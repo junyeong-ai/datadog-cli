@@ -15,7 +15,8 @@ target/
 # IDE and editor files
 .vscode/
 .idea/
-.claude/
+.claude/*
+!.claude/skills/
 *.swp
 *.swo
 *~
