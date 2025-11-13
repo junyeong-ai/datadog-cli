@@ -3,6 +3,15 @@ name: datadog-query
 description: Query Datadog observability data via CLI with natural language time parsing, automatic pagination, and tag filtering (30-70% response reduction). Use for investigating errors, analyzing metrics, checking monitors, searching APM traces, or building Unix pipelines with grep/jq. Supports logs, metrics, monitors, events, hosts, dashboards, spans, services, and RUM.
 ---
 
+# EXECUTION DIRECTIVE
+
+**When user requests Datadog data: Execute commands using Bash tool, return actual data.**
+
+- Use `datadog <command> --format json` to get structured data
+- Parse natural language queries → construct CLI commands → execute → return results
+- Don't provide instructions or examples - execute and deliver data
+- Use command reference below for syntax
+
 # Datadog Query Expert
 
 ## Commands Reference
@@ -157,110 +166,6 @@ Unix pipeline examples:
 ```bash
 datadog logs search "..." --format jsonl | grep "error" | wc -l
 datadog monitors list --format jsonl | grep '"Alert"' | jq -r '.name'
-```
-
-## Authentication & Configuration
-
-### Environment Variables (AI Agent Best Practice)
-```bash
-DD_API_KEY=xxx DD_APP_KEY=yyy datadog logs search "..."  # Highest priority
-DD_SITE=datadoghq.eu datadog monitors list               # EU region
-```
-
-### Configuration Priority
-1. **Environment variables** (temporary override, best for AI agents)
-2. **Local .env** (project-specific)
-3. **Global config** (~/.config/datadog-cli/config)
-
-### Multi-Region Support
-DD_SITE values:
-- `datadoghq.com` (US1, default)
-- `datadoghq.eu` (EU)
-- `us3.datadoghq.com` (US3)
-- `us5.datadoghq.com` (US5)
-- `ddog-gov.com` (US1-FED)
-
-### Global Options (All Commands)
-```bash
---api-key <KEY>        # Override DD_API_KEY
---app-key <KEY>        # Override DD_APP_KEY
---site <SITE>          # Override DD_SITE
---format <FORMAT>      # json|jsonl|table
--q, --quiet            # Errors only
--v, --verbose          # Verbose/debug mode
-```
-
-### Config Commands
-```bash
-datadog config show              # Show current config (keys masked)
-datadog config path              # Show local .env path
-datadog config path --global     # Show global config path
-datadog config list              # List all sources with status
-datadog config edit --global     # Edit global config with $EDITOR
-```
-
-## Troubleshooting
-
-### Authentication Errors
-```bash
-# Check current config (keys masked)
-datadog config show
-
-# List all config sources
-datadog config list
-
-# Verify environment variables
-echo $DD_API_KEY | cut -c1-8  # First 8 chars
-echo $DD_APP_KEY | cut -c1-8
-
-# Test with explicit keys
-DD_API_KEY=xxx DD_APP_KEY=yyy datadog monitors list --limit 1
-```
-
-### Time Parse Errors
-- **Valid:** "1 hour ago", "yesterday", "2025-01-15T10:30:00Z", "1704067200"
-- **Invalid:** "1h ago" (use "hour"), "tomorrow" (future not supported)
-
-### Large Response / Timeout
-```bash
-# Reduce response size with tag filtering (30-70% reduction)
---tag-filter "env:,service:"
-
-# Reduce limit
---limit 10
-
-# For spans/RUM, use pagination
---limit 100 --cursor "..."
-```
-
-### Empty Results
-```bash
-# Test connectivity
-datadog logs search "*" --from "1 hour ago" --limit 1
-
-# Verify time range
-datadog logs search "..." --from "24 hours ago" --to "now"
-
-# Check query syntax (Datadog query language)
-datadog logs search "status:error AND service:api" --limit 1
-```
-
-### Configuration Issues
-```bash
-# Find config files
-datadog config path              # Local .env
-datadog config path --global     # Global config
-
-# Create global config
-mkdir -p ~/.config/datadog-cli
-cat > ~/.config/datadog-cli/config << EOF
-DD_API_KEY=your_key
-DD_APP_KEY=your_app_key
-DD_SITE=datadoghq.com
-EOF
-
-# Edit existing config
-datadog config edit --global
 ```
 
 ## Unix Pipeline Patterns
