@@ -8,7 +8,7 @@ Quick reference for AI agents maintaining this Rust CLI tool.
 **Stack**: Rust 2024 (1.91.1+), clap, tokio, reqwest, toml, dirs
 **Tests**: 122 passing (14s)
 **Binary**: 5.1MB (LTO optimized)
-**Commands**: 13 (logs, metrics, monitors, events, hosts, spans, services, rum, dashboards, config)
+**Commands**: 10 (metrics, logs, monitors, events, hosts, dashboards, spans, services, rum, config)
 **Config**: TOML only (`~/.config/datadog-cli/config.toml`)
 
 ---
@@ -27,19 +27,20 @@ src/
 │   ├── client.rs        # HTTP client (reqwest + rustls)
 │   ├── retry.rs         # Exponential backoff (3 retries)
 │   └── models.rs        # API response types
-├── handlers/            # 13 command handlers
+├── handlers/            # Command handlers (11 handlers + common traits)
+│   ├── mod.rs           # Handler module
 │   ├── common.rs        # Shared traits (TimeHandler, ParameterParser, etc.)
+│   ├── metrics.rs       # metrics command
 │   ├── logs.rs          # logs search
-│   ├── logs_aggregate.rs
-│   ├── logs_timeseries.rs
-│   ├── metrics.rs
-│   ├── monitors.rs
-│   ├── events.rs
-│   ├── hosts.rs
-│   ├── dashboards.rs
-│   ├── spans.rs
-│   ├── services.rs
-│   └── rum.rs
+│   ├── logs_aggregate.rs  # logs aggregate
+│   ├── logs_timeseries.rs # logs timeseries
+│   ├── monitors.rs      # monitors list/get
+│   ├── events.rs        # events command
+│   ├── hosts.rs         # hosts command
+│   ├── dashboards.rs    # dashboards list/get
+│   ├── spans.rs         # spans command
+│   ├── services.rs      # services command
+│   └── rum.rs           # rum command
 ├── error.rs             # DatadogError (thiserror)
 └── utils.rs             # parse_time() (interim + chrono)
 ```
@@ -51,26 +52,15 @@ src/
 ### Data Flow
 
 ```
-Terminal Command
-  ↓ clap::Parser
-Cli struct (cli/mod.rs)
-  ↓ Config::load()
-TOML config (~/.config/datadog-cli/config.toml)
-  ↓ match command
-Handler (handlers/*.rs)
-  ↓ API call
-DatadogClient (datadog/client.rs)
-  ↓ HTTP/2 + rustls
-Datadog API
-  ↓ format output
-stdout (JSON/JSONL/Table)
+Terminal → CLI Parser → Config::load() → Handler → DatadogClient → Datadog API
+                                            ↓
+                                         Format output (JSON/JSONL/Table)
 ```
 
 **Key Points**:
 - Config: TOML only (no env vars, no .env)
-- API: HTTP/2 with rustls-tls
-- Retry: Exponential backoff (1s, 2s, 4s)
-- Time: Natural language via interim library
+- Retry: Exponential backoff (2s, 4s, 8s for 3 max retries)
+- Time: Natural language via interim library ("1 hour ago", "yesterday", etc.)
 
 ---
 
@@ -115,14 +105,17 @@ pub struct Cli {
 
 pub enum Command {
     Metrics { query, from, to, max_points },
-    Logs { action: LogsAction },
-    Monitors { action: MonitorsAction },
-    // ... 10 more
-    Config { action: ConfigAction },
+    Logs { action: LogsAction },         // search, aggregate, timeseries
+    Monitors { action: MonitorsAction }, // list, get
+    Events { ... },
+    Hosts { ... },
+    Dashboards { action: DashboardsAction }, // list, get
+    Spans { ... },
+    Services { ... },
+    Rum { ... },
+    Config { action: ConfigAction },     // init, show, path, edit
 }
 ```
-
-**No GlobalOpts** - Config loaded separately via `Config::load()`
 
 ### Handler Pattern (src/handlers/*.rs)
 
@@ -193,13 +186,14 @@ pub fn print(data: &Value, format: &Format) -> io::Result<()>
 ### Retry Logic (src/datadog/retry.rs)
 
 ```rust
-pub struct RetryPolicy {
-    max_retries: 3,
-    base_delay_ms: 1000,
-}
+pub const MAX_RETRIES: u32 = 3;
 
-// Exponential backoff: 1s, 2s, 4s
+pub fn calculate_backoff(retry_count: u32) -> Duration {
+    Duration::from_secs(2_u64.pow(retry_count))
+}
 ```
+
+**Backoff timing**: Retry 1: 2s, Retry 2: 4s, Retry 3: 8s (2^retry_count seconds)
 
 ---
 

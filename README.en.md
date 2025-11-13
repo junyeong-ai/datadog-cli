@@ -13,7 +13,7 @@
 ## ✨ Key Features
 
 - 🚀 **5.1MB Single Binary** - No dependencies, instant execution
-- 📊 **13 Commands** - metrics, logs, monitors, events, hosts, spans, services, rum, dashboards
+- 📊 **10 Commands** - metrics, logs, monitors, events, hosts, dashboards, spans, services, rum, config
 - 🌍 **Natural Language Time** - "1 hour ago", "yesterday", "last week"
 - 🎯 **3 Output Formats** - JSON, JSONL, Table
 - 🔧 **Unix Pipeline** - Perfect integration with grep, jq, etc.
@@ -32,14 +32,7 @@ Binary will be installed to `~/.local/bin/datadog`
 ### 2. Configuration
 ```bash
 datadog config init
-vim ~/.config/datadog-cli/config.toml
-```
-
-**config.toml:**
-```toml
-api_key = "your-api-key-here"
-app_key = "your-app-key-here"
-site = "datadoghq.com"
+datadog config edit
 ```
 
 ### 3. Usage
@@ -74,22 +67,22 @@ datadog hosts [options]              # List hosts
 
 ### Logs & Analytics
 ```bash
-datadog logs search <query>          # Search logs
-datadog logs aggregate [options]     # Aggregate logs (count/sum/avg/min/max)
+datadog logs search <query>          # Search logs (default subcommand)
+datadog logs aggregate [options]     # Aggregate logs (count only)
 datadog logs timeseries [options]    # Time series analysis
 ```
 
 ### Monitoring & Events
 ```bash
-datadog monitors list                # List monitors
-datadog monitors get <id>            # Get monitor details
+datadog monitors list                # List monitors (subcommand)
+datadog monitors get <id>            # Get monitor details (subcommand)
 datadog events [options]             # Query events
 ```
 
 ### Dashboards
 ```bash
-datadog dashboards list              # List dashboards
-datadog dashboards get <id>          # Get dashboard details
+datadog dashboards list              # List dashboards (subcommand)
+datadog dashboards get <id>          # Get dashboard details (subcommand)
 ```
 
 ### APM & Tracing
@@ -105,11 +98,10 @@ datadog rum [options]                # User experience monitoring
 
 ### Configuration
 ```bash
-datadog config init                  # Create config file
-datadog config show                  # Show current config (masked)
-datadog config path                  # Show config file path
-datadog config edit                  # Edit config file
+datadog config <subcommand>          # Config management (init/show/path/edit)
 ```
+
+**Note**: logs, monitors, dashboards, and config commands use subcommands.
 
 **All options:** `datadog --help` or `datadog <command> --help`
 
@@ -258,6 +250,8 @@ app_key = "your-app-key"
 site = "datadoghq.com"  # or datadoghq.eu, us3.datadoghq.com, etc.
 ```
 
+**Getting API Keys**: Generate API Key and Application Key at [Datadog API Keys](https://app.datadoghq.com/organization-settings/api-keys).
+
 **Permissions:** On Unix systems, automatically set to 600 (owner read/write only).
 
 ### Configuration Commands
@@ -277,22 +271,7 @@ datadog config edit
 
 ### Datadog Site Configuration
 
-Use `site` field to specify your Datadog site:
-
-| Site | Value | Region |
-|------|-------|--------|
-| US1 (default) | `datadoghq.com` | United States |
-| EU | `datadoghq.eu` | Europe |
-| US3 | `us3.datadoghq.com` | United States |
-| US5 | `us5.datadoghq.com` | United States |
-| US1-FED | `ddog-gov.com` | US Government |
-
-**config.toml example:**
-```toml
-api_key = "your-api-key"
-app_key = "your-app-key"
-site = "datadoghq.eu"
-```
+`site` field values: `datadoghq.com` (US1, default), `datadoghq.eu` (EU), `us3.datadoghq.com`, `us5.datadoghq.com`, `ddog-gov.com` (US1-FED)
 
 ---
 

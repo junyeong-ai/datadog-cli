@@ -13,7 +13,7 @@
 ## ✨ 주요 기능
 
 - 🚀 **5.1MB 단일 바이너리** - 의존성 없음, 즉시 실행
-- 📊 **13개 명령어** - metrics, logs, monitors, events, hosts, spans, services, rum, dashboards
+- 📊 **10개 명령어** - metrics, logs, monitors, events, hosts, dashboards, spans, services, rum, config
 - 🌍 **자연어 시간 지원** - "1 hour ago", "yesterday", "last week"
 - 🎯 **3가지 출력 포맷** - JSON, JSONL, Table
 - 🔧 **Unix 파이프라인** - grep, jq 등과 완벽 호환
@@ -32,14 +32,7 @@
 ### 2. 설정
 ```bash
 datadog config init
-vim ~/.config/datadog-cli/config.toml
-```
-
-**config.toml:**
-```toml
-api_key = "your-api-key-here"
-app_key = "your-app-key-here"
-site = "datadoghq.com"
+datadog config edit
 ```
 
 ### 3. 사용
@@ -74,22 +67,22 @@ datadog hosts [options]              # 호스트 리스트
 
 ### Logs & Analytics
 ```bash
-datadog logs search <query>          # 로그 검색
-datadog logs aggregate [options]     # 로그 집계 (count/sum/avg/min/max)
+datadog logs search <query>          # 로그 검색 (기본)
+datadog logs aggregate [options]     # 로그 집계 (count만 지원)
 datadog logs timeseries [options]    # 로그 시계열 분석
 ```
 
 ### Monitoring & Events
 ```bash
-datadog monitors list                # 모니터 리스트
-datadog monitors get <id>            # 모니터 상세 정보
+datadog monitors list                # 모니터 리스트 (서브커맨드)
+datadog monitors get <id>            # 모니터 상세 정보 (서브커맨드)
 datadog events [options]             # 이벤트 조회
 ```
 
 ### Dashboards
 ```bash
-datadog dashboards list              # 대시보드 리스트
-datadog dashboards get <id>          # 대시보드 상세 정보
+datadog dashboards list              # 대시보드 리스트 (서브커맨드)
+datadog dashboards get <id>          # 대시보드 상세 정보 (서브커맨드)
 ```
 
 ### APM & Tracing
@@ -105,11 +98,10 @@ datadog rum [options]                # 사용자 경험 모니터링
 
 ### Configuration
 ```bash
-datadog config init                  # 설정 파일 생성
-datadog config show                  # 현재 설정 확인 (마스킹)
-datadog config path                  # 설정 파일 경로
-datadog config edit                  # 설정 파일 편집
+datadog config <subcommand>          # 설정 관리 (init/show/path/edit)
 ```
+
+**참고**: logs, monitors, dashboards, config 명령어는 서브커맨드를 사용합니다.
 
 **전체 명령어 옵션:** `datadog --help` 또는 `datadog <command> --help`
 
@@ -258,6 +250,8 @@ app_key = "your-app-key"
 site = "datadoghq.com"  # or datadoghq.eu, us3.datadoghq.com, etc.
 ```
 
+**API 키 획득**: [Datadog API Keys](https://app.datadoghq.com/organization-settings/api-keys)에서 API Key와 Application Key를 생성하세요.
+
 **권한:** Unix 시스템에서는 600 (owner read/write only)으로 자동 설정됩니다.
 
 ### 설정 관리 명령어
@@ -277,22 +271,7 @@ datadog config edit
 
 ### Datadog 사이트 설정
 
-`site` 필드로 사용할 Datadog 사이트 지정:
-
-| 사이트 | 값 | 지역 |
-|-------|-----|------|
-| US1 (기본) | `datadoghq.com` | 미국 |
-| EU | `datadoghq.eu` | 유럽 |
-| US3 | `us3.datadoghq.com` | 미국 |
-| US5 | `us5.datadoghq.com` | 미국 |
-| US1-FED | `ddog-gov.com` | 미국 정부 |
-
-**config.toml 예시:**
-```toml
-api_key = "your-api-key"
-app_key = "your-app-key"
-site = "datadoghq.eu"
-```
+`site` 필드 값: `datadoghq.com` (US1, 기본), `datadoghq.eu` (EU), `us3.datadoghq.com`, `us5.datadoghq.com`, `ddog-gov.com` (US1-FED)
 
 ---
 
