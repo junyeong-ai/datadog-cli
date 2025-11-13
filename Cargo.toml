@@ -16,10 +16,11 @@ reqwest = { version = "0.12.23", features = ["json", "rustls-tls"] }
 thiserror = "2.0.17"
 chrono = { version = "0.4", features = ["serde"] }
 interim = { version = "0.2", features = ["chrono_0_4"] }
-dotenvy = "0.15"
+toml = "0.8"
+dirs = "5.0"
 log = "0.4"
 env_logger = "0.11"
-clap = { version = "4.5.51", features = ["derive", "env"] }
+clap = { version = "4.5.51", features = ["derive"] }
 comfy-table = "7.2.1"
 
 [dev-dependencies]

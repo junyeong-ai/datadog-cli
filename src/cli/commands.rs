@@ -1,6 +1,4 @@
 use serde_json::{Value, json};
-use std::env;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::{Command, ConfigAction, DashboardsAction, LogsAction, MonitorsAction};
@@ -195,154 +193,27 @@ pub async fn execute(command: &Command, client: Arc<DatadogClient>) -> Result<Va
     }
 }
 
-fn get_global_config_path() -> PathBuf {
-    let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home)
-        .join(".config")
-        .join("datadog-cli")
-        .join("config")
-}
-
-fn get_local_config_path() -> PathBuf {
-    PathBuf::from(".env")
-}
-
-fn mask_secret(value: &str) -> String {
-    if value.len() <= 8 {
-        "*".repeat(value.len())
-    } else {
-        format!("{}...{}", &value[..4], &value[value.len() - 4..])
-    }
-}
-
 pub fn handle_config(action: &ConfigAction) -> Result<()> {
+    use crate::config::Config;
+
     match action {
-        ConfigAction::Path { global } => {
-            let path = if *global {
-                get_global_config_path()
-            } else {
-                get_local_config_path()
-            };
-            println!("{}", path.display());
+        ConfigAction::Init => {
+            let path = Config::init()?;
+            println!("Created config file: {}", path.display());
+            println!();
+            println!("Edit with your credentials:");
+            println!("  vim {}", path.display());
         }
 
         ConfigAction::Show => {
-            println!("Current Configuration:");
-            println!();
-
-            if let Ok(api_key) = env::var("DD_API_KEY") {
-                println!("  DD_API_KEY:  {} (from env)", mask_secret(&api_key));
-            } else {
-                println!("  DD_API_KEY:  not set");
-            }
-
-            if let Ok(app_key) = env::var("DD_APP_KEY") {
-                println!("  DD_APP_KEY:  {} (from env)", mask_secret(&app_key));
-            } else {
-                println!("  DD_APP_KEY:  not set");
-            }
-
-            if let Ok(site) = env::var("DD_SITE") {
-                println!("  DD_SITE:     {}", site);
-            } else {
-                println!("  DD_SITE:     datadoghq.com (default)");
-            }
-
-            if let Ok(log_level) = env::var("LOG_LEVEL") {
-                println!("  LOG_LEVEL:   {}", log_level);
-            } else {
-                println!("  LOG_LEVEL:   warn (default)");
-            }
-
-            if let Ok(tag_filter) = env::var("DD_TAG_FILTER") {
-                println!("  DD_TAG_FILTER: {}", tag_filter);
-            }
+            let output = Config::show()?;
+            println!("{}", output);
         }
 
-        ConfigAction::List => {
-            println!("Configuration Sources (in priority order):");
-            println!();
-
-            println!("1. Environment Variables:");
-            for (key, value) in env::vars() {
-                if key.starts_with("DD_") || key == "LOG_LEVEL" {
-                    let display_value = if key.contains("KEY") {
-                        mask_secret(&value)
-                    } else {
-                        value
-                    };
-                    println!("   {}={}", key, display_value);
-                }
-            }
-            println!();
-
-            let local_path = get_local_config_path();
-            println!("2. Local Config: {}", local_path.display());
-            if local_path.exists() {
-                println!("   Status: exists");
-            } else {
-                println!("   Status: not found");
-            }
-            println!();
-
-            let global_path = get_global_config_path();
-            println!("3. Global Config: {}", global_path.display());
-            if global_path.exists() {
-                println!("   Status: exists");
-            } else {
-                println!("   Status: not found");
-            }
-        }
-
-        ConfigAction::Edit { global } => {
-            let path = if *global {
-                get_global_config_path()
-            } else {
-                get_local_config_path()
-            };
-
-            if !path.exists() {
-                eprintln!("Config file not found: {}", path.display());
-                eprintln!();
-                eprintln!("Create it with:");
-                if *global {
-                    eprintln!("  mkdir -p ~/.config/datadog-cli");
-                    eprintln!("  cat > {} << EOF", path.display());
-                } else {
-                    eprintln!("  cat > .env << EOF");
-                }
-                eprintln!("DD_API_KEY=your_api_key");
-                eprintln!("DD_APP_KEY=your_app_key");
-                eprintln!("DD_SITE=datadoghq.com");
-                eprintln!("LOG_LEVEL=error");
-                eprintln!("EOF");
-                return Err(DatadogError::InvalidInput(
-                    "Config file not found".to_string(),
-                ));
-            }
-
-            let editor = env::var("EDITOR").unwrap_or_else(|_| {
-                if cfg!(target_os = "macos") {
-                    "open".to_string()
-                } else if cfg!(target_os = "windows") {
-                    "notepad".to_string()
-                } else {
-                    "vi".to_string()
-                }
-            });
-
-            let status = std::process::Command::new(&editor)
-                .arg(&path)
-                .status()
-                .map_err(|e| {
-                    DatadogError::InvalidInput(format!("Failed to launch editor: {}", e))
-                })?;
-
-            if !status.success() {
-                return Err(DatadogError::InvalidInput(
-                    "Editor exited with error".to_string(),
-                ));
-            }
+        ConfigAction::Path => {
+            let path = Config::config_path()
+                .ok_or_else(|| DatadogError::InvalidInput("Cannot determine config path".into()))?;
+            println!("{}", path.display());
         }
     }
 

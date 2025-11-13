@@ -29,12 +29,15 @@
 
 ### 2. 설정
 ```bash
-mkdir -p ~/.config/datadog-cli
-cat > ~/.config/datadog-cli/config << EOF
-DD_API_KEY=your_api_key
-DD_APP_KEY=your_app_key
-DD_SITE=datadoghq.com
-EOF
+datadog config init
+vim ~/.config/datadog-cli/config.toml
+```
+
+**config.toml:**
+```toml
+api_key = "your-api-key-here"
+app_key = "your-app-key-here"
+site = "datadoghq.com"
 ```
 
 ### 3. 사용
@@ -114,10 +117,16 @@ datadog rum [options]                # 사용자 경험 모니터링
 
 ### Configuration
 ```bash
+datadog config init                  # 설정 파일 생성
 datadog config show                  # 현재 설정 확인 (마스킹)
-datadog config path [--global]       # 설정 파일 경로
-datadog config list                  # 모든 설정 소스
-datadog config edit [--global]       # 설정 편집
+datadog config path                  # 설정 파일 경로
+```
+
+**Config file:** `~/.config/datadog-cli/config.toml`
+```toml
+api_key = "your-api-key"
+app_key = "your-app-key"
+site = "datadoghq.com"  # or datadoghq.eu, us3.datadoghq.com, etc.
 ```
 
 **전체 명령어 옵션:** `datadog --help` 또는 `datadog <command> --help`

@@ -4,65 +4,42 @@ mod output;
 use clap::{Parser, Subcommand};
 use std::sync::Arc;
 
+use crate::config::Config;
 use crate::datadog::DatadogClient;
 use crate::error::Result;
 
 #[derive(Parser)]
 #[command(name = "datadog")]
 #[command(version)]
-#[command(about = "Datadog CLI - High-performance observability tool", long_about = None)]
+#[command(about = "Datadog CLI", long_about = None)]
 pub struct Cli {
-    #[command(flatten)]
-    pub global: GlobalOpts,
-
-    #[command(subcommand)]
-    pub command: Command,
-}
-
-#[derive(Parser)]
-pub struct GlobalOpts {
-    #[arg(long, env = "DD_API_KEY", help = "Datadog API key")]
-    pub api_key: Option<String>,
-
-    #[arg(long, env = "DD_APP_KEY", help = "Datadog application key")]
-    pub app_key: Option<String>,
-
-    #[arg(
-        long,
-        env = "DD_SITE",
-        default_value = "datadoghq.com",
-        help = "Datadog site"
-    )]
-    pub site: String,
-
-    #[arg(
-        long,
-        default_value = "json",
-        help = "Output format: json, jsonl, table"
-    )]
+    #[arg(long, default_value = "json", help = "Output format: json, jsonl, table")]
     pub format: String,
 
-    #[arg(short = 'q', long, help = "Quiet mode (errors only)")]
+    #[arg(short = 'q', long, help = "Quiet mode")]
     pub quiet: bool,
 
     #[arg(short = 'v', long, help = "Verbose mode")]
     pub verbose: bool,
+
+    #[command(subcommand)]
+    pub command: Command,
 }
 
 #[derive(Subcommand)]
 pub enum Command {
     #[command(about = "Query time series metrics")]
     Metrics {
-        #[arg(help = "Metrics query (e.g., 'avg:system.cpu.user{*}')")]
+        #[arg(help = "Metrics query")]
         query: String,
 
-        #[arg(long, default_value = "1 hour ago", help = "Start time")]
+        #[arg(long, default_value = "1 hour ago")]
         from: String,
 
-        #[arg(long, default_value = "now", help = "End time")]
+        #[arg(long, default_value = "now")]
         to: String,
 
-        #[arg(long, help = "Maximum number of data points")]
+        #[arg(long)]
         max_points: Option<usize>,
     },
 
@@ -80,43 +57,43 @@ pub enum Command {
 
     #[command(about = "Query events")]
     Events {
-        #[arg(long, default_value = "1 hour ago", help = "Start time")]
+        #[arg(long, default_value = "1 hour ago")]
         from: String,
 
-        #[arg(long, default_value = "now", help = "End time")]
+        #[arg(long, default_value = "now")]
         to: String,
 
-        #[arg(long, help = "Priority filter (normal, low)")]
+        #[arg(long)]
         priority: Option<String>,
 
-        #[arg(long, help = "Sources filter")]
+        #[arg(long)]
         sources: Option<String>,
 
-        #[arg(long, help = "Tags filter")]
+        #[arg(long)]
         tags: Option<String>,
     },
 
     #[command(about = "List infrastructure hosts")]
     Hosts {
-        #[arg(long, help = "Host filter query")]
+        #[arg(long)]
         filter: Option<String>,
 
-        #[arg(long, default_value = "1 hour ago", help = "From time")]
+        #[arg(long, default_value = "1 hour ago")]
         from: String,
 
-        #[arg(long, help = "Sort field")]
+        #[arg(long)]
         sort_field: Option<String>,
 
-        #[arg(long, help = "Sort direction (asc, desc)")]
+        #[arg(long)]
         sort_dir: Option<String>,
 
-        #[arg(long, default_value = "0", help = "Starting index")]
+        #[arg(long, default_value = "0")]
         start: usize,
 
-        #[arg(long, default_value = "100", help = "Number of hosts (max 1000)")]
+        #[arg(long, default_value = "100")]
         count: usize,
 
-        #[arg(long, help = "Tag filter")]
+        #[arg(long)]
         tag_filter: Option<String>,
     },
 
@@ -128,65 +105,65 @@ pub enum Command {
 
     #[command(about = "Search APM spans")]
     Spans {
-        #[arg(default_value = "*", help = "Spans search query")]
+        #[arg(default_value = "*")]
         query: String,
 
-        #[arg(long, help = "Start time")]
+        #[arg(long)]
         from: String,
 
-        #[arg(long, help = "End time")]
+        #[arg(long)]
         to: String,
 
-        #[arg(long, default_value = "10", help = "Maximum number of spans")]
+        #[arg(long, default_value = "10")]
         limit: usize,
 
-        #[arg(long, help = "Pagination cursor")]
+        #[arg(long)]
         cursor: Option<String>,
 
-        #[arg(long, help = "Sort order (e.g., 'timestamp')")]
+        #[arg(long)]
         sort: Option<String>,
 
-        #[arg(long, help = "Tag filter")]
+        #[arg(long)]
         tag_filter: Option<String>,
 
-        #[arg(long, help = "Include full stack traces")]
+        #[arg(long)]
         full_stack_trace: bool,
     },
 
-    #[command(about = "List services from service catalog")]
+    #[command(about = "List services")]
     Services {
-        #[arg(long, help = "Filter by environment")]
+        #[arg(long)]
         env: Option<String>,
     },
 
     #[command(about = "Search RUM events")]
     Rum {
-        #[arg(default_value = "*", help = "RUM search query")]
+        #[arg(default_value = "*")]
         query: String,
 
-        #[arg(long, default_value = "1 hour ago", help = "Start time")]
+        #[arg(long, default_value = "1 hour ago")]
         from: String,
 
-        #[arg(long, default_value = "now", help = "End time")]
+        #[arg(long, default_value = "now")]
         to: String,
 
-        #[arg(long, default_value = "10", help = "Maximum number of events")]
+        #[arg(long, default_value = "10")]
         limit: usize,
 
-        #[arg(long, help = "Pagination cursor")]
+        #[arg(long)]
         cursor: Option<String>,
 
-        #[arg(long, help = "Sort order")]
+        #[arg(long)]
         sort: Option<String>,
 
-        #[arg(long, help = "Tag filter")]
+        #[arg(long)]
         tag_filter: Option<String>,
 
-        #[arg(long, help = "Include full stack traces")]
+        #[arg(long)]
         full_stack_trace: bool,
     },
 
-    #[command(about = "Configuration management")]
+    #[command(about = "Config management")]
     Config {
         #[command(subcommand)]
         action: ConfigAction,
@@ -200,53 +177,49 @@ pub enum LogsAction {
         #[arg(help = "Log search query")]
         query: String,
 
-        #[arg(long, default_value = "1 hour ago", help = "Start time")]
+        #[arg(long, default_value = "1 hour ago")]
         from: String,
 
-        #[arg(long, default_value = "now", help = "End time")]
+        #[arg(long, default_value = "now")]
         to: String,
 
-        #[arg(long, default_value = "10", help = "Maximum number of logs")]
+        #[arg(long, default_value = "10")]
         limit: usize,
 
-        #[arg(long, help = "Tag filter")]
+        #[arg(long)]
         tag_filter: Option<String>,
     },
 
     #[command(about = "Aggregate logs")]
     Aggregate {
-        #[arg(default_value = "*", help = "Log search query")]
+        #[arg(default_value = "*")]
         query: String,
 
-        #[arg(long, help = "Start time")]
+        #[arg(long)]
         from: String,
 
-        #[arg(long, help = "End time")]
+        #[arg(long)]
         to: String,
     },
 
     #[command(about = "Generate log timeseries")]
     Timeseries {
-        #[arg(default_value = "*", help = "Log search query")]
+        #[arg(default_value = "*")]
         query: String,
 
-        #[arg(long, help = "Start time")]
+        #[arg(long)]
         from: String,
 
-        #[arg(long, help = "End time")]
+        #[arg(long)]
         to: String,
 
-        #[arg(
-            long,
-            default_value = "1h",
-            help = "Time interval (e.g., '1m', '5m', '1h')"
-        )]
+        #[arg(long, default_value = "1h")]
         interval: String,
 
-        #[arg(long, default_value = "count", help = "Aggregation type")]
+        #[arg(long, default_value = "count")]
         aggregation: String,
 
-        #[arg(long, help = "Field to aggregate on")]
+        #[arg(long)]
         metric: Option<String>,
     },
 }
@@ -255,10 +228,10 @@ pub enum LogsAction {
 pub enum MonitorsAction {
     #[command(about = "List monitors")]
     List {
-        #[arg(long, help = "Filter by tags")]
+        #[arg(long)]
         tags: Option<String>,
 
-        #[arg(long, help = "Filter by monitor tags")]
+        #[arg(long)]
         monitor_tags: Option<String>,
     },
 
@@ -283,23 +256,14 @@ pub enum DashboardsAction {
 
 #[derive(Subcommand)]
 pub enum ConfigAction {
-    #[command(about = "Show configuration file path")]
-    Path {
-        #[arg(long, help = "Show global config path")]
-        global: bool,
-    },
+    #[command(about = "Initialize config file")]
+    Init,
 
-    #[command(about = "Show current configuration (with masked secrets)")]
+    #[command(about = "Show current config")]
     Show,
 
-    #[command(about = "List all configuration sources")]
-    List,
-
-    #[command(about = "Edit configuration file")]
-    Edit {
-        #[arg(long, help = "Edit global config")]
-        global: bool,
-    },
+    #[command(about = "Show config file path")]
+    Path,
 }
 
 pub async fn run(cli: Cli) -> Result<()> {
@@ -307,25 +271,17 @@ pub async fn run(cli: Cli) -> Result<()> {
         return commands::handle_config(action);
     }
 
-    let api_key = cli.global.api_key.ok_or_else(|| {
-        crate::error::DatadogError::InvalidInput(
-            "DD_API_KEY is required (set via --api-key or DD_API_KEY env var)".to_string(),
-        )
-    })?;
+    let config = Config::load()?;
+    let client = Arc::new(DatadogClient::new(
+        config.api_key.clone(),
+        config.app_key.clone(),
+        Some(config.site.clone()),
+    )?);
 
-    let app_key = cli.global.app_key.ok_or_else(|| {
-        crate::error::DatadogError::InvalidInput(
-            "DD_APP_KEY is required (set via --app-key or DD_APP_KEY env var)".to_string(),
-        )
-    })?;
-
-    let client = Arc::new(DatadogClient::new(api_key, app_key, Some(cli.global.site))?);
-
-    let format = output::Format::from_str(&cli.global.format)
+    let format = output::Format::from_str(&cli.format)
         .map_err(crate::error::DatadogError::InvalidInput)?;
 
     let result = commands::execute(&cli.command, client).await?;
-
     output::print(&result, &format)?;
 
     Ok(())
