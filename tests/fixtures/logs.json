@@ -1,0 +1,33 @@
+{
+  "data": [
+    {
+      "id": "log-1",
+      "content": {
+        "timestamp": 1234567890000,
+        "message": "Application started successfully",
+        "service": "web-api",
+        "status": "info"
+      },
+      "attributes": {
+        "tags": ["env:production", "service:web-api"]
+      }
+    },
+    {
+      "id": "log-2",
+      "content": {
+        "timestamp": 1234567891000,
+        "message": "Request processed",
+        "service": "web-api",
+        "status": "info"
+      },
+      "attributes": {
+        "tags": ["env:production", "service:web-api"]
+      }
+    }
+  ],
+  "meta": {
+    "page": {
+      "after": "next_cursor_token"
+    }
+  }
+}
