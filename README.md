@@ -1,10 +1,12 @@
 # Datadog CLI
 
 [![Rust](https://img.shields.io/badge/rust-1.91.1%2B%20(2024%20edition)-orange?style=flat-square&logo=rust)](https://www.rust-lang.org)
-[![Tests](https://img.shields.io/badge/tests-117%20passing-green?style=flat-square)](https://github.com/junyeong-ai/datadog-cli)
+[![Tests](https://img.shields.io/badge/tests-122%20passing-green?style=flat-square)](https://github.com/junyeong-ai/datadog-cli)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 
 > Datadog을 명령줄에서 빠르게 조회하는 고성능 CLI 도구
+
+[한국어](README.md) | [English](README.en.md)
 
 ---
 
@@ -53,26 +55,12 @@ datadog logs search "status:error" --limit 10
 
 ## 💡 왜 Datadog CLI인가?
 
-### vs Datadog Web UI
-| 항목 | Web UI | Datadog CLI |
-|------|--------|-------------|
-| 조회 속도 | 브라우저 로딩 | ✅ 즉시 (1초 이내) |
-| 자동화 | ❌ 불가능 | ✅ 스크립트 가능 |
-| 데이터 처리 | 수동 복사 | ✅ Unix 도구 연계 |
-
-### vs Python SDK
-| 항목 | Python SDK | Datadog CLI |
-|------|-----------|-------------|
-| 설치 | pip, 의존성 관리 | ✅ 단일 바이너리 |
-| 시작 시간 | 10분+ | ✅ 3분 |
-| 메모리 | Python 런타임 | ✅ 네이티브 (낮음) |
-
-### vs curl
-| 항목 | curl | Datadog CLI |
-|------|------|-------------|
-| 인증 | 매번 헤더 설정 | ✅ 자동 |
-| 에러 처리 | 수동 파싱 | ✅ 명확한 메시지 |
-| 출력 | 원시 JSON | ✅ 포맷 선택 가능 |
+| 기능 | Web UI | Python SDK | curl | Datadog CLI |
+|------|--------|-----------|------|-------------|
+| 조회 속도 | 브라우저 로딩 | 10분+ 셋업 | 매번 헤더 | ✅ 즉시 (1초 이내) |
+| 자동화 | ❌ 불가능 | 가능 | 가능 | ✅ 스크립트 가능 |
+| 설치 | - | pip + 의존성 | 내장 | ✅ 단일 바이너리 |
+| 데이터 처리 | 수동 복사 | Python 코드 | 원시 JSON | ✅ Unix 도구 연계 |
 
 ---
 
@@ -120,13 +108,7 @@ datadog rum [options]                # 사용자 경험 모니터링
 datadog config init                  # 설정 파일 생성
 datadog config show                  # 현재 설정 확인 (마스킹)
 datadog config path                  # 설정 파일 경로
-```
-
-**Config file:** `~/.config/datadog-cli/config.toml`
-```toml
-api_key = "your-api-key"
-app_key = "your-app-key"
-site = "datadoghq.com"  # or datadoghq.eu, us3.datadoghq.com, etc.
+datadog config edit                  # 설정 파일 편집
 ```
 
 **전체 명령어 옵션:** `datadog --help` 또는 `datadog <command> --help`
@@ -198,25 +180,6 @@ datadog logs aggregate \
   jq '.data.buckets | sort_by(.count) | reverse | .[0:5]'
 ```
 
-### 예시 4: 스크립트 자동화
-```bash
-#!/bin/bash
-# 에러율 모니터링 스크립트
-
-ERROR_COUNT=$(dd logs search "status:error" \
-  --from "5 minutes ago" \
-  --format json | \
-  jq '.pagination.total')
-
-if [ $ERROR_COUNT -gt 10 ]; then
-  echo "⚠️  High error rate: $ERROR_COUNT errors"
-  # Slack 알림 전송
-  curl -X POST $SLACK_WEBHOOK -d "{\"text\":\"High error rate: $ERROR_COUNT\"}"
-else
-  echo "✅ Error rate normal: $ERROR_COUNT errors"
-fi
-```
-
 ---
 
 ## 🌟 고급 기능
@@ -242,17 +205,14 @@ datadog logs search "..." --from "1704067200"  # Unix timestamp
 태그 필터링으로 응답 크기를 대폭 줄일 수 있습니다:
 
 ```bash
-# 환경 변수로 설정
-DD_TAG_FILTER="env:,service:" datadog logs search "status:error"
-
-# 또는 파라미터로 전달
+# 파라미터로 전달
 datadog logs search "status:error" --tag-filter "env:,service:"
 
 # 전략
-DD_TAG_FILTER="*"                    # 모든 태그 (기본값)
-DD_TAG_FILTER=""                     # 태그 제외
-DD_TAG_FILTER="env:,service:"        # 특정 prefix만 (권장!)
-DD_TAG_FILTER="env:production"       # 특정 값만
+--tag-filter "*"                    # 모든 태그 (기본값)
+--tag-filter ""                     # 태그 제외
+--tag-filter "env:,service:"        # 특정 prefix만 (권장!)
+--tag-filter "env:production"       # 특정 값만
 ```
 
 ### 출력 포맷
@@ -288,85 +248,36 @@ jq '.data[] | select(.status=="Alert")' monitors.json
 
 ## ⚙️ 설정
 
-### 우선순위
-설정은 다음 순서로 적용됩니다:
+### TOML 설정 파일
 
-1. **환경 변수** (최우선)
-   ```bash
-   DD_API_KEY=xxx DD_APP_KEY=yyy datadog monitors list
-   ```
+**위치:** `~/.config/datadog-cli/config.toml`
 
-2. **로컬 .env** (프로젝트별)
-   ```bash
-   # .env 파일
-   DD_API_KEY=xxx
-   DD_APP_KEY=yyy
-   DD_SITE=datadoghq.com
-   ```
-
-3. **전역 설정** (사용자 기본값)
-   ```bash
-   # ~/.config/datadog-cli/config
-   DD_API_KEY=xxx
-   DD_APP_KEY=yyy
-   DD_SITE=datadoghq.com
-   ```
-
-### 사용 가능한 환경 변수
-
-| 변수 | 설명 | 기본값 | 필수 |
-|------|------|--------|------|
-| `DD_API_KEY` | Datadog API 키 | - | ✅ |
-| `DD_APP_KEY` | Datadog Application 키 | - | ✅ |
-| `DD_SITE` | Datadog 사이트 | `datadoghq.com` | ❌ |
-| `DD_TAG_FILTER` | 태그 필터 (응답 크기 최적화) | `*` (전체) | ❌ |
-| `LOG_LEVEL` | 로그 레벨 (error/warn/info/debug) | `warn` | ❌ |
-
-**예시:**
-```bash
-# 전체 태그 포함 (기본)
-DD_TAG_FILTER="*" datadog logs search "status:error"
-
-# 특정 태그만 포함 (권장)
-DD_TAG_FILTER="env:,service:" datadog logs search "status:error"
-
-# 디버그 로그 활성화
-LOG_LEVEL=debug datadog monitors list
+```toml
+api_key = "your-api-key"
+app_key = "your-app-key"
+site = "datadoghq.com"  # or datadoghq.eu, us3.datadoghq.com, etc.
 ```
+
+**권한:** Unix 시스템에서는 600 (owner read/write only)으로 자동 설정됩니다.
 
 ### 설정 관리 명령어
 ```bash
+# 설정 파일 생성
+datadog config init
+
 # 현재 설정 확인 (API 키 마스킹)
 datadog config show
 
 # 설정 파일 경로
-datadog config path              # 로컬 .env
-datadog config path --global     # 전역 설정
+datadog config path
 
-# 모든 설정 소스 확인
-datadog config list
-
-# 설정 편집
-datadog config edit --global     # 전역 설정 편집
+# 설정 파일 편집 ($EDITOR 사용)
+datadog config edit
 ```
-
-### 설정 파일 위치
-
-**전역 설정 (권장):**
-```
-~/.config/datadog-cli/config
-```
-
-**로컬 설정:**
-```
-.env (프로젝트 루트)
-```
-
-**템플릿:** `.env.example` 참조
 
 ### Datadog 사이트 설정
 
-`DD_SITE` 환경 변수로 사용할 Datadog 사이트 지정:
+`site` 필드로 사용할 Datadog 사이트 지정:
 
 | 사이트 | 값 | 지역 |
 |-------|-----|------|
@@ -376,17 +287,12 @@ datadog config edit --global     # 전역 설정 편집
 | US5 | `us5.datadoghq.com` | 미국 |
 | US1-FED | `ddog-gov.com` | 미국 정부 |
 
-```bash
-DD_SITE=datadoghq.eu datadog monitors list
+**config.toml 예시:**
+```toml
+api_key = "your-api-key"
+app_key = "your-app-key"
+site = "datadoghq.eu"
 ```
-
-### ⚠️ 중요: .env 파일
-`.env`는 **프로젝트 공유 파일**입니다 (Node.js, Docker 등도 사용).
-
-**안전한 방법:**
-- ✅ **전역 설정 사용** (`~/.config/datadog-cli/config`) - datadog-cli 전용
-- ⚠️ **.env 사용 시** - 프로젝트별 오버라이드만
-- ❌ **.env 삭제 금지** - 다른 도구 설정 포함 가능
 
 ---
 
@@ -406,7 +312,6 @@ DD_SITE=datadoghq.eu datadog monitors list
 **제거 범위:**
 - ✅ 바이너리 (`~/.local/bin/datadog`)
 - ✅ 전역 설정 (`~/.config/datadog-cli/`) - 선택적
-- ❌ 로컬 .env - 수동 제거 필요
 
 ---
 
@@ -419,12 +324,12 @@ cargo build
 
 # 릴리즈 빌드 (최적화)
 cargo build --release
-# 결과: target/release/dd (5.1MB)
+# 결과: target/release/datadog (5.1MB)
 ```
 
 ### 테스트
 ```bash
-cargo test              # 117 tests
+cargo test              # 122 tests
 cargo fmt --check       # 포맷 검증
 cargo clippy           # 린팅
 ```
@@ -441,8 +346,8 @@ RUST_LOG=debug cargo run -- monitors list
 | 메트릭 | 값 |
 |--------|-----|
 | **바이너리 크기** | 5.1MB |
-| **테스트** | 117개 (100% 통과) |
-| **의존성** | 12개 (production) |
+| **테스트** | 122개 (100% 통과) |
+| **의존성** | 13개 (production) |
 | **빌드 최적화** | LTO + strip + opt-level 3 |
 | **평균 응답 시간** | 0.6-1.2초 (API 서버 시간) |
 

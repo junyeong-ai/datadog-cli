@@ -1,12 +1,12 @@
 # Datadog CLI
 
 [![Rust](https://img.shields.io/badge/rust-1.91.1%2B%20(2024%20edition)-orange?style=flat-square&logo=rust)](https://www.rust-lang.org)
-[![Tests](https://img.shields.io/badge/tests-117%20passing-green?style=flat-square)](https://github.com/junyeong-ai/datadog-cli)
+[![Tests](https://img.shields.io/badge/tests-122%20passing-green?style=flat-square)](https://github.com/junyeong-ai/datadog-cli)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 
 > High-performance CLI tool for querying Datadog from the command line
 
-[한국어](README.md) | English
+[한국어](README.md) | [English](README.en.md)
 
 ---
 
@@ -31,12 +31,15 @@ Binary will be installed to `~/.local/bin/datadog`
 
 ### 2. Configuration
 ```bash
-mkdir -p ~/.config/datadog-cli
-cat > ~/.config/datadog-cli/config << EOF
-DD_API_KEY=your_api_key
-DD_APP_KEY=your_app_key
-DD_SITE=datadoghq.com
-EOF
+datadog config init
+vim ~/.config/datadog-cli/config.toml
+```
+
+**config.toml:**
+```toml
+api_key = "your-api-key-here"
+app_key = "your-app-key-here"
+site = "datadoghq.com"
 ```
 
 ### 3. Usage
@@ -52,26 +55,12 @@ Done! 🎉
 
 ## 💡 Why Datadog CLI?
 
-### vs Datadog Web UI
-| Item | Web UI | Datadog CLI |
-|------|--------|-------------|
-| Query Speed | Browser loading | ✅ Instant (<1s) |
-| Automation | ❌ Impossible | ✅ Scriptable |
-| Data Processing | Manual copy | ✅ Unix tools |
-
-### vs Python SDK
-| Item | Python SDK | Datadog CLI |
-|------|-----------|-------------|
-| Installation | pip, dependencies | ✅ Single binary |
-| Start Time | 10min+ | ✅ 3 minutes |
-| Memory | Python runtime | ✅ Native (low) |
-
-### vs curl
-| Item | curl | Datadog CLI |
-|------|------|-------------|
-| Authentication | Manual headers | ✅ Automatic |
-| Error Handling | Manual parsing | ✅ Clear messages |
-| Output | Raw JSON | ✅ Format selection |
+| Feature | Web UI | Python SDK | curl | Datadog CLI |
+|---------|--------|-----------|------|-------------|
+| Query Speed | Browser loading | 10min+ setup | Manual headers | ✅ Instant (<1s) |
+| Automation | ❌ Impossible | Available | Available | ✅ Scriptable |
+| Installation | - | pip + dependencies | Built-in | ✅ Single binary |
+| Data Processing | Manual copy | Python code | Raw JSON | ✅ Unix tools |
 
 ---
 
@@ -116,10 +105,10 @@ datadog rum [options]                # User experience monitoring
 
 ### Configuration
 ```bash
+datadog config init                  # Create config file
 datadog config show                  # Show current config (masked)
-datadog config path [--global]       # Show config file path
-datadog config list                  # List all config sources
-datadog config edit [--global]       # Edit configuration
+datadog config path                  # Show config file path
+datadog config edit                  # Edit config file
 ```
 
 **All options:** `datadog --help` or `datadog <command> --help`
@@ -191,25 +180,6 @@ datadog logs aggregate \
   jq '.data.buckets | sort_by(.count) | reverse | .[0:5]'
 ```
 
-### Example 4: Script Automation
-```bash
-#!/bin/bash
-# Error rate monitoring script
-
-ERROR_COUNT=$(dd logs search "status:error" \
-  --from "5 minutes ago" \
-  --format json | \
-  jq '.pagination.total')
-
-if [ $ERROR_COUNT -gt 10 ]; then
-  echo "⚠️  High error rate: $ERROR_COUNT errors"
-  # Send Slack notification
-  curl -X POST $SLACK_WEBHOOK -d "{\"text\":\"High error rate: $ERROR_COUNT\"}"
-else
-  echo "✅ Error rate normal: $ERROR_COUNT errors"
-fi
-```
-
 ---
 
 ## 🌟 Advanced Features
@@ -235,17 +205,14 @@ datadog logs search "..." --from "1704067200"  # Unix timestamp
 Tag filtering can significantly reduce response size:
 
 ```bash
-# Set via environment variable
-DD_TAG_FILTER="env:,service:" datadog logs search "status:error"
-
-# Or pass as parameter
+# Pass as parameter
 datadog logs search "status:error" --tag-filter "env:,service:"
 
 # Strategies
-DD_TAG_FILTER="*"                    # All tags (default)
-DD_TAG_FILTER=""                     # Exclude all tags
-DD_TAG_FILTER="env:,service:"        # Specific prefixes (recommended!)
-DD_TAG_FILTER="env:production"       # Specific values only
+--tag-filter "*"                    # All tags (default)
+--tag-filter ""                     # Exclude all tags
+--tag-filter "env:,service:"        # Specific prefixes (recommended!)
+--tag-filter "env:production"       # Specific values only
 ```
 
 ### Output Formats
@@ -281,85 +248,36 @@ jq '.data[] | select(.status=="Alert")' monitors.json
 
 ## ⚙️ Configuration
 
-### Priority
-Configuration is applied in this order:
+### TOML Config File
 
-1. **Environment Variables** (highest priority)
-   ```bash
-   DD_API_KEY=xxx DD_APP_KEY=yyy datadog monitors list
-   ```
+**Location:** `~/.config/datadog-cli/config.toml`
 
-2. **Local .env** (project-specific)
-   ```bash
-   # .env file
-   DD_API_KEY=xxx
-   DD_APP_KEY=yyy
-   DD_SITE=datadoghq.com
-   ```
-
-3. **Global Config** (user default)
-   ```bash
-   # ~/.config/datadog-cli/config
-   DD_API_KEY=xxx
-   DD_APP_KEY=yyy
-   DD_SITE=datadoghq.com
-   ```
-
-### Available Environment Variables
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `DD_API_KEY` | Datadog API key | - | ✅ |
-| `DD_APP_KEY` | Datadog Application key | - | ✅ |
-| `DD_SITE` | Datadog site | `datadoghq.com` | ❌ |
-| `DD_TAG_FILTER` | Tag filter (optimize response size) | `*` (all) | ❌ |
-| `LOG_LEVEL` | Log level (error/warn/info/debug) | `warn` | ❌ |
-
-**Examples:**
-```bash
-# Include all tags (default)
-DD_TAG_FILTER="*" datadog logs search "status:error"
-
-# Include specific tags only (recommended)
-DD_TAG_FILTER="env:,service:" datadog logs search "status:error"
-
-# Enable debug logging
-LOG_LEVEL=debug datadog monitors list
+```toml
+api_key = "your-api-key"
+app_key = "your-app-key"
+site = "datadoghq.com"  # or datadoghq.eu, us3.datadoghq.com, etc.
 ```
+
+**Permissions:** On Unix systems, automatically set to 600 (owner read/write only).
 
 ### Configuration Commands
 ```bash
+# Create config file
+datadog config init
+
 # Show current config (API keys masked)
 datadog config show
 
-# Show config file paths
-datadog config path              # Local .env
-datadog config path --global     # Global config
+# Show config file path
+datadog config path
 
-# List all config sources
-datadog config list
-
-# Edit configuration
-datadog config edit --global     # Edit global config
+# Edit config file (uses $EDITOR)
+datadog config edit
 ```
-
-### Configuration File Locations
-
-**Global Config (recommended):**
-```
-~/.config/datadog-cli/config
-```
-
-**Local Config:**
-```
-.env (project root)
-```
-
-**Template:** See `.env.example`
 
 ### Datadog Site Configuration
 
-Use `DD_SITE` environment variable to specify your Datadog site:
+Use `site` field to specify your Datadog site:
 
 | Site | Value | Region |
 |------|-------|--------|
@@ -369,17 +287,12 @@ Use `DD_SITE` environment variable to specify your Datadog site:
 | US5 | `us5.datadoghq.com` | United States |
 | US1-FED | `ddog-gov.com` | US Government |
 
-```bash
-DD_SITE=datadoghq.eu datadog monitors list
+**config.toml example:**
+```toml
+api_key = "your-api-key"
+app_key = "your-app-key"
+site = "datadoghq.eu"
 ```
-
-### ⚠️ Important: .env File
-`.env` is a **shared project file** (also used by Node.js, Docker, etc.).
-
-**Safe Approach:**
-- ✅ **Use global config** (`~/.config/datadog-cli/config`) - datadog-cli only
-- ⚠️ **Use .env** - For project-specific overrides only
-- ❌ **Never delete .env** - May contain other tool settings
 
 ---
 
@@ -399,7 +312,6 @@ Binary will be installed to `~/.local/bin/datadog`
 **Removal Scope:**
 - ✅ Binary (`~/.local/bin/datadog`)
 - ✅ Global config (`~/.config/datadog-cli/`) - Optional
-- ❌ Local .env - Manual removal required
 
 ---
 
@@ -412,12 +324,12 @@ cargo build
 
 # Release build (optimized)
 cargo build --release
-# Result: target/release/dd (5.1MB)
+# Result: target/release/datadog (5.1MB)
 ```
 
 ### Testing
 ```bash
-cargo test              # 117 tests
+cargo test              # 122 tests
 cargo fmt --check       # Format check
 cargo clippy           # Linting
 ```
@@ -434,8 +346,8 @@ RUST_LOG=debug cargo run -- monitors list
 | Metric | Value |
 |--------|-------|
 | **Binary Size** | 5.1MB |
-| **Tests** | 117 (100% passing) |
-| **Dependencies** | 12 (production) |
+| **Tests** | 122 (100% passing) |
+| **Dependencies** | 13 (production) |
 | **Build Optimization** | LTO + strip + opt-level 3 |
 | **Avg Response Time** | 0.6-1.2s (API server time) |
 
