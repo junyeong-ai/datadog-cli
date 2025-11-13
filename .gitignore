@@ -1,0 +1,79 @@
+# Rust build artifacts
+/target/
+target/
+**/*.rs.bk
+*.pdb
+
+# Cargo lock file (for libraries, keep for binaries)
+# Cargo.lock
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE and editor files
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Specification and planning files
+.specify/
+.serena/
+specs/
+
+# Debug and log files
+*.log
+debug/
+logs/
+
+# Test coverage
+tarpaulin-report.html
+cobertura.xml
+lcov.info
+
+# Profiling
+perf.data
+perf.data.old
+flamegraph.svg
+*.profdata
+*.profraw
+
+# Documentation build
+/target/doc/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Backup files
+*.backup
+*.bak
+*.orig
+
+# Binary
+mcp-datadog
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test artifacts
+test-results/
+*.test
