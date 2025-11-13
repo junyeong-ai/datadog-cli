@@ -199,10 +199,7 @@ pub fn handle_config(action: &ConfigAction) -> Result<()> {
     match action {
         ConfigAction::Init => {
             let path = Config::init()?;
-            println!("Created config file: {}", path.display());
-            println!();
-            println!("Edit with your credentials:");
-            println!("  vim {}", path.display());
+            println!("Created: {}", path.display());
         }
 
         ConfigAction::Show => {
@@ -214,6 +211,10 @@ pub fn handle_config(action: &ConfigAction) -> Result<()> {
             let path = Config::config_path()
                 .ok_or_else(|| DatadogError::InvalidInput("Cannot determine config path".into()))?;
             println!("{}", path.display());
+        }
+
+        ConfigAction::Edit => {
+            Config::edit()?;
         }
     }
 

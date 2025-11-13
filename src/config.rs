@@ -135,6 +135,39 @@ site = "datadoghq.com"
         ))
     }
 
+    pub fn edit() -> Result<()> {
+        let path = Self::config_path()
+            .ok_or_else(|| DatadogError::InvalidInput("Cannot determine config path".into()))?;
+
+        if !path.exists() {
+            return Err(DatadogError::InvalidInput(format!(
+                "Config file not found: {}\nRun: datadog config init",
+                path.display()
+            )));
+        }
+
+        let editor = std::env::var("EDITOR").unwrap_or_else(|_| {
+            if cfg!(target_os = "macos") {
+                "vim".to_string()
+            } else if cfg!(target_os = "windows") {
+                "notepad".to_string()
+            } else {
+                "vi".to_string()
+            }
+        });
+
+        let status = std::process::Command::new(&editor)
+            .arg(&path)
+            .status()
+            .map_err(|e| DatadogError::InvalidInput(format!("Failed to launch editor: {}", e)))?;
+
+        if !status.success() {
+            return Err(DatadogError::InvalidInput("Editor exited with error".into()));
+        }
+
+        Ok(())
+    }
+
     pub fn base_url(&self) -> String {
         format!("https://api.{}", self.site)
     }

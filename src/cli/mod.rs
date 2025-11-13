@@ -264,6 +264,9 @@ pub enum ConfigAction {
 
     #[command(about = "Show config file path")]
     Path,
+
+    #[command(about = "Edit config file")]
+    Edit,
 }
 
 pub async fn run(cli: Cli) -> Result<()> {
