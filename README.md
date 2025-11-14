@@ -27,7 +27,8 @@
 ```bash
 ./install.sh
 ```
-바이너리가 `~/.local/bin/datadog`에 설치됩니다.
+- 바이너리가 `~/.local/bin/datadog`에 설치됩니다
+- **Claude Code AI 스킬** 설치 여부를 선택할 수 있습니다 (선택 1 권장)
 
 ### 2. 설정
 ```bash
@@ -43,6 +44,63 @@ datadog logs search "status:error" --limit 10
 ```
 
 완료! 🎉
+
+---
+
+## 🤖 Claude Code AI 스킬
+
+이 프로젝트는 [Claude Code](https://code.claude.com)용 AI 스킬을 포함합니다. 스킬을 설치하면 Claude가 자동으로 Datadog 쿼리를 실행해줍니다!
+
+### 주요 기능
+- 🔍 **자동 쿼리 실행** - 자연어로 요청하면 Claude가 적절한 명령어를 실행
+- 📊 **데이터 분석** - 에러 조사, 성능 분석, 모니터 확인 등 자동화
+- 🎯 **컨텍스트 인식** - 프로젝트 컨텍스트에 맞는 쿼리 자동 생성
+- 🛠️ **Unix 파이프라인** - jq/grep과 조합하여 복잡한 데이터 처리
+
+### 스킬 설치 옵션
+
+`./install.sh` 실행 시 4가지 옵션을 선택할 수 있습니다:
+
+**[1] Skip** - 스킬 설치 안 함
+- CLI는 정상 작동
+- Claude 자동 실행 기능은 사용 불가
+- 나중에 다시 설치 가능
+
+**[2] User (권장)** - 사용자 레벨 설치
+- 설치 위치: `~/.claude/skills/datadog-query/`
+- 모든 프로젝트에서 사용 가능
+- 프로젝트 삭제해도 스킬 유지
+
+**[3] Project** - 프로젝트 레벨만 사용
+- 설치 위치: `.claude/skills/datadog-query/` (이미 있음)
+- 이 프로젝트에서만 사용 가능
+- 추가 설치 없음
+
+**[4] Both** - 양쪽 모두 설치
+- 사용자 레벨 + 프로젝트 레벨
+- 최대 호환성
+
+### 사용 예시
+
+```
+You: "최근 1시간 동안 production 환경의 에러 로그 보여줘"
+
+Claude: datadog logs search "status:error env:production" --from "1 hour ago" 실행
+        → 결과 분석 및 요약 제공
+```
+
+```
+You: "API 서버 CPU 사용량 추이 확인해줘"
+
+Claude: datadog metrics "avg:system.cpu.user{service:api}" --from "24 hours ago" 실행
+        → 그래프 데이터 분석 및 인사이트 제공
+```
+
+### 버전 관리
+
+- 스킬 버전: v0.1.0 (CLI 버전과 동기화)
+- 설치 스크립트가 자동으로 버전 확인
+- 업데이트 시 기존 버전 자동 백업 (예: `~/.claude/skills/datadog-query.bak-20251114-102030`)
 
 ---
 
@@ -281,7 +339,15 @@ datadog config edit
 ```bash
 ./install.sh
 ```
-바이너리가 `~/.local/bin/datadog`에 설치됩니다.
+
+**설치 항목:**
+1. **CLI 바이너리**: `~/.local/bin/datadog`
+2. **Claude Code 스킬** (선택 사항):
+   - 옵션 1: 사용자 레벨 (`~/.claude/skills/datadog-query/`) - 권장
+   - 옵션 2: 프로젝트 레벨만 (`.claude/skills/datadog-query/`)
+   - 옵션 3: 설치 안 함
+
+설치 스크립트가 대화형으로 선택지를 제공합니다.
 
 ### 제거
 ```bash
@@ -291,6 +357,10 @@ datadog config edit
 **제거 범위:**
 - ✅ 바이너리 (`~/.local/bin/datadog`)
 - ✅ 전역 설정 (`~/.config/datadog-cli/`) - 선택적
+- ⚠️ Claude Code 스킬은 수동으로 제거:
+  ```bash
+  rm -rf ~/.claude/skills/datadog-query
+  ```
 
 ---
 
