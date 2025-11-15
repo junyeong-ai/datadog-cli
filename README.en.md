@@ -1,365 +1,162 @@
 # Datadog CLI
 
-[![Rust](https://img.shields.io/badge/rust-1.91.1%2B%20(2024%20edition)-orange?style=flat-square&logo=rust)](https://www.rust-lang.org)
-[![Tests](https://img.shields.io/badge/tests-122%20passing-green?style=flat-square)](https://github.com/junyeong-ai/datadog-cli)
-[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+Fast and powerful Datadog API query tool - Natural language time parsing support
 
-> High-performance CLI tool for querying Datadog from the command line
+## ✨ Features
 
-[한국어](README.md) | [English](README.en.md)
+- **⚡ High Performance**: Rust-based, 10x faster than Python SDK
+- **🔒 Secure**: rustls-based TLS 1.3 secure communication
+- **📊 Multiple Outputs**: JSON, JSONL, Table for Unix pipelines
+- **🕐 Natural Time**: Intuitive time like "1 hour ago", "30 minutes ago"
+- **⚙️ Flexible Config**: CLI args, env vars, project/global config files
 
----
+## 🚀 Quick Start
 
-## ✨ Key Features
+### Installation
 
-- 🚀 **5.1MB Single Binary** - No dependencies, instant execution
-- 📊 **10 Commands** - metrics, logs, monitors, events, hosts, dashboards, spans, services, rum, config
-- 🌍 **Natural Language Time** - "1 hour ago", "yesterday", "last week"
-- 🎯 **3 Output Formats** - JSON, JSONL, Table
-- 🔧 **Unix Pipeline** - Perfect integration with grep, jq, etc.
-- ⚡ **Optimized Performance** - HTTP/2 + rustls, async processing
-
----
-
-## 🚀 Quick Start (3 Minutes)
-
-### 1. Installation
 ```bash
-./install.sh
-```
-Binary will be installed to `~/.local/bin/datadog`
+# Install with Cargo
+cargo install --path .
 
-### 2. Configuration
-```bash
-datadog config init
-datadog config edit
-```
-
-### 3. Usage
-```bash
-datadog monitors list
-datadog metrics "avg:system.cpu.user{*}" --from "1 hour ago"
-datadog logs search "status:error" --limit 10
-```
-
-Done! 🎉
-
----
-
-## 💡 Why Datadog CLI?
-
-| Feature | Web UI | Python SDK | curl | Datadog CLI |
-|---------|--------|-----------|------|-------------|
-| Query Speed | Browser loading | 10min+ setup | Manual headers | ✅ Instant (<1s) |
-| Automation | ❌ Impossible | Available | Available | ✅ Scriptable |
-| Installation | - | pip + dependencies | Built-in | ✅ Single binary |
-| Data Processing | Manual copy | Python code | Raw JSON | ✅ Unix tools |
-
----
-
-## 📋 Commands
-
-### Metrics & Infrastructure
-```bash
-datadog metrics <query>              # Query metrics
-datadog hosts [options]              # List hosts
-```
-
-### Logs & Analytics
-```bash
-datadog logs search <query>          # Search logs (default subcommand)
-datadog logs aggregate [options]     # Aggregate logs (count only)
-datadog logs timeseries [options]    # Time series analysis
-```
-
-### Monitoring & Events
-```bash
-datadog monitors list                # List monitors (subcommand)
-datadog monitors get <id>            # Get monitor details (subcommand)
-datadog events [options]             # Query events
-```
-
-### Dashboards
-```bash
-datadog dashboards list              # List dashboards (subcommand)
-datadog dashboards get <id>          # Get dashboard details (subcommand)
-```
-
-### APM & Tracing
-```bash
-datadog spans [options]              # Search APM spans
-datadog services [options]           # Service catalog
-```
-
-### RUM (Real User Monitoring)
-```bash
-datadog rum [options]                # User experience monitoring
+# Or use script
+./scripts/install.sh
 ```
 
 ### Configuration
-```bash
-datadog config <subcommand>          # Config management (init/show/path/edit)
-```
-
-**Note**: logs, monitors, dashboards, and config commands use subcommands.
-
-**All options:** `datadog --help` or `datadog <command> --help`
-
----
-
-## 🎯 Usage Examples
-
-### Example 1: Production Error Monitoring
-```bash
-# Search production errors from last hour
-datadog logs search "status:error env:production" \
-  --from "1 hour ago" \
-  --limit 50 \
-  --format table
-```
-
-**Output:**
-```
-┌────────────────────┬─────────────────────┬───────────────────┐
-│ timestamp          ┆ service             ┆ message           │
-├────────────────────┼─────────────────────┼───────────────────┤
-│ 2025-11-13 06:00   ┆ payment-api         ┆ Connection timeout│
-│ 2025-11-13 06:02   ┆ auth-service        ┆ Invalid token     │
-└────────────────────┴─────────────────────┴───────────────────┘
-```
-
-### Example 2: CPU Usage Trend Analysis
-```bash
-# API server CPU usage for last 24 hours
-datadog metrics "avg:system.cpu.user{service:api}" \
-  --from "24 hours ago" \
-  --to "now" \
-  --format json
-```
-
-**Output:**
-```json
-{
-  "data": [{
-    "metric": "system.cpu.user",
-    "points": [
-      {"timestamp": "2025-11-12 06:00:00 UTC", "value": 45.2},
-      {"timestamp": "2025-11-12 12:00:00 UTC", "value": 62.8}
-    ]
-  }]
-}
-```
-
-### Example 3: Unix Pipeline Usage
-```bash
-# Count monitors in Alert status
-datadog --format jsonl monitors list | \
-  grep '"status":"Alert"' | \
-  jq -s 'length'
-
-# Output: 42
-```
-
-**Advanced Example:**
-```bash
-# Top 5 services by error count
-datadog logs aggregate \
-  --query "status:error" \
-  --from "1 hour ago" \
-  --compute '[{"aggregation":"count","type":"total"}]' \
-  --group-by '[{"facet":"service"}]' \
-  --format json | \
-  jq '.data.buckets | sort_by(.count) | reverse | .[0:5]'
-```
-
----
-
-## 🌟 Advanced Features
-
-### Natural Language Time
-```bash
-# Relative time
-datadog logs search "..." --from "10 minutes ago"
-datadog logs search "..." --from "2 hours ago"
-datadog logs search "..." --from "3 days ago"
-
-# Named times
-datadog logs search "..." --from "yesterday"
-datadog logs search "..." --from "last week"
-datadog logs search "..." --from "last month"
-
-# Absolute time
-datadog logs search "..." --from "2025-01-15T10:30:00Z"
-datadog logs search "..." --from "1704067200"  # Unix timestamp
-```
-
-### Tag Filtering
-Tag filtering can significantly reduce response size:
 
 ```bash
-# Pass as parameter
-datadog logs search "status:error" --tag-filter "env:,service:"
+# 1. Create config file
+datadog config init
 
-# Strategies
---tag-filter "*"                    # All tags (default)
---tag-filter ""                     # Exclude all tags
---tag-filter "env:,service:"        # Specific prefixes (recommended!)
---tag-filter "env:production"       # Specific values only
+# 2. Set API keys (choose one)
+export DD_API_KEY="your-api-key"
+export DD_APP_KEY="your-app-key"
+
+# Or
+datadog config edit
+
+# Or
+datadog --api-key "key" --app-key "key" metrics "..."
 ```
 
-### Output Formats
+### Basic Usage
+
 ```bash
-# JSON (default) - Raw API response
-datadog monitors list --format json
+# Query metrics (last 1 hour)
+datadog metrics "system.cpu.user"
 
-# JSONL (JSON Lines) - Unix-friendly
-datadog monitors list --format jsonl | grep "Alert" | jq -s '.'
+# Search logs
+datadog logs search "service:web status:error" --from "1 hour ago"
 
-# Table - Human-readable
-datadog monitors list --format table
+# List monitors
+datadog monitors list
 ```
 
-### Unix Pipeline Patterns
-```bash
-# Pattern 1: Filter + Aggregate
-datadog --format jsonl monitors list | \
-  grep "production" | \
-  jq -s 'length'
+## 📖 Commands
 
-# Pattern 2: Data Transformation
-datadog monitors list --format json | \
-  jq '.data[] | {id, name, status}'
-
-# Pattern 3: Save to File
-datadog monitors list > monitors.json
-jq '.data | length' monitors.json
-jq '.data[] | select(.status=="Alert")' monitors.json
-```
-
----
+| Command | Description | Example |
+|---------|-------------|---------|
+| `metrics` | Query metrics | `datadog metrics "avg:system.cpu.user{*}"` |
+| `logs` | Search/analyze logs | `datadog logs search "query" --limit 100` |
+| `monitors` | Manage monitors | `datadog monitors list --tags "env:prod"` |
+| `events` | Query events | `datadog events --from "1 day ago"` |
+| `hosts` | List hosts | `datadog hosts --filter "env:production"` |
+| `dashboards` | Manage dashboards | `datadog dashboards list` |
+| `spans` | Search APM spans | `datadog spans "service:api"` |
+| `services` | List services | `datadog services --env prod` |
+| `rum` | Search RUM events | `datadog rum "query"` |
+| `config` | Config management | `datadog config show` |
 
 ## ⚙️ Configuration
 
-### TOML Config File
+### Priority
 
-**Location:** `~/.config/datadog-cli/config.toml`
-
-```toml
-api_key = "your-api-key"
-app_key = "your-app-key"
-site = "datadoghq.com"  # or datadoghq.eu, us3.datadoghq.com, etc.
+```
+1. CLI arguments       --api-key, --app-key (highest)
+2. Environment vars    DD_API_KEY, DD_APP_KEY, DD_SITE
+3. Project config      ./.datadog.toml
+4. Global config       ~/.config/datadog-cli/config.toml
 ```
 
-**Getting API Keys**: Generate API Key and Application Key at [Datadog API Keys](https://app.datadoghq.com/organization-settings/api-keys).
+### Config File Example
 
-**Permissions:** On Unix systems, automatically set to 600 (owner read/write only).
+**Global** (`~/.config/datadog-cli/config.toml`):
 
-### Configuration Commands
+```toml
+api_key = "your-api-key-here"
+app_key = "your-app-key-here"
+site = "datadoghq.com"  # or datadoghq.eu, ddog-gov.com, etc.
+```
+
+**Project** (`.datadog.toml`):
+
+```toml
+# Project-specific keys
+api_key = "project-key"
+app_key = "project-app-key"
+site = "datadoghq.eu"
+```
+
+## 💡 Tips
+
+### With jq
+
 ```bash
-# Create config file
+# Extract metric points
+datadog metrics "system.cpu.user" --format jsonl | jq '.series[].pointlist'
+
+# Extract log messages
+datadog logs search "query" --format jsonl | jq -r '.logs[].message'
+```
+
+### Time Parsing
+
+```bash
+# Natural language
+datadog metrics "..." --from "1 hour ago" --to "now"
+
+# ISO8601
+datadog metrics "..." --from "2024-01-01T00:00:00Z"
+
+# Unix timestamp
+datadog metrics "..." --from "1704067200"
+```
+
+## 🛠️ Troubleshooting
+
+### Config Not Found
+
+```bash
 datadog config init
-
-# Show current config (API keys masked)
-datadog config show
-
-# Show config file path
 datadog config path
-
-# Edit config file (uses $EDITOR)
 datadog config edit
 ```
 
-### Datadog Site Configuration
+### Auth Failed
 
-`site` field values: `datadoghq.com` (US1, default), `datadoghq.eu` (EU), `us3.datadoghq.com`, `us5.datadoghq.com`, `ddog-gov.com` (US1-FED)
-
----
-
-## 📦 Installation & Removal
-
-### Installation
 ```bash
-./install.sh
-```
-Binary will be installed to `~/.local/bin/datadog`
-
-### Removal
-```bash
-./uninstall.sh
+datadog config show
+DD_API_KEY="new-key" DD_APP_KEY="new-app-key" datadog monitors list
 ```
 
-**Removal Scope:**
-- ✅ Binary (`~/.local/bin/datadog`)
-- ✅ Global config (`~/.config/datadog-cli/`) - Optional
+## 🔧 Development
 
----
-
-## 🛠️ Development
-
-### Build
 ```bash
-# Development build
-cargo build
-
-# Release build (optimized)
+# Build
 cargo build --release
-# Result: target/release/datadog (5.1MB)
+
+# Test
+cargo test
+
+# Lint
+cargo clippy -- -D warnings && cargo fmt
 ```
-
-### Testing
-```bash
-cargo test              # 122 tests
-cargo fmt --check       # Format check
-cargo clippy           # Linting
-```
-
-### Debugging
-```bash
-RUST_LOG=debug cargo run -- monitors list
-```
-
----
-
-## 📊 Performance
-
-| Metric | Value |
-|--------|-------|
-| **Binary Size** | 5.1MB |
-| **Tests** | 122 (100% passing) |
-| **Dependencies** | 13 (production) |
-| **Build Optimization** | LTO + strip + opt-level 3 |
-| **Avg Response Time** | 0.6-1.2s (API server time) |
-
----
 
 ## 📄 License
 
-MIT License - See [LICENSE](LICENSE) file
+MIT License
 
----
+## 🔗 Links
 
-## 🤝 Contributing
-
-Issues and Pull Requests are welcome!
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Guidelines
-- `cargo fmt` - Code formatting
-- `cargo clippy -- -D warnings` - Linting (0 warnings)
-- `cargo test` - All tests must pass
-- AI agent development: See [CLAUDE.md](CLAUDE.md)
-
----
-
-<div align="center">
-
-**Made with 🦀 Rust**
-
-[⭐ Star this repo](https://github.com/junyeong-ai/datadog-cli) · [🐛 Report Bug](https://github.com/junyeong-ai/datadog-cli/issues) · [✨ Request Feature](https://github.com/junyeong-ai/datadog-cli/issues)
-
-</div>
+- [Datadog API Docs](https://docs.datadoghq.com/api/)
+- [GitHub Repository](https://github.com/junyeong-ai/datadog-cli)
