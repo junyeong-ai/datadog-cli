@@ -421,8 +421,7 @@ impl DatadogClient {
             body["options"] = serde_json::json!({"timezone": tz});
         }
 
-        // Debug: log request body
-        log::debug!(
+        tracing::debug!(
             "Logs aggregate request body: {}",
             serde_json::to_string_pretty(&body).unwrap_or_default()
         );
