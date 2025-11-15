@@ -208,7 +208,7 @@ pub fn handle_config(action: &ConfigAction) -> Result<()> {
         }
 
         ConfigAction::Path => {
-            let path = Config::config_path()
+            let path = Config::global_config_path()
                 .ok_or_else(|| DatadogError::InvalidInput("Cannot determine config path".into()))?;
             println!("{}", path.display());
         }
