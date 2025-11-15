@@ -1,7 +1,7 @@
 ---
 name: datadog-query
 version: 0.1.0
-description: Execute Datadog observability queries via CLI (requires datadog binary installed). Use when investigating Datadog production errors, analyzing metrics/performance, checking monitors/alerts, searching APM traces, querying logs, or building monitoring dashboards. Activates on keywords - Datadog, observability, monitoring, logs, metrics, APM, RUM, traces, spans, monitors, alerts, performance. Supports natural time parsing ("1 hour ago"), tag filtering (30-70% reduction), and Unix pipelines (jq/grep). Commands - logs, metrics, monitors, events, hosts, dashboards, spans, services, rum.
+description: Execute Datadog CLI observability queries. Use when investigating production errors, analyzing metrics/performance, checking monitors/alerts, searching APM traces, querying logs, or building dashboards. Activates on - Datadog, observability, monitoring, logs, metrics, APM, RUM, traces, spans, monitors, alerts, performance. Supports natural time ("1 hour ago"), tag filtering, Unix pipelines (jq/grep).
 allowed-tools: Bash, Read
 ---
 
