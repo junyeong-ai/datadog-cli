@@ -11,16 +11,22 @@ use crate::error::Result;
 #[derive(Parser)]
 #[command(name = "datadog")]
 #[command(version)]
-#[command(about = "Datadog CLI", long_about = None)]
+#[command(about = "High-performance Datadog CLI")]
 pub struct Cli {
-    #[arg(long, default_value = "json", help = "Output format: json, jsonl, table")]
+    #[arg(long, default_value = "json")]
     pub format: String,
 
-    #[arg(short = 'q', long, help = "Quiet mode")]
-    pub quiet: bool,
-
-    #[arg(short = 'v', long, help = "Verbose mode")]
+    #[arg(short = 'v', long, global = true)]
     pub verbose: bool,
+
+    #[arg(long, env = "DD_API_KEY", global = true, hide_env_values = true)]
+    pub api_key: Option<String>,
+
+    #[arg(long, env = "DD_APP_KEY", global = true, hide_env_values = true)]
+    pub app_key: Option<String>,
+
+    #[arg(long, env = "DD_SITE", global = true)]
+    pub site: Option<String>,
 
     #[command(subcommand)]
     pub command: Command,
@@ -274,15 +280,15 @@ pub async fn run(cli: Cli) -> Result<()> {
         return commands::handle_config(action);
     }
 
-    let config = Config::load()?;
+    let config = Config::load(cli.api_key, cli.app_key, cli.site)?;
     let client = Arc::new(DatadogClient::new(
-        config.api_key.clone(),
-        config.app_key.clone(),
+        config.api_key().to_string(),
+        config.app_key().to_string(),
         Some(config.site.clone()),
     )?);
 
-    let format = output::Format::from_str(&cli.format)
-        .map_err(crate::error::DatadogError::InvalidInput)?;
+    let format =
+        output::Format::from_str(&cli.format).map_err(crate::error::DatadogError::InvalidInput)?;
 
     let result = commands::execute(&cli.command, client).await?;
     output::print(&result, &format)?;
