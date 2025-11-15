@@ -37,7 +37,7 @@ pub fn load(
 **Traits**:
 - `TimeHandler`: Parse natural language, ISO8601, Unix timestamps
 - `ParameterParser`: Build API query parameters
-- `TagFilter`: Apply tag filters from env (`DD_FILTER_TAGS`)
+- `TagFilter`: Apply tag filters from env (`DD_TAG_FILTER`)
 - `ResponseFormatter`: Format API responses (JSON, JSONL, Table)
 - `Paginator`: Handle pagination for list operations
 - `ResponseFilter`: Filter response data
@@ -93,7 +93,7 @@ pub async fn retry_with_backoff<F, Fut, T>(f: F) -> Result<T>
 
 ### Add New Command
 
-1. **Add to `Command` enum** (`src/cli/mod.rs:30-171`)
+1. **Add to `Command` enum** (`src/cli/mod.rs:36-177`)
    ```rust
    #[derive(Subcommand)]
    pub enum Command {
@@ -150,7 +150,7 @@ pub async fn retry_with_backoff<F, Fut, T>(f: F) -> Result<T>
 
 ### Modify Config
 
-1. **Update `Config` struct** (`src/config.rs:6-16`)
+1. **Update `Config` struct** (`src/config.rs:7-16`)
    ```rust
    pub struct Config {
        pub new_field: Option<String>,
@@ -166,7 +166,7 @@ pub async fn retry_with_backoff<F, Fut, T>(f: F) -> Result<T>
 
 3. **Update `validate()`** for new constraints (`src/config.rs:126-147`)
 
-4. **Update `init()` template** (`src/config.rs:164-167`)
+4. **Update `init()` template** (`src/config.rs:149-180`, template at 164-167)
 
 ---
 
@@ -251,7 +251,7 @@ let params = self.apply_tag_filter(base_params, tag_filter);
 - `src/config.rs`: Default site (`datadoghq.com`), config paths
 - `src/datadog/retry.rs`: Max retries (3), delays (2s, 4s, 8s)
 - `src/utils.rs`: Time parsing logic
-- `src/handlers/common.rs`: Tag filter env var (`DD_FILTER_TAGS`)
+- `src/datadog/client.rs`: Tag filter env var (`DD_TAG_FILTER`)
 - `src/handlers/logs.rs`: Default query (`*`), default limit (100)
 - `src/handlers/metrics.rs`: Rollup interval calculation constants
 
