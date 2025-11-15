@@ -72,7 +72,7 @@ jobs:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: unittests
-          name: codecov-mcp-datadog
+          name: codecov-datadog-cli
           verbose: true
 
       - name: Generate HTML coverage report
