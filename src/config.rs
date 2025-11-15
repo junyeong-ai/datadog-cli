@@ -117,7 +117,7 @@ impl Config {
         if other.app_key.is_some() {
             self.app_key = other.app_key;
         }
-        if other.site != default_site() {
+        if !other.site.is_empty() {
             self.site = other.site;
         }
         self
