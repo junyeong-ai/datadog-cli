@@ -1,90 +1,146 @@
 # Datadog CLI
 
-빠르고 강력한 Datadog API 조회 도구 - 자연어 시간 파싱 지원
+[![Rust](https://img.shields.io/badge/rust-1.91.1%2B%20(2024%20edition)-orange?style=flat-square&logo=rust)](https://www.rust-lang.org)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue?style=flat-square)](https://github.com/junyeong-ai/datadog-cli/releases)
 
-## ✨ 주요 기능
+> **🌐 한국어** | **[English](README.en.md)**
 
-- **⚡ 고성능**: Rust 기반, Python SDK 대비 10배 빠른 조회 속도
-- **🔒 안전한 인증**: rustls 기반 TLS 1.3 보안 통신
-- **📊 다양한 출력**: JSON, JSONL, Table 지원으로 Unix 파이프라인 연동
-- **🕐 자연어 시간**: "1 hour ago", "30 minutes ago" 등 직관적인 시간 지정
-- **⚙️ 유연한 설정**: CLI 인자, 환경 변수, 프로젝트/전역 설정 파일 지원
+---
 
-## 🚀 빠른 시작
+> **⚡ 빠르고 강력한 Datadog API 조회 도구**
+>
+> - 🚀 **고성능** (Rust 기반, Python SDK 대비 10배 빠름)
+> - 🕐 **자연어 시간** ("1 hour ago", "30 minutes ago")
+> - 📊 **다양한 출력** (JSON, JSONL, Table)
+> - 🔒 **안전한 인증** (rustls 기반 TLS 1.3)
 
-### 설치
+---
 
-**방법 1: Prebuilt Binary (권장 - 빠름)**
-
-```bash
-curl -sSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh | bash
-```
-
-**방법 2: Cargo Install**
+## ⚡ 빠른 시작 (1분)
 
 ```bash
-# Crates.io에서 설치 (향후 지원)
-cargo install datadog-cli
+# 1. 설치
+curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh | bash
 
-# 또는 로컬 빌드
-git clone https://github.com/junyeong-ai/datadog-cli
-cd datadog-cli
-cargo install --path .
-```
-
-**방법 3: Source Build (개발자용)**
-
-```bash
-git clone https://github.com/junyeong-ai/datadog-cli
-cd datadog-cli
-cargo build --release
-# Binary: target/release/datadog
-```
-
-### 설정
-
-```bash
-# 1. 설정 파일 생성
+# 2. 설정 초기화
 datadog config init
 
-# 2. API 키 설정 (3가지 방법 중 택1)
-export DD_API_KEY="your-api-key"
-export DD_APP_KEY="your-app-key"
-
-# 또는
+# 3. API 키 설정
 datadog config edit
 
-# 또는
-datadog --api-key "key" --app-key "key" metrics "..."
+# 4. 사용 시작! 🎉
+datadog monitors list
+datadog logs search "status:error" --from "1 hour ago"
+datadog metrics "avg:system.cpu.user{*}"
 ```
 
-### 기본 사용
+---
 
+## 🎯 주요 기능
+
+### 로그 조회
 ```bash
-# 메트릭 조회 (최근 1시간)
-datadog metrics "system.cpu.user"
-
-# 로그 검색
+# 로그 검색 (자연어 시간)
 datadog logs search "service:web status:error" --from "1 hour ago"
 
-# 모니터 목록
-datadog monitors list
+# 로그 집계 (카운트)
+datadog logs aggregate "service:api" --from "6 hours ago"
+
+# 시계열 분석
+datadog logs timeseries "status:error" \
+  --from "24 hours ago" \
+  --interval "1h" \
+  --aggregation "count"
 ```
 
-## 📖 주요 명령어
+### 메트릭 조회
+```bash
+# 메트릭 쿼리
+datadog metrics "avg:system.cpu.user{*}"
 
-| 명령어 | 설명 | 예시 |
-|--------|------|------|
-| `metrics` | 메트릭 조회 | `datadog metrics "avg:system.cpu.user{*}"` |
-| `logs` | 로그 검색/분석 | `datadog logs search "query" --limit 100` |
-| `monitors` | 모니터 관리 | `datadog monitors list --tags "env:prod"` |
-| `events` | 이벤트 조회 | `datadog events --from "1 day ago"` |
-| `hosts` | 호스트 목록 | `datadog hosts --filter "env:production"` |
-| `dashboards` | 대시보드 관리 | `datadog dashboards list` |
-| `spans` | APM 스팬 검색 | `datadog spans "service:api" --from "..." --to "..."` |
-| `services` | 서비스 목록 | `datadog services --env prod` |
-| `rum` | RUM 이벤트 검색 | `datadog rum "query"` |
-| `config` | 설정 관리 | `datadog config show` |
+# 특정 태그 필터링
+datadog metrics "avg:system.cpu.user{service:web}"
+
+# 그룹화
+datadog metrics "avg:system.cpu.user{*} by {service}"
+```
+
+### APM & RUM
+```bash
+# 스팬 검색 (에러만)
+datadog spans "service:api error:true" --from "30 minutes ago"
+
+# RUM 이벤트
+datadog rum "@type:error" --from "1 hour ago"
+
+# 서비스 목록
+datadog services --env production
+```
+
+### 모니터링
+```bash
+# 모니터 목록
+datadog monitors list --tags "env:prod"
+
+# 모니터 상세 조회
+datadog monitors get 12345678
+
+# 이벤트 조회
+datadog events --from "1 day ago" --priority "normal"
+```
+
+### 인프라
+```bash
+# 호스트 목록
+datadog hosts --filter "env:production"
+
+# 대시보드 목록
+datadog dashboards list
+```
+
+---
+
+## 📦 설치
+
+### 방법 1: Prebuilt Binary (권장) ⭐
+
+**자동 설치**:
+```bash
+curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh | bash
+```
+
+**수동 설치**:
+1. [Releases](https://github.com/junyeong-ai/datadog-cli/releases)에서 바이너리 다운로드
+2. 압축 해제: `tar -xzf datadog-*.tar.gz`
+3. PATH에 이동: `mv datadog ~/.local/bin/`
+
+### 방법 2: Cargo
+
+```bash
+cargo install datadog-cli
+```
+
+### 방법 3: 소스 빌드
+
+```bash
+git clone https://github.com/junyeong-ai/datadog-cli
+cd datadog-cli
+./scripts/install.sh
+```
+
+**Requirements**: Rust 1.91.1+
+
+### 🤖 Claude Code Skill (선택사항)
+
+`./scripts/install.sh` 실행 시 Claude Code 스킬 설치 여부를 선택할 수 있습니다:
+
+- **User-level** (권장): 모든 프로젝트에서 사용 가능
+- **Project-level**: Git을 통해 팀 자동 배포
+- **Skip**: 나중에 수동 설치
+
+스킬을 설치하면 Claude Code에서 자연어로 Datadog 데이터 조회가 가능합니다.
+
+---
 
 ## ⚙️ 설정
 
@@ -97,7 +153,7 @@ datadog monitors list
 4. 전역 설정         ~/.config/datadog-cli/config.toml
 ```
 
-### 설정 파일 예시
+### 설정 파일
 
 **전역 설정** (`~/.config/datadog-cli/config.toml`):
 
@@ -116,6 +172,22 @@ app_key = "project-specific-app-key"
 site = "datadoghq.eu"
 ```
 
+### 설정 관리
+
+```bash
+# 설정 초기화
+datadog config init
+
+# 설정 표시 (토큰 마스킹)
+datadog config show
+
+# 설정 파일 경로
+datadog config path
+
+# 에디터로 수정 ($EDITOR 사용)
+datadog config edit
+```
+
 ### 환경 변수
 
 ```bash
@@ -124,30 +196,35 @@ export DD_APP_KEY="your-app-key"
 export DD_SITE="datadoghq.com"
 ```
 
-## 💡 유용한 팁
+---
 
-### jq와 함께 사용
+## 💡 사용 팁
+
+### 자연어 시간 파싱
 
 ```bash
-# 메트릭 포인트만 추출
+# 자연어 (권장)
+datadog logs search "query" --from "1 hour ago" --to "now"
+datadog metrics "query" --from "30 minutes ago"
+
+# ISO8601
+datadog logs search "query" --from "2024-01-01T00:00:00Z"
+
+# Unix timestamp
+datadog metrics "query" --from "1704067200"
+```
+
+### Unix 파이프라인 연동
+
+```bash
+# jq로 메트릭 포인트 추출
 datadog metrics "system.cpu.user" --format jsonl | jq '.series[].pointlist'
 
 # 로그 메시지만 추출
 datadog logs search "query" --format jsonl | jq -r '.logs[].message'
-```
 
-### 시간 파싱
-
-```bash
-# 자연어
-datadog metrics "..." --from "1 hour ago" --to "now"
-datadog logs search "..." --from "30 minutes ago"
-
-# ISO8601
-datadog metrics "..." --from "2024-01-01T00:00:00Z" --to "2024-01-01T23:59:59Z"
-
-# Unix timestamp
-datadog metrics "..." --from "1704067200" --to "1704153600"
+# 에러 카운트
+datadog logs search "status:error" --format jsonl | jq '.logs | length'
 ```
 
 ### Table 출력
@@ -157,6 +234,49 @@ datadog metrics "..." --from "1704067200" --to "1704153600"
 datadog monitors list --format table
 datadog hosts --format table
 ```
+
+### 태그 필터링
+
+```bash
+# 응답 크기 30-70% 절감
+datadog logs search "query" --tag-filter "env:,service:"
+
+# 모든 태그 제외
+datadog logs search "query" --tag-filter ""
+
+# 모든 태그 포함 (기본값)
+datadog logs search "query" --tag-filter "*"
+```
+
+**환경 변수 설정**:
+```bash
+export DD_TAG_FILTER="env:,service:"
+```
+
+**적용 대상**: logs search, spans, rum, hosts
+
+---
+
+## 📖 명령어
+
+| 명령어 | 설명 | 예시 |
+|--------|------|------|
+| `metrics` | 메트릭 조회 | `datadog metrics "avg:system.cpu.user{*}"` |
+| `logs search` | 로그 검색 | `datadog logs search "query" --from "1h ago"` |
+| `logs aggregate` | 로그 집계 | `datadog logs aggregate "query" --from "6h ago"` |
+| `logs timeseries` | 로그 시계열 | `datadog logs timeseries "query" --interval "1h"` |
+| `monitors list` | 모니터 목록 | `datadog monitors list --tags "env:prod"` |
+| `monitors get` | 모니터 상세 | `datadog monitors get 12345678` |
+| `events` | 이벤트 조회 | `datadog events --from "1 day ago"` |
+| `hosts` | 호스트 목록 | `datadog hosts --filter "env:production"` |
+| `dashboards list` | 대시보드 목록 | `datadog dashboards list` |
+| `dashboards get` | 대시보드 상세 | `datadog dashboards get abc-def-ghi` |
+| `spans` | APM 스팬 검색 | `datadog spans "service:api" --from "..."` |
+| `services` | 서비스 목록 | `datadog services --env prod` |
+| `rum` | RUM 이벤트 검색 | `datadog rum "@type:error"` |
+| `config` | 설정 관리 | `datadog config show` |
+
+---
 
 ## 🛠️ 문제 해결
 
@@ -205,12 +325,9 @@ datadog config edit
 # - ap1.datadoghq.com (AP1)
 ```
 
+---
+
 ## 🔧 개발
-
-### 요구사항
-
-- Rust 1.91.1 이상
-- Cargo
 
 ### 빌드
 
@@ -251,6 +368,8 @@ cargo fmt
 cargo fmt && cargo clippy -- -D warnings && cargo test
 ```
 
+---
+
 ## 🤝 기여
 
 이슈와 PR을 환영합니다!
@@ -261,12 +380,20 @@ cargo fmt && cargo clippy -- -D warnings && cargo test
 4. Push (`git push origin feature/amazing-feature`)
 5. Pull Request
 
+---
+
 ## 📄 라이선스
 
 MIT License - [LICENSE](LICENSE) 참고
+
+---
 
 ## 🔗 링크
 
 - [Datadog API 문서](https://docs.datadoghq.com/api/)
 - [GitHub Repository](https://github.com/junyeong-ai/datadog-cli)
 - [Issue Tracker](https://github.com/junyeong-ai/datadog-cli/issues)
+
+---
+
+**For AI Agents**: See [CLAUDE.md](CLAUDE.md)
