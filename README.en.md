@@ -14,12 +14,31 @@ Fast and powerful Datadog API query tool - Natural language time parsing support
 
 ### Installation
 
-```bash
-# Install with Cargo
-cargo install --path .
+**Method 1: Prebuilt Binary (Recommended - Fast)**
 
-# Or use script
-./scripts/install.sh
+```bash
+curl -sSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh | bash
+```
+
+**Method 2: Cargo Install**
+
+```bash
+# Install from crates.io (coming soon)
+cargo install datadog-cli
+
+# Or local build
+git clone https://github.com/junyeong-ai/datadog-cli
+cd datadog-cli
+cargo install --path .
+```
+
+**Method 3: Source Build (For Developers)**
+
+```bash
+git clone https://github.com/junyeong-ai/datadog-cli
+cd datadog-cli
+cargo build --release
+# Binary: target/release/datadog
 ```
 
 ### Configuration

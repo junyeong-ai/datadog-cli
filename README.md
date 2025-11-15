@@ -14,12 +14,31 @@
 
 ### 설치
 
-```bash
-# Cargo로 설치
-cargo install --path .
+**방법 1: Prebuilt Binary (권장 - 빠름)**
 
-# 또는 스크립트 사용
-./scripts/install.sh
+```bash
+curl -sSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh | bash
+```
+
+**방법 2: Cargo Install**
+
+```bash
+# Crates.io에서 설치 (향후 지원)
+cargo install datadog-cli
+
+# 또는 로컬 빌드
+git clone https://github.com/junyeong-ai/datadog-cli
+cd datadog-cli
+cargo install --path .
+```
+
+**방법 3: Source Build (개발자용)**
+
+```bash
+git clone https://github.com/junyeong-ai/datadog-cli
+cd datadog-cli
+cargo build --release
+# Binary: target/release/datadog
 ```
 
 ### 설정

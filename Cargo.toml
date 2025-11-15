@@ -3,10 +3,14 @@ name = "datadog-cli"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.91.1"
-authors = ["Datadog CLI"]
-description = "High-performance Datadog CLI"
+authors = ["Datadog CLI Contributors"]
+description = "High-performance Datadog CLI with natural time parsing and observability tools"
 license = "MIT"
 repository = "https://github.com/junyeong-ai/datadog-cli"
+homepage = "https://github.com/junyeong-ai/datadog-cli"
+keywords = ["datadog", "cli", "observability", "monitoring", "apm"]
+categories = ["command-line-utilities", "api-bindings", "development-tools::profiling"]
+readme = "README.md"
 
 [dependencies]
 tokio = { version = "1.48", features = ["rt-multi-thread", "macros", "time"] }
