@@ -1,6 +1,6 @@
 # Datadog CLI Command Reference
 
-Complete syntax for all commands.
+Complete syntax for all commands. **Remember**: `--format` is a global option and must be placed BEFORE the command.
 
 ---
 
@@ -8,47 +8,102 @@ Complete syntax for all commands.
 
 ### logs search
 ```bash
-datadog-cli logs search "<query>" --from "<time>" --to "<time>" [options]
+datadog-cli [--format <format>] logs search "<query>" [OPTIONS]
 ```
-**Options:** `--limit <n>`, `--tag-filter "<prefixes>"`, `--format <format>`
 
-**Query syntax:** `status:error`, `service:api`, `status:error AND service:api`, `*`
+**Arguments:**
+- `<query>` - Log search query (required)
+
+**Options:**
+- `--from <time>` - Start time (default: "1 hour ago")
+- `--to <time>` - End time (default: "now")
+- `--limit <n>` - Max results (default: 10)
+- `--tag-filter "<prefixes>"` - Tag filter (e.g., "env:,service:")
+
+**Query syntax:**
+- `status:error` - Filter by status
+- `service:api` - Filter by service
+- `status:error AND service:api` - Combine filters
+- `*` - Match all
+
+**Example:**
+```bash
+datadog-cli --format json logs search "status:error service:api" --from "1 hour ago" --limit 20
+```
 
 ---
 
 ### logs aggregate
 ```bash
-datadog-cli logs aggregate "<query>" --from "<time>" --to "<time>"
+datadog-cli [--format <format>] logs aggregate "<query>" --from "<time>" --to "<time>"
 ```
-**Note:** Basic count only, no grouping/sorting
+
+**Arguments:**
+- `<query>` - Log search query (default: "*")
+
+**Options:**
+- `--from <time>` - Start time (required)
+- `--to <time>` - End time (required)
+
+**Note:** Returns basic count only, no grouping/sorting.
+
+**Example:**
+```bash
+datadog-cli --format json logs aggregate "status:error" --from "1 hour ago" --to "now"
+```
 
 ---
 
 ### logs timeseries
 ```bash
-datadog-cli logs timeseries "<query>" --from "<time>" --to "<time>" [options]
+datadog-cli [--format <format>] logs timeseries "<query>" --from "<time>" --to "<time>" [OPTIONS]
 ```
+
+**Arguments:**
+- `<query>` - Log search query (default: "*")
+
 **Options:**
-- `--interval "<duration>"` - Time bucket: "1m", "5m", "1h", "1d"
-- `--aggregation "<type>"` - count, avg, sum, min, max, pc95
-- `--metric "<field>"` - Required for avg/sum/min/max/pc95
+- `--from <time>` - Start time (required)
+- `--to <time>` - End time (required)
+- `--interval "<duration>"` - Time bucket (default: "1h")
+- `--aggregation "<type>"` - Aggregation type (default: "count")
+- `--metric "<field>"` - Field to aggregate (required for avg/sum/min/max/pc95)
+
+**Example:**
+```bash
+datadog-cli --format json logs timeseries "service:api" \
+  --from "6 hours ago" --to "now" \
+  --interval "1h" --aggregation "count"
+```
 
 ---
 
 ## Metrics
 
 ```bash
-datadog-cli metrics "<query>" --from "<time>" --to "<time>" [options]
+datadog-cli [--format <format>] metrics "<query>" [OPTIONS]
 ```
 
-**Query format:** `<aggregator>:<metric>{<scope>} by {<tag>}`
+**Arguments:**
+- `<query>` - Metrics query (required)
+
+**Query format:** `<aggregator>:<metric>{<scope>}[ by {<tag>}]`
 
 **Examples:**
-- `avg:system.cpu.user{*}` - Average across all
-- `avg:system.cpu.user{service:web}` - Filtered
-- `avg:system.cpu.user{*} by {service}` - Grouped
+- `avg:system.cpu.user{*}` - Average across all hosts
+- `avg:system.cpu.user{service:web}` - Filtered by service
+- `avg:system.cpu.user{*} by {service}` - Grouped by service
+- `sum:system.mem.used{env:prod}` - Sum of memory usage
 
-**Options:** `--max-points <n>` - Downsample for large ranges
+**Options:**
+- `--from <time>` - Start time (default: "1 hour ago")
+- `--to <time>` - End time (default: "now")
+- `--max-points <n>` - Downsample for large time ranges
+
+**Example:**
+```bash
+datadog-cli --format json metrics "avg:system.cpu.user{*}" --from "1 hour ago"
+```
 
 ---
 
@@ -56,19 +111,51 @@ datadog-cli metrics "<query>" --from "<time>" --to "<time>" [options]
 
 ### monitors list
 ```bash
-datadog-cli monitors list [--tags "<tags>"] [--monitor-tags "<tags>"]
+datadog-cli [--format <format>] monitors list [OPTIONS]
 ```
+
+**Options:**
+- `--tags "<tags>"` - Filter by tags
+- `--monitor-tags "<tags>"` - Filter by monitor tags
+
+**Example:**
+```bash
+datadog-cli --format json monitors list --tags "env:prod"
+```
+
+---
 
 ### monitors get
 ```bash
-datadog-cli monitors get <id>
+datadog-cli [--format <format>] monitors get <id>
 ```
+
+**Arguments:**
+- `<id>` - Monitor ID (required)
+
+**Example:**
+```bash
+datadog-cli --format json monitors get 12345678
+```
+
+---
 
 ### events
 ```bash
-datadog-cli events --from "<time>" --to "<time>" [options]
+datadog-cli [--format <format>] events [OPTIONS]
 ```
-**Options:** `--priority "<level>"`, `--sources "<source>"`, `--tags "<tags>"`
+
+**Options:**
+- `--from <time>` - Start time (default: "1 hour ago")
+- `--to <time>` - End time (default: "now")
+- `--priority "<level>"` - Filter by priority (low, normal)
+- `--sources "<source>"` - Filter by source
+- `--tags "<tags>"` - Filter by tags
+
+**Example:**
+```bash
+datadog-cli --format json events --from "1 hour ago" --priority "normal"
+```
 
 ---
 
@@ -76,9 +163,22 @@ datadog-cli events --from "<time>" --to "<time>" [options]
 
 ### hosts
 ```bash
-datadog-cli hosts [options]
+datadog-cli [--format <format>] hosts [OPTIONS]
 ```
-**Options:** `--filter "<query>"`, `--from "<time>"`, `--start <n>`, `--count <n>`, `--tag-filter "<prefixes>"`
+
+**Options:**
+- `--filter "<query>"` - Host filter query
+- `--from <time>` - Start time (default: "1 hour ago")
+- `--start <n>` - Pagination offset (default: 0)
+- `--count <n>` - Results per page (default: 100)
+- `--tag-filter "<prefixes>"` - Tag filter
+- `--sort-field "<field>"` - Sort field
+- `--sort-dir "<dir>"` - Sort direction (asc, desc)
+
+**Example:**
+```bash
+datadog-cli --format json hosts --filter "env:prod" --count 50 --tag-filter "env:,service:"
+```
 
 ---
 
@@ -86,22 +186,48 @@ datadog-cli hosts [options]
 
 ### spans
 ```bash
-datadog-cli spans "<query>" --from "<time>" --to "<time>" [options]
+datadog-cli [--format <format>] spans "<query>" --from "<time>" --to "<time>" [OPTIONS]
 ```
 
+**Arguments:**
+- `<query>` - Span search query (default: "*")
+
 **Query examples:**
-- `service:checkout` - By service
+- `service:checkout` - Filter by service
 - `error:true` - Errors only
 - `http.status_code:>=500` - Server errors
-- `service:api AND error:true` - Combined
+- `service:api AND error:true` - Combined filters
+- `trace_id:<id>` - Specific trace
 
-**Options:** `--limit <n>`, `--cursor "<token>"`, `--full-stack-trace`, `--tag-filter "<prefixes>"`
+**Options:**
+- `--from <time>` - Start time (required)
+- `--to <time>` - End time (required)
+- `--limit <n>` - Max results (default: 10)
+- `--cursor "<token>"` - Pagination cursor
+- `--sort "<field>"` - Sort field
+- `--tag-filter "<prefixes>"` - Tag filter
+- `--full-stack-trace` - Include full stack traces
+
+**Example:**
+```bash
+datadog-cli --format jsonl spans "error:true service:api" \
+  --from "10 minutes ago" --to "now" \
+  --limit 20 --tag-filter "env:,service:"
+```
 
 ---
 
 ### services
 ```bash
-datadog-cli services [--env "<environment>"]
+datadog-cli [--format <format>] services [OPTIONS]
+```
+
+**Options:**
+- `--env "<environment>"` - Filter by environment
+
+**Example:**
+```bash
+datadog-cli --format json services --env "production"
 ```
 
 ---
@@ -109,15 +235,32 @@ datadog-cli services [--env "<environment>"]
 ## RUM
 
 ```bash
-datadog-cli rum "<query>" --from "<time>" --to "<time>" [options]
+datadog-cli [--format <format>] rum "<query>" [OPTIONS]
 ```
 
-**Query examples:**
-- `@type:error` - User errors
-- `@type:session AND @session.type:user` - Sessions
-- `@view.url_path:/checkout` - Page views
+**Arguments:**
+- `<query>` - RUM search query (default: "*")
 
-**Options:** `--limit <n>`, `--cursor "<token>"`, `--full-stack-trace`, `--tag-filter "<prefixes>"`
+**Query examples:**
+- `@type:error` - User-facing errors
+- `@type:session AND @session.type:user` - User sessions
+- `@view.url_path:/checkout` - Specific page views
+- `@user.plan:premium` - Filter by user attributes
+
+**Options:**
+- `--from <time>` - Start time (default: "1 hour ago")
+- `--to <time>` - End time (default: "now")
+- `--limit <n>` - Max results (default: 10)
+- `--cursor "<token>"` - Pagination cursor
+- `--sort "<field>"` - Sort field
+- `--tag-filter "<prefixes>"` - Tag filter
+- `--full-stack-trace` - Include full stack traces
+
+**Example:**
+```bash
+datadog-cli --format jsonl rum "@type:error @user.plan:premium" \
+  --from "1 hour ago" --limit 50 --tag-filter "user_id:,session_id:"
+```
 
 ---
 
@@ -125,89 +268,167 @@ datadog-cli rum "<query>" --from "<time>" --to "<time>" [options]
 
 ### dashboards list
 ```bash
-datadog-cli dashboards list
+datadog-cli [--format <format>] dashboards list
 ```
+
+**Example:**
+```bash
+datadog-cli --format json dashboards list
+```
+
+---
 
 ### dashboards get
 ```bash
-datadog-cli dashboards get <id>
+datadog-cli [--format <format>] dashboards get <id>
+```
+
+**Arguments:**
+- `<id>` - Dashboard ID (required)
+
+**Example:**
+```bash
+datadog-cli --format json dashboards get "abc-123-def"
 ```
 
 ---
 
 ## Configuration
 
+### config init
+```bash
+datadog-cli config init
+```
+
+Creates config file at `~/.config/datadog-cli/config.toml`.
+
+---
+
 ### config show
 ```bash
 datadog-cli config show
 ```
 
+Displays current config with masked secrets.
+
+---
+
 ### config path
 ```bash
-datadog-cli config path [--global]
+datadog-cli config path
 ```
+
+Shows path to active config file.
+
+---
 
 ### config edit
 ```bash
-datadog-cli config edit [--global]
+datadog-cli config edit
 ```
-Opens in `$EDITOR` (default: vim)
+
+Opens config in `$EDITOR` (default: vim).
 
 ---
 
 ## Time Formats
 
-- Natural: "1 hour ago", "30 minutes ago", "yesterday"
-- ISO8601: "2025-01-15T10:30:00Z"
-- Unix: "1704067200"
+**Relative intervals:**
+- "1 hour ago", "30 minutes ago", "2 days ago", "3 weeks ago"
+- Short forms: "3h ago", "2d ago", "5m ago"
+
+**Absolute formats:**
+- ISO8601/RFC3339: "2025-01-15T10:30:00Z"
+- Unix timestamp: "1704067200"
 - Special: "now"
 
 ---
 
 ## Tag Filtering
 
+Reduce response size by including only specific tag prefixes:
+
 ```bash
---tag-filter "env:,service:"  # Include specific prefixes
---tag-filter ""               # Exclude all tags
---tag-filter "*"              # Include all (default)
+--tag-filter "env:,service:,version:"  # Include these prefixes
+--tag-filter ""                        # Exclude all tags
+--tag-filter "*"                       # Include all (default)
 ```
 
-Applies to: logs search, spans, rum, hosts
+**Commands supporting tag filtering:**
+- `logs search`
+- `spans`
+- `rum`
+- `hosts`
 
-Environment variable: `DD_TAG_FILTER="env:,service:"`
+**Environment variable:**
+```bash
+export DD_TAG_FILTER="env:,service:"
+```
 
 ---
 
-## Pagination
+## Pagination Patterns
 
-- **logs search**: `--limit <n>` (simple limit)
-- **spans, rum**: `--cursor "<token>"` (from response `meta.page.after`)
-- **hosts**: `--start <n> --count <n>` (offset-based)
+### Logs (Simple Limit)
+```bash
+datadog-cli --format json logs search "query" --limit 100
+```
+
+### Spans/RUM (Cursor-based)
+```bash
+# First page
+datadog-cli --format json spans "query" --from "1h ago" --to "now" --limit 100 > page1.json
+
+# Get cursor from response
+CURSOR=$(jq -r '.meta.page.after' page1.json)
+
+# Next page
+datadog-cli --format json spans "query" --from "1h ago" --to "now" --limit 100 --cursor "$CURSOR"
+```
+
+### Hosts (Offset-based)
+```bash
+# First 100
+datadog-cli --format json hosts --start 0 --count 100
+
+# Next 100
+datadog-cli --format json hosts --start 100 --count 100
+```
 
 ---
 
 ## Output Formats
 
 ```bash
---format json   # Pretty JSON (default)
---format jsonl  # JSON Lines (for Unix pipelines)
---format table  # Human-readable tables
+# Pretty JSON (default) - human-readable
+datadog-cli --format json <command>
+
+# JSON Lines - one object per line for Unix pipelines
+datadog-cli --format jsonl <command> | jq -r '.service'
+
+# Table - human-readable tables
+datadog-cli --format table <command>
 ```
 
 ---
 
 ## Global Options
 
+These apply to ALL commands:
+
 ```bash
---api-key <KEY>   # Override DD_API_KEY
---app-key <KEY>   # Override DD_APP_KEY
---site <SITE>     # Override DD_SITE
---format <format> # json|jsonl|table
--v, --verbose     # Debug logging
+--format <format>     # Output format: json|jsonl|table
+--api-key <KEY>       # Override DD_API_KEY env var
+--app-key <KEY>       # Override DD_APP_KEY env var
+--site <SITE>         # Override DD_SITE env var
+-v, --verbose         # Enable debug logging
+-h, --help            # Show help
+-V, --version         # Show version
 ```
 
 **Multi-region sites:**
-- `datadoghq.com` (US1, default)
-- `datadoghq.eu` (EU)
-- `us3.datadoghq.com`, `us5.datadoghq.com`
-- `ddog-gov.com` (US1-FED)
+- `datadoghq.com` - US1 (default)
+- `datadoghq.eu` - EU
+- `us3.datadoghq.com` - US3
+- `us5.datadoghq.com` - US5
+- `ddog-gov.com` - US1-FED
