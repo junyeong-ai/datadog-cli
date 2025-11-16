@@ -186,10 +186,10 @@ pub async fn retry_with_backoff<F, Fut, T>(f: F) -> Result<T>
 **Example**:
 ```bash
 # Good
-datadog logs search "query" --from "1 hour ago"
+datadog-cli logs search "query" --from "1 hour ago"
 
 # Bad
-datadog logs search "query" --from "yesterday"  # Not supported
+datadog-cli logs search "query" --from "yesterday"  # Not supported
 ```
 
 ---
@@ -200,12 +200,12 @@ datadog logs search "query" --from "yesterday"  # Not supported
 
 **Check**:
 ```bash
-datadog config path
+datadog-cli config path
 ```
 
 **Fix**:
 ```bash
-datadog config init
+datadog-cli config init
 ```
 
 **Note**: Searches for `.datadog.toml` in current directory and parents, then falls back to `~/.config/datadog-cli/config.toml`.

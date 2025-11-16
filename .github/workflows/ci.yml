@@ -104,14 +104,14 @@ jobs:
 
       - name: Check binary size
         run: |
-          ls -lh target/release/datadog
-          du -h target/release/datadog
+          ls -lh target/release/datadog-cli
+          du -h target/release/datadog-cli
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: release-binary
-          path: target/release/datadog
+          path: target/release/datadog-cli
           retention-days: 7
 
   security-audit:

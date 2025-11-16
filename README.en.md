@@ -26,15 +26,15 @@
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh | bash
 
 # 2. Initialize config
-datadog config init
+datadog-cli config init
 
 # 3. Set API keys
-datadog config edit
+datadog-cli config edit
 
 # 4. Start using! 🎉
-datadog monitors list
-datadog logs search "status:error" --from "1 hour ago"
-datadog metrics "avg:system.cpu.user{*}"
+datadog-cli monitors list
+datadog-cli logs search "status:error" --from "1 hour ago"
+datadog-cli metrics "avg:system.cpu.user{*}"
 ```
 
 ---
@@ -44,13 +44,13 @@ datadog metrics "avg:system.cpu.user{*}"
 ### Logs
 ```bash
 # Search logs (natural time)
-datadog logs search "service:web status:error" --from "1 hour ago"
+datadog-cli logs search "service:web status:error" --from "1 hour ago"
 
 # Aggregate logs (count)
-datadog logs aggregate "service:api" --from "6 hours ago"
+datadog-cli logs aggregate "service:api" --from "6 hours ago"
 
 # Timeseries analysis
-datadog logs timeseries "status:error" \
+datadog-cli logs timeseries "status:error" \
   --from "24 hours ago" \
   --interval "1h" \
   --aggregation "count"
@@ -59,46 +59,46 @@ datadog logs timeseries "status:error" \
 ### Metrics
 ```bash
 # Query metrics
-datadog metrics "avg:system.cpu.user{*}"
+datadog-cli metrics "avg:system.cpu.user{*}"
 
 # Filter by tags
-datadog metrics "avg:system.cpu.user{service:web}"
+datadog-cli metrics "avg:system.cpu.user{service:web}"
 
 # Group by
-datadog metrics "avg:system.cpu.user{*} by {service}"
+datadog-cli metrics "avg:system.cpu.user{*} by {service}"
 ```
 
 ### APM & RUM
 ```bash
 # Search spans (errors only)
-datadog spans "service:api error:true" --from "30 minutes ago"
+datadog-cli spans "service:api error:true" --from "30 minutes ago"
 
 # RUM events
-datadog rum "@type:error" --from "1 hour ago"
+datadog-cli rum "@type:error" --from "1 hour ago"
 
 # List services
-datadog services --env production
+datadog-cli services --env production
 ```
 
 ### Monitoring
 ```bash
 # List monitors
-datadog monitors list --tags "env:prod"
+datadog-cli monitors list --tags "env:prod"
 
 # Get monitor details
-datadog monitors get 12345678
+datadog-cli monitors get 12345678
 
 # Query events
-datadog events --from "1 day ago" --priority "normal"
+datadog-cli events --from "1 day ago" --priority "normal"
 ```
 
 ### Infrastructure
 ```bash
 # List hosts
-datadog hosts --filter "env:production"
+datadog-cli hosts --filter "env:production"
 
 # List dashboards
-datadog dashboards list
+datadog-cli dashboards list
 ```
 
 ---
@@ -115,7 +115,7 @@ curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/script
 **Manual install**:
 1. Download binary from [Releases](https://github.com/junyeong-ai/datadog-cli/releases)
 2. Extract: `tar -xzf datadog-*.tar.gz`
-3. Move to PATH: `mv datadog ~/.local/bin/`
+3. Move to PATH: `mv datadog-cli ~/.local/bin/`
 
 ### Method 2: Cargo
 
@@ -179,16 +179,16 @@ site = "datadoghq.eu"
 
 ```bash
 # Initialize config
-datadog config init
+datadog-cli config init
 
 # Show config (tokens masked)
-datadog config show
+datadog-cli config show
 
 # Config file path
-datadog config path
+datadog-cli config path
 
 # Edit with $EDITOR
-datadog config edit
+datadog-cli config edit
 ```
 
 ### Environment Variables
@@ -207,48 +207,48 @@ export DD_SITE="datadoghq.com"
 
 ```bash
 # Natural language (recommended)
-datadog logs search "query" --from "1 hour ago" --to "now"
-datadog metrics "query" --from "30 minutes ago"
+datadog-cli logs search "query" --from "1 hour ago" --to "now"
+datadog-cli metrics "query" --from "30 minutes ago"
 
 # ISO8601
-datadog logs search "query" --from "2024-01-01T00:00:00Z"
+datadog-cli logs search "query" --from "2024-01-01T00:00:00Z"
 
 # Unix timestamp
-datadog metrics "query" --from "1704067200"
+datadog-cli metrics "query" --from "1704067200"
 ```
 
 ### Unix Pipeline Integration
 
 ```bash
 # Extract metric points with jq
-datadog metrics "system.cpu.user" --format jsonl | jq '.series[].pointlist'
+datadog-cli metrics "system.cpu.user" --format jsonl | jq '.series[].pointlist'
 
 # Extract log messages only
-datadog logs search "query" --format jsonl | jq -r '.logs[].message'
+datadog-cli logs search "query" --format jsonl | jq -r '.logs[].message'
 
 # Count errors
-datadog logs search "status:error" --format jsonl | jq '.logs | length'
+datadog-cli logs search "status:error" --format jsonl | jq '.logs | length'
 ```
 
 ### Table Output
 
 ```bash
 # Human-readable table format
-datadog monitors list --format table
-datadog hosts --format table
+datadog-cli monitors list --format table
+datadog-cli hosts --format table
 ```
 
 ### Tag Filtering
 
 ```bash
 # 30-70% response size reduction
-datadog logs search "query" --tag-filter "env:,service:"
+datadog-cli logs search "query" --tag-filter "env:,service:"
 
 # Exclude all tags
-datadog logs search "query" --tag-filter ""
+datadog-cli logs search "query" --tag-filter ""
 
 # Include all tags (default)
-datadog logs search "query" --tag-filter "*"
+datadog-cli logs search "query" --tag-filter "*"
 ```
 
 **Environment variable**:
@@ -264,20 +264,20 @@ export DD_TAG_FILTER="env:,service:"
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `metrics` | Query metrics | `datadog metrics "avg:system.cpu.user{*}"` |
-| `logs search` | Search logs | `datadog logs search "query" --from "1h ago"` |
-| `logs aggregate` | Aggregate logs | `datadog logs aggregate "query" --from "6h ago"` |
-| `logs timeseries` | Logs timeseries | `datadog logs timeseries "query" --interval "1h"` |
-| `monitors list` | List monitors | `datadog monitors list --tags "env:prod"` |
-| `monitors get` | Get monitor | `datadog monitors get 12345678` |
-| `events` | Query events | `datadog events --from "1 day ago"` |
-| `hosts` | List hosts | `datadog hosts --filter "env:production"` |
-| `dashboards list` | List dashboards | `datadog dashboards list` |
-| `dashboards get` | Get dashboard | `datadog dashboards get abc-def-ghi` |
-| `spans` | Search APM spans | `datadog spans "service:api" --from "..."` |
-| `services` | List services | `datadog services --env prod` |
-| `rum` | Search RUM events | `datadog rum "@type:error"` |
-| `config` | Config management | `datadog config show` |
+| `metrics` | Query metrics | `datadog-cli metrics "avg:system.cpu.user{*}"` |
+| `logs search` | Search logs | `datadog-cli logs search "query" --from "1h ago"` |
+| `logs aggregate` | Aggregate logs | `datadog-cli logs aggregate "query" --from "6h ago"` |
+| `logs timeseries` | Logs timeseries | `datadog-cli logs timeseries "query" --interval "1h"` |
+| `monitors list` | List monitors | `datadog-cli monitors list --tags "env:prod"` |
+| `monitors get` | Get monitor | `datadog-cli monitors get 12345678` |
+| `events` | Query events | `datadog-cli events --from "1 day ago"` |
+| `hosts` | List hosts | `datadog-cli hosts --filter "env:production"` |
+| `dashboards list` | List dashboards | `datadog-cli dashboards list` |
+| `dashboards get` | Get dashboard | `datadog-cli dashboards get abc-def-ghi` |
+| `spans` | Search APM spans | `datadog-cli spans "service:api" --from "..."` |
+| `services` | List services | `datadog-cli services --env prod` |
+| `rum` | Search RUM events | `datadog-cli rum "@type:error"` |
+| `config` | Config management | `datadog-cli config show` |
 
 ---
 
@@ -290,13 +290,13 @@ export DD_TAG_FILTER="env:,service:"
 **Solution**:
 ```bash
 # 1. Create config file
-datadog config init
+datadog-cli config init
 
 # 2. Check config path
-datadog config path
+datadog-cli config path
 
 # 3. Set API keys
-datadog config edit
+datadog-cli config edit
 ```
 
 ### Auth Failure
@@ -304,11 +304,11 @@ datadog config edit
 **Symptom**: `AuthError` or 403 error
 
 **Solution**:
-1. Check API keys: `datadog config show`
+1. Check API keys: `datadog-cli config show`
 2. Regenerate API keys in Datadog
 3. Test with environment variables:
    ```bash
-   DD_API_KEY="new-key" DD_APP_KEY="new-app-key" datadog monitors list
+   DD_API_KEY="new-key" DD_APP_KEY="new-app-key" datadog-cli monitors list
    ```
 
 ### Invalid Site
@@ -318,7 +318,7 @@ datadog config edit
 **Solution**:
 ```bash
 # Check and edit site
-datadog config edit
+datadog-cli config edit
 # Set site to one of:
 # - datadoghq.com (US1)
 # - datadoghq.eu (EU)

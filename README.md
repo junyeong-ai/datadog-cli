@@ -26,15 +26,15 @@
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh | bash
 
 # 2. 설정 초기화
-datadog config init
+datadog-cli config init
 
 # 3. API 키 설정
-datadog config edit
+datadog-cli config edit
 
 # 4. 사용 시작! 🎉
-datadog monitors list
-datadog logs search "status:error" --from "1 hour ago"
-datadog metrics "avg:system.cpu.user{*}"
+datadog-cli monitors list
+datadog-cli logs search "status:error" --from "1 hour ago"
+datadog-cli metrics "avg:system.cpu.user{*}"
 ```
 
 ---
@@ -44,13 +44,13 @@ datadog metrics "avg:system.cpu.user{*}"
 ### 로그 조회
 ```bash
 # 로그 검색 (자연어 시간)
-datadog logs search "service:web status:error" --from "1 hour ago"
+datadog-cli logs search "service:web status:error" --from "1 hour ago"
 
 # 로그 집계 (카운트)
-datadog logs aggregate "service:api" --from "6 hours ago"
+datadog-cli logs aggregate "service:api" --from "6 hours ago"
 
 # 시계열 분석
-datadog logs timeseries "status:error" \
+datadog-cli logs timeseries "status:error" \
   --from "24 hours ago" \
   --interval "1h" \
   --aggregation "count"
@@ -59,46 +59,46 @@ datadog logs timeseries "status:error" \
 ### 메트릭 조회
 ```bash
 # 메트릭 쿼리
-datadog metrics "avg:system.cpu.user{*}"
+datadog-cli metrics "avg:system.cpu.user{*}"
 
 # 특정 태그 필터링
-datadog metrics "avg:system.cpu.user{service:web}"
+datadog-cli metrics "avg:system.cpu.user{service:web}"
 
 # 그룹화
-datadog metrics "avg:system.cpu.user{*} by {service}"
+datadog-cli metrics "avg:system.cpu.user{*} by {service}"
 ```
 
 ### APM & RUM
 ```bash
 # 스팬 검색 (에러만)
-datadog spans "service:api error:true" --from "30 minutes ago"
+datadog-cli spans "service:api error:true" --from "30 minutes ago"
 
 # RUM 이벤트
-datadog rum "@type:error" --from "1 hour ago"
+datadog-cli rum "@type:error" --from "1 hour ago"
 
 # 서비스 목록
-datadog services --env production
+datadog-cli services --env production
 ```
 
 ### 모니터링
 ```bash
 # 모니터 목록
-datadog monitors list --tags "env:prod"
+datadog-cli monitors list --tags "env:prod"
 
 # 모니터 상세 조회
-datadog monitors get 12345678
+datadog-cli monitors get 12345678
 
 # 이벤트 조회
-datadog events --from "1 day ago" --priority "normal"
+datadog-cli events --from "1 day ago" --priority "normal"
 ```
 
 ### 인프라
 ```bash
 # 호스트 목록
-datadog hosts --filter "env:production"
+datadog-cli hosts --filter "env:production"
 
 # 대시보드 목록
-datadog dashboards list
+datadog-cli dashboards list
 ```
 
 ---
@@ -115,7 +115,7 @@ curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/script
 **수동 설치**:
 1. [Releases](https://github.com/junyeong-ai/datadog-cli/releases)에서 바이너리 다운로드
 2. 압축 해제: `tar -xzf datadog-*.tar.gz`
-3. PATH에 이동: `mv datadog ~/.local/bin/`
+3. PATH에 이동: `mv datadog-cli ~/.local/bin/`
 
 ### 방법 2: Cargo
 
@@ -179,16 +179,16 @@ site = "datadoghq.eu"
 
 ```bash
 # 설정 초기화
-datadog config init
+datadog-cli config init
 
 # 설정 표시 (토큰 마스킹)
-datadog config show
+datadog-cli config show
 
 # 설정 파일 경로
-datadog config path
+datadog-cli config path
 
 # 에디터로 수정 ($EDITOR 사용)
-datadog config edit
+datadog-cli config edit
 ```
 
 ### 환경 변수
@@ -207,48 +207,48 @@ export DD_SITE="datadoghq.com"
 
 ```bash
 # 자연어 (권장)
-datadog logs search "query" --from "1 hour ago" --to "now"
-datadog metrics "query" --from "30 minutes ago"
+datadog-cli logs search "query" --from "1 hour ago" --to "now"
+datadog-cli metrics "query" --from "30 minutes ago"
 
 # ISO8601
-datadog logs search "query" --from "2024-01-01T00:00:00Z"
+datadog-cli logs search "query" --from "2024-01-01T00:00:00Z"
 
 # Unix timestamp
-datadog metrics "query" --from "1704067200"
+datadog-cli metrics "query" --from "1704067200"
 ```
 
 ### Unix 파이프라인 연동
 
 ```bash
 # jq로 메트릭 포인트 추출
-datadog metrics "system.cpu.user" --format jsonl | jq '.series[].pointlist'
+datadog-cli metrics "system.cpu.user" --format jsonl | jq '.series[].pointlist'
 
 # 로그 메시지만 추출
-datadog logs search "query" --format jsonl | jq -r '.logs[].message'
+datadog-cli logs search "query" --format jsonl | jq -r '.logs[].message'
 
 # 에러 카운트
-datadog logs search "status:error" --format jsonl | jq '.logs | length'
+datadog-cli logs search "status:error" --format jsonl | jq '.logs | length'
 ```
 
 ### Table 출력
 
 ```bash
 # 읽기 쉬운 테이블 형식
-datadog monitors list --format table
-datadog hosts --format table
+datadog-cli monitors list --format table
+datadog-cli hosts --format table
 ```
 
 ### 태그 필터링
 
 ```bash
 # 응답 크기 30-70% 절감
-datadog logs search "query" --tag-filter "env:,service:"
+datadog-cli logs search "query" --tag-filter "env:,service:"
 
 # 모든 태그 제외
-datadog logs search "query" --tag-filter ""
+datadog-cli logs search "query" --tag-filter ""
 
 # 모든 태그 포함 (기본값)
-datadog logs search "query" --tag-filter "*"
+datadog-cli logs search "query" --tag-filter "*"
 ```
 
 **환경 변수 설정**:
@@ -264,20 +264,20 @@ export DD_TAG_FILTER="env:,service:"
 
 | 명령어 | 설명 | 예시 |
 |--------|------|------|
-| `metrics` | 메트릭 조회 | `datadog metrics "avg:system.cpu.user{*}"` |
-| `logs search` | 로그 검색 | `datadog logs search "query" --from "1h ago"` |
-| `logs aggregate` | 로그 집계 | `datadog logs aggregate "query" --from "6h ago"` |
-| `logs timeseries` | 로그 시계열 | `datadog logs timeseries "query" --interval "1h"` |
-| `monitors list` | 모니터 목록 | `datadog monitors list --tags "env:prod"` |
-| `monitors get` | 모니터 상세 | `datadog monitors get 12345678` |
-| `events` | 이벤트 조회 | `datadog events --from "1 day ago"` |
-| `hosts` | 호스트 목록 | `datadog hosts --filter "env:production"` |
-| `dashboards list` | 대시보드 목록 | `datadog dashboards list` |
-| `dashboards get` | 대시보드 상세 | `datadog dashboards get abc-def-ghi` |
-| `spans` | APM 스팬 검색 | `datadog spans "service:api" --from "..."` |
-| `services` | 서비스 목록 | `datadog services --env prod` |
-| `rum` | RUM 이벤트 검색 | `datadog rum "@type:error"` |
-| `config` | 설정 관리 | `datadog config show` |
+| `metrics` | 메트릭 조회 | `datadog-cli metrics "avg:system.cpu.user{*}"` |
+| `logs search` | 로그 검색 | `datadog-cli logs search "query" --from "1h ago"` |
+| `logs aggregate` | 로그 집계 | `datadog-cli logs aggregate "query" --from "6h ago"` |
+| `logs timeseries` | 로그 시계열 | `datadog-cli logs timeseries "query" --interval "1h"` |
+| `monitors list` | 모니터 목록 | `datadog-cli monitors list --tags "env:prod"` |
+| `monitors get` | 모니터 상세 | `datadog-cli monitors get 12345678` |
+| `events` | 이벤트 조회 | `datadog-cli events --from "1 day ago"` |
+| `hosts` | 호스트 목록 | `datadog-cli hosts --filter "env:production"` |
+| `dashboards list` | 대시보드 목록 | `datadog-cli dashboards list` |
+| `dashboards get` | 대시보드 상세 | `datadog-cli dashboards get abc-def-ghi` |
+| `spans` | APM 스팬 검색 | `datadog-cli spans "service:api" --from "..."` |
+| `services` | 서비스 목록 | `datadog-cli services --env prod` |
+| `rum` | RUM 이벤트 검색 | `datadog-cli rum "@type:error"` |
+| `config` | 설정 관리 | `datadog-cli config show` |
 
 ---
 
@@ -290,13 +290,13 @@ export DD_TAG_FILTER="env:,service:"
 **해결**:
 ```bash
 # 1. 설정 파일 생성
-datadog config init
+datadog-cli config init
 
 # 2. 설정 파일 경로 확인
-datadog config path
+datadog-cli config path
 
 # 3. API 키 설정
-datadog config edit
+datadog-cli config edit
 ```
 
 ### 인증 실패
@@ -304,11 +304,11 @@ datadog config edit
 **증상**: `AuthError` 또는 403 에러
 
 **해결**:
-1. API 키 확인: `datadog config show`
+1. API 키 확인: `datadog-cli config show`
 2. Datadog에서 API 키 재생성
 3. 환경 변수로 테스트:
    ```bash
-   DD_API_KEY="new-key" DD_APP_KEY="new-app-key" datadog monitors list
+   DD_API_KEY="new-key" DD_APP_KEY="new-app-key" datadog-cli monitors list
    ```
 
 ### 잘못된 Site
@@ -318,7 +318,7 @@ datadog config edit
 **해결**:
 ```bash
 # Site 확인 및 수정
-datadog config edit
+datadog-cli config edit
 # site를 다음 중 하나로 설정:
 # - datadoghq.com (US1)
 # - datadoghq.eu (EU)

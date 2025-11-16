@@ -39,7 +39,7 @@ name = "datadog_cli"
 path = "src/lib.rs"
 
 [[bin]]
-name = "datadog"
+name = "datadog-cli"
 path = "src/main.rs"
 
 [profile.release]
