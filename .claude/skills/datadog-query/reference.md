@@ -8,7 +8,7 @@ Complete syntax for all commands.
 
 ### logs search
 ```bash
-datadog logs search "<query>" --from "<time>" --to "<time>" [options]
+datadog-cli logs search "<query>" --from "<time>" --to "<time>" [options]
 ```
 **Options:** `--limit <n>`, `--tag-filter "<prefixes>"`, `--format <format>`
 
@@ -18,7 +18,7 @@ datadog logs search "<query>" --from "<time>" --to "<time>" [options]
 
 ### logs aggregate
 ```bash
-datadog logs aggregate "<query>" --from "<time>" --to "<time>"
+datadog-cli logs aggregate "<query>" --from "<time>" --to "<time>"
 ```
 **Note:** Basic count only, no grouping/sorting
 
@@ -26,7 +26,7 @@ datadog logs aggregate "<query>" --from "<time>" --to "<time>"
 
 ### logs timeseries
 ```bash
-datadog logs timeseries "<query>" --from "<time>" --to "<time>" [options]
+datadog-cli logs timeseries "<query>" --from "<time>" --to "<time>" [options]
 ```
 **Options:**
 - `--interval "<duration>"` - Time bucket: "1m", "5m", "1h", "1d"
@@ -38,7 +38,7 @@ datadog logs timeseries "<query>" --from "<time>" --to "<time>" [options]
 ## Metrics
 
 ```bash
-datadog metrics "<query>" --from "<time>" --to "<time>" [options]
+datadog-cli metrics "<query>" --from "<time>" --to "<time>" [options]
 ```
 
 **Query format:** `<aggregator>:<metric>{<scope>} by {<tag>}`
@@ -56,17 +56,17 @@ datadog metrics "<query>" --from "<time>" --to "<time>" [options]
 
 ### monitors list
 ```bash
-datadog monitors list [--tags "<tags>"] [--monitor-tags "<tags>"]
+datadog-cli monitors list [--tags "<tags>"] [--monitor-tags "<tags>"]
 ```
 
 ### monitors get
 ```bash
-datadog monitors get <id>
+datadog-cli monitors get <id>
 ```
 
 ### events
 ```bash
-datadog events --from "<time>" --to "<time>" [options]
+datadog-cli events --from "<time>" --to "<time>" [options]
 ```
 **Options:** `--priority "<level>"`, `--sources "<source>"`, `--tags "<tags>"`
 
@@ -76,7 +76,7 @@ datadog events --from "<time>" --to "<time>" [options]
 
 ### hosts
 ```bash
-datadog hosts [options]
+datadog-cli hosts [options]
 ```
 **Options:** `--filter "<query>"`, `--from "<time>"`, `--start <n>`, `--count <n>`, `--tag-filter "<prefixes>"`
 
@@ -86,7 +86,7 @@ datadog hosts [options]
 
 ### spans
 ```bash
-datadog spans "<query>" --from "<time>" --to "<time>" [options]
+datadog-cli spans "<query>" --from "<time>" --to "<time>" [options]
 ```
 
 **Query examples:**
@@ -101,7 +101,7 @@ datadog spans "<query>" --from "<time>" --to "<time>" [options]
 
 ### services
 ```bash
-datadog services [--env "<environment>"]
+datadog-cli services [--env "<environment>"]
 ```
 
 ---
@@ -109,7 +109,7 @@ datadog services [--env "<environment>"]
 ## RUM
 
 ```bash
-datadog rum "<query>" --from "<time>" --to "<time>" [options]
+datadog-cli rum "<query>" --from "<time>" --to "<time>" [options]
 ```
 
 **Query examples:**
@@ -125,12 +125,12 @@ datadog rum "<query>" --from "<time>" --to "<time>" [options]
 
 ### dashboards list
 ```bash
-datadog dashboards list
+datadog-cli dashboards list
 ```
 
 ### dashboards get
 ```bash
-datadog dashboards get <id>
+datadog-cli dashboards get <id>
 ```
 
 ---
@@ -139,17 +139,17 @@ datadog dashboards get <id>
 
 ### config show
 ```bash
-datadog config show
+datadog-cli config show
 ```
 
 ### config path
 ```bash
-datadog config path [--global]
+datadog-cli config path [--global]
 ```
 
 ### config edit
 ```bash
-datadog config edit [--global]
+datadog-cli config edit [--global]
 ```
 Opens in `$EDITOR` (default: vim)
 

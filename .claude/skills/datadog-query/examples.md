@@ -10,7 +10,7 @@ Find errors in one service that caused errors in downstream services:
 
 ```bash
 # Get trace IDs from service A errors
-SERVICE_A_ERRORS=$(datadog logs search "status:error service:auth-service" \
+SERVICE_A_ERRORS=$(datadog-cli logs search "status:error service:auth-service" \
   --from "10 minutes ago" \
   --format jsonl | \
   jq -r '.trace_id' | \
@@ -18,7 +18,7 @@ SERVICE_A_ERRORS=$(datadog logs search "status:error service:auth-service" \
 
 # Find correlated errors in service B
 echo "$SERVICE_A_ERRORS" | while read trace_id; do
-  datadog spans "trace_id:$trace_id service:user-service error:true" \
+  datadog-cli spans "trace_id:$trace_id service:user-service error:true" \
     --from "10 minutes ago" \
     --format jsonl | \
     jq -r '[.trace_id, .service, .resource, .error] | @tsv'
@@ -35,7 +35,7 @@ Discover upstream and downstream dependencies:
 SERVICE="api-gateway"
 
 # Services called by this service
-datadog spans "service:$SERVICE" \
+datadog-cli spans "service:$SERVICE" \
   --from "1 hour ago" \
   --limit 1000 \
   --format jsonl | \
@@ -43,7 +43,7 @@ datadog spans "service:$SERVICE" \
   sort -u
 
 # Services calling this service
-datadog spans "service:* @downstream_services:$SERVICE" \
+datadog-cli spans "service:* @downstream_services:$SERVICE" \
   --from "1 hour ago" \
   --limit 1000 \
   --format jsonl | \
@@ -62,11 +62,11 @@ QUERY="status:error service:api"
 TIME_RANGE="1 hour ago"
 
 # Total count
-datadog logs aggregate "$QUERY" --from "$TIME_RANGE" --format json | \
+datadog-cli logs aggregate "$QUERY" --from "$TIME_RANGE" --format json | \
   jq '.meta.aggregates[0].value'
 
 # Hourly trend
-datadog logs timeseries "$QUERY" \
+datadog-cli logs timeseries "$QUERY" \
   --from "6 hours ago" \
   --interval "1h" \
   --aggregation "count" \
@@ -74,14 +74,14 @@ datadog logs timeseries "$QUERY" \
   jq -r '.data.buckets[] | "\(.timestamp | strftime("%H:%M")): \(.computes.c0)"'
 
 # Sample errors
-datadog logs search "$QUERY" \
+datadog-cli logs search "$QUERY" \
   --from "$TIME_RANGE" \
   --limit 5 \
   --format jsonl | \
   jq -r '[.timestamp, .message] | @tsv'
 
 # Related traces
-datadog spans "service:api error:true" \
+datadog-cli spans "service:api error:true" \
   --from "$TIME_RANGE" \
   --limit 3 \
   --format jsonl | \
@@ -98,7 +98,7 @@ Compare current performance vs baseline:
 SERVICE="web-api"
 
 # Current (last 15 minutes)
-CURRENT=$(datadog logs timeseries "service:$SERVICE @http.status_code:200" \
+CURRENT=$(datadog-cli logs timeseries "service:$SERVICE @http.status_code:200" \
   --from "15 minutes ago" \
   --interval "15m" \
   --aggregation "avg" \
@@ -107,7 +107,7 @@ CURRENT=$(datadog logs timeseries "service:$SERVICE @http.status_code:200" \
   jq '.data.buckets[-1].computes.c0')
 
 # Baseline (yesterday same time)
-BASELINE=$(datadog logs timeseries "service:$SERVICE @http.status_code:200" \
+BASELINE=$(datadog-cli logs timeseries "service:$SERVICE @http.status_code:200" \
   --from "25 hours ago" \
   --to "24 hours ago" \
   --interval "15m" \
@@ -127,12 +127,12 @@ Exclude known issues and focus on new errors:
 
 ```bash
 # Errors excluding known patterns
-datadog logs search "status:error -message:*DeprecationWarning* -message:*timeout*" \
+datadog-cli logs search "status:error -message:*DeprecationWarning* -message:*timeout*" \
   --from "1 hour ago" \
   --format jsonl
 
 # High-value user errors only
-datadog rum "@type:error @user.plan:premium" \
+datadog-cli rum "@type:error @user.plan:premium" \
   --from "24 hours ago" \
   --limit 50 \
   --tag-filter "user_id:,session_id:" \

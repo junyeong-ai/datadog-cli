@@ -13,7 +13,7 @@ Execute Datadog observability queries automatically via command-line interface.
 
 **When user requests Datadog data: Execute commands using Bash tool, return actual data.**
 
-- Use `datadog <command> --format json` for structured output
+- Use `datadog-cli <command> --format json` for structured output
 - Parse natural language queries → construct CLI commands → execute → return results
 - Don't provide instructions - execute and deliver data
 

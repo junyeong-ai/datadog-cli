@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-BINARY_NAME="datadog"
+BINARY_NAME="datadog-cli"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 USER_SKILL_DIR="$HOME/.claude/skills/datadog-query"
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-BINARY_NAME="datadog"
+BINARY_NAME="datadog-cli"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 REPO="junyeong-ai/datadog-cli"
 SKILL_NAME="datadog-query"
@@ -37,7 +37,7 @@ get_latest_version() {
 download_binary() {
     local version="$1"
     local target="$2"
-    local archive="datadog-v${version}-${target}.tar.gz"
+    local archive="datadog-cli-v${version}-${target}.tar.gz"
     local url="https://github.com/$REPO/releases/download/v${version}/${archive}"
     local checksum_url="${url}.sha256"
 
