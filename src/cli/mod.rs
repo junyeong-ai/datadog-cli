@@ -9,7 +9,7 @@ use crate::datadog::DatadogClient;
 use crate::error::Result;
 
 #[derive(Parser)]
-#[command(name = "datadog")]
+#[command(name = "datadog-cli")]
 #[command(version)]
 #[command(about = "High-performance Datadog CLI")]
 pub struct Cli {
