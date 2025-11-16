@@ -41,33 +41,33 @@ download_binary() {
     local url="https://github.com/$REPO/releases/download/v${version}/${archive}"
     local checksum_url="${url}.sha256"
 
-    echo "📥 Downloading $archive..."
-    if ! curl -fLO "$url"; then
-        echo "❌ Download failed"
+    echo "📥 Downloading $archive..." >&2
+    if ! curl -fLO "$url" >&2; then
+        echo "❌ Download failed" >&2
         return 1
     fi
 
-    echo "🔐 Verifying checksum..."
-    if curl -fLO "$checksum_url"; then
+    echo "🔐 Verifying checksum..." >&2
+    if curl -fLO "$checksum_url" >&2; then
         if command -v sha256sum >/dev/null; then
-            sha256sum -c "${archive}.sha256" || return 1
+            sha256sum -c "${archive}.sha256" >&2 || return 1
         elif command -v shasum >/dev/null; then
-            shasum -a 256 -c "${archive}.sha256" || return 1
+            shasum -a 256 -c "${archive}.sha256" >&2 || return 1
         else
-            echo "⚠️  No checksum tool found, skipping verification"
+            echo "⚠️  No checksum tool found, skipping verification" >&2
         fi
     fi
 
-    echo "📦 Extracting..."
-    tar -xzf "$archive"
+    echo "📦 Extracting..." >&2
+    tar -xzf "$archive" >&2
     rm -f "$archive" "${archive}.sha256"
 
     echo "$BINARY_NAME"
 }
 
 build_from_source() {
-    echo "🔨 Building from source..."
-    cargo build --release
+    echo "🔨 Building from source..." >&2
+    cargo build --release >&2
     echo "target/release/$BINARY_NAME"
 }
 
