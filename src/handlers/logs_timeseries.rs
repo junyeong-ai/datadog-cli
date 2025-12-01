@@ -33,13 +33,25 @@ impl LogsTimeseriesHandler {
         let interval = params["interval"].as_str().unwrap_or("1h");
         let metric = handler.extract_string(params, "metric");
         let aggregation = params["aggregation"].as_str().unwrap_or("count");
+        let timezone = params["timezone"].as_str().map(|s| s.to_string());
 
-        // Create timeseries compute with required type field
+        // Build meta first to avoid cloning metric and timezone
+        let meta_base = json!({
+            "query": &query,
+            "from": &from,
+            "to": &to,
+            "interval": interval,
+            "aggregation": aggregation,
+            "metric": &metric,
+            "timezone": &timezone
+        });
+
+        // Create timeseries compute with required type field (after meta_base to avoid clone)
         let compute = vec![LogsCompute {
             aggregation: aggregation.to_string(),
-            compute_type: Some("timeseries".to_string()), // Required
+            compute_type: Some("timeseries".to_string()),
             interval: Some(interval.to_string()),
-            metric: metric.clone(),
+            metric,
         }];
 
         // Parse group_by if provided with required type field
@@ -49,23 +61,14 @@ impl LogsTimeseriesHandler {
                 .map(|g| LogsGroupBy {
                     facet: g["facet"].as_str().unwrap_or("status").to_string(),
                     limit: g["limit"].as_i64().map(|l| l as i32),
-                    sort: None, // Timeseries typically don't use sort
-                    group_type: Some(g["type"].as_str().unwrap_or("facet").to_string()), // Required
+                    sort: None,
+                    group_type: Some(g["type"].as_str().unwrap_or("facet").to_string()),
                 })
                 .collect::<Vec<_>>()
         });
 
-        let timezone = params["timezone"].as_str().map(|s| s.to_string());
-
         let response = client
-            .aggregate_logs(
-                &query,
-                &from,
-                &to,
-                Some(compute),
-                group_by,
-                timezone.clone(),
-            )
+            .aggregate_logs(&query, &from, &to, Some(compute), group_by, timezone)
             .await?;
 
         let data = response["data"].clone();
@@ -75,16 +78,8 @@ impl LogsTimeseriesHandler {
             .map(|b| b.len())
             .unwrap_or(0);
 
-        let meta = json!({
-            "query": query,
-            "from": from,
-            "to": to,
-            "interval": interval,
-            "aggregation": aggregation,
-            "metric": metric,
-            "buckets_count": buckets_count,
-            "timezone": timezone
-        });
+        let mut meta = meta_base;
+        meta["buckets_count"] = json!(buckets_count);
 
         Ok(handler.format_list(data, None, Some(meta)))
     }

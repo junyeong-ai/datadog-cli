@@ -93,15 +93,16 @@ impl LogsAggregateHandler {
 
         let timezone = params["timezone"].as_str().map(|s| s.to_string());
 
+        // Build meta first to avoid cloning timezone
+        let meta_base = json!({
+            "query": &query,
+            "from": &from,
+            "to": &to,
+            "timezone": &timezone
+        });
+
         let response = client
-            .aggregate_logs(
-                &query,
-                &from,
-                &to,
-                compute.clone(),
-                group_by.clone(),
-                timezone.clone(),
-            )
+            .aggregate_logs(&query, &from, &to, compute, group_by, timezone)
             .await?;
 
         let data = response["data"].clone();
@@ -111,13 +112,8 @@ impl LogsAggregateHandler {
             .map(|b| b.len())
             .unwrap_or(0);
 
-        let meta = json!({
-            "query": query,
-            "from": from,
-            "to": to,
-            "buckets_count": buckets_count,
-            "timezone": timezone
-        });
+        let mut meta = meta_base;
+        meta["buckets_count"] = json!(buckets_count);
 
         Ok(handler.format_list(data, None, Some(meta)))
     }
