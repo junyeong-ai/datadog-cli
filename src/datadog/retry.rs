@@ -1,8 +1,5 @@
 use std::time::Duration;
 
-/// Maximum number of retry attempts for failed API requests
-pub const MAX_RETRIES: u32 = 3;
-
 /// Calculate exponential backoff duration for a given retry attempt
 ///
 /// Returns: Duration = 2^retry_count seconds
@@ -14,8 +11,8 @@ pub fn calculate_backoff(retry_count: u32) -> Duration {
 }
 
 /// Check if another retry should be attempted
-pub fn should_retry(current_retry: u32) -> bool {
-    current_retry < MAX_RETRIES
+pub fn should_retry(current_retry: u32, max_retries: u32) -> bool {
+    current_retry < max_retries
 }
 
 #[cfg(test)]
@@ -39,25 +36,27 @@ mod tests {
 
     #[test]
     fn test_should_retry_under_limit() {
-        assert!(should_retry(0));
-        assert!(should_retry(1));
-        assert!(should_retry(2));
+        assert!(should_retry(0, 3));
+        assert!(should_retry(1, 3));
+        assert!(should_retry(2, 3));
     }
 
     #[test]
     fn test_should_retry_at_limit() {
-        assert!(!should_retry(3));
+        assert!(!should_retry(3, 3));
     }
 
     #[test]
     fn test_should_retry_over_limit() {
-        assert!(!should_retry(4));
-        assert!(!should_retry(5));
-        assert!(!should_retry(100));
+        assert!(!should_retry(4, 3));
+        assert!(!should_retry(5, 3));
+        assert!(!should_retry(100, 3));
     }
 
     #[test]
-    fn test_max_retries_constant() {
-        assert_eq!(MAX_RETRIES, 3);
+    fn test_should_retry_custom_max() {
+        assert!(should_retry(4, 5));
+        assert!(!should_retry(5, 5));
+        assert!(!should_retry(0, 0));
     }
 }

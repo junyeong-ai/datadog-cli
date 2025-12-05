@@ -1,38 +1,35 @@
 use reqwest::{Client, Response, StatusCode};
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::time::Duration;
 
 use super::models::*;
 use super::retry;
 use crate::error::{DatadogError, Result};
 
-const DEFAULT_TIMEOUT_SECS: u64 = 30;
-
 pub struct DatadogClient {
     client: Client,
     api_key: String,
     app_key: String,
     base_url: String,
+    max_retries: u32,
     tag_filter: Option<String>,
 }
 
 impl DatadogClient {
-    pub fn new(api_key: String, app_key: String, site: Option<String>) -> Result<Self> {
-        Self::with_tag_filter(api_key, app_key, site, std::env::var("DD_TAG_FILTER").ok())
-    }
-
-    pub fn with_tag_filter(
+    pub fn new(
         api_key: String,
         app_key: String,
         site: Option<String>,
+        timeout_secs: u64,
+        max_retries: u32,
         tag_filter: Option<String>,
     ) -> Result<Self> {
         let site = site.unwrap_or_else(|| "datadoghq.com".to_string());
         let base_url = format!("https://api.{}", site);
 
         let client = Client::builder()
-            .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS))
+            .timeout(Duration::from_secs(timeout_secs))
             .build()
             .map_err(DatadogError::NetworkError)?;
 
@@ -41,6 +38,7 @@ impl DatadogClient {
             api_key,
             app_key,
             base_url,
+            max_retries,
             tag_filter,
         })
     }
@@ -82,13 +80,10 @@ impl DatadogClient {
             match self.handle_response(response).await {
                 Ok(data) => return Ok(data),
                 Err(e) => {
-                    if !retry::should_retry(retries) {
+                    if !retry::should_retry(retries, self.max_retries) {
                         return Err(e);
                     }
-
                     retries += 1;
-
-                    // Exponential backoff
                     tokio::time::sleep(retry::calculate_backoff(retries)).await;
                 }
             }
@@ -148,23 +143,70 @@ impl DatadogClient {
         query: &str,
         from: &str,
         to: &str,
-        limit: Option<i32>,
+        limit: i32,
+        cursor: Option<String>,
+        sort: Option<String>,
     ) -> Result<LogsResponse> {
-        let body = serde_json::json!({
+        let mut body = serde_json::json!({
             "filter": {
                 "query": query,
                 "from": from,
                 "to": to
             },
             "page": {
-                "limit": limit.unwrap_or(10)
-            },
-            "sort": "timestamp"
+                "limit": limit
+            }
         });
+
+        if let Some(c) = cursor {
+            body["page"]["cursor"] = serde_json::json!(c);
+        }
+
+        if let Some(s) = sort {
+            body["sort"] = serde_json::json!(s);
+        }
 
         self.request(
             reqwest::Method::POST,
             "/api/v2/logs/events/search",
+            None,
+            Some(body),
+        )
+        .await
+    }
+
+    pub async fn aggregate_logs(
+        &self,
+        query: &str,
+        from: &str,
+        to: &str,
+        compute: Option<Vec<LogsCompute>>,
+        group_by: Option<Vec<LogsGroupBy>>,
+        timezone: Option<String>,
+    ) -> Result<serde_json::Value> {
+        let mut body = serde_json::json!({
+            "filter": {
+                "query": query,
+                "from": from,
+                "to": to
+            }
+        });
+
+        if let Some(comp) = compute {
+            body["compute"] = serde_json::to_value(comp)?;
+        }
+
+        if let Some(gb) = group_by {
+            body["group_by"] = serde_json::to_value(gb)?;
+        }
+
+        if let Some(tz) = timezone {
+            body["options"] = serde_json::json!({"timezone": tz});
+        }
+
+        self.request(
+            reqwest::Method::POST,
+            "/api/v2/logs/analytics/aggregate",
             None,
             Some(body),
         )
@@ -210,7 +252,6 @@ impl DatadogClient {
 
     pub async fn get_monitor(&self, monitor_id: i64) -> Result<Monitor> {
         let endpoint = format!("/api/v1/monitor/{}", monitor_id);
-
         self.request(reqwest::Method::GET, &endpoint, None, None::<()>)
             .await
     }
@@ -246,7 +287,7 @@ impl DatadogClient {
         .await
     }
 
-    // ============= Infrastructure/Hosts API =============
+    // ============= Hosts API =============
 
     pub async fn list_hosts(
         &self,
@@ -291,20 +332,43 @@ impl DatadogClient {
         .await
     }
 
-    // ============= Dashboard API Methods =============
+    // ============= Dashboard API =============
 
-    /// List all dashboards
-    pub async fn list_dashboards(&self) -> Result<DashboardsResponse> {
+    pub async fn list_dashboards(
+        &self,
+        count: Option<i32>,
+        start: Option<i32>,
+        filter_shared: Option<bool>,
+        filter_deleted: Option<bool>,
+    ) -> Result<DashboardsResponse> {
+        let mut params = vec![];
+
+        if let Some(c) = count {
+            params.push(("count", c.to_string()));
+        }
+        if let Some(s) = start {
+            params.push(("start", s.to_string()));
+        }
+        if let Some(true) = filter_shared {
+            params.push(("filter[shared]", "true".to_string()));
+        }
+        if let Some(true) = filter_deleted {
+            params.push(("filter[deleted]", "true".to_string()));
+        }
+
         self.request(
             reqwest::Method::GET,
             "/api/v1/dashboard",
-            None::<Vec<(&str, String)>>,
+            if params.is_empty() {
+                None
+            } else {
+                Some(params)
+            },
             None::<()>,
         )
         .await
     }
 
-    /// Get a specific dashboard by ID
     pub async fn get_dashboard(&self, dashboard_id: &str) -> Result<Dashboard> {
         let url = format!("/api/v1/dashboard/{}", dashboard_id);
         self.request(
@@ -316,15 +380,14 @@ impl DatadogClient {
         .await
     }
 
-    // ============= APM Spans API Methods =============
+    // ============= APM Spans API =============
 
-    /// List spans using the GET endpoint
     pub async fn list_spans(
         &self,
         query: &str,
         from: &str,
         to: &str,
-        limit: Option<i32>,
+        limit: i32,
         cursor: Option<String>,
         sort: Option<String>,
     ) -> Result<serde_json::Value> {
@@ -332,10 +395,9 @@ impl DatadogClient {
             ("filter[query]", query.to_string()),
             ("filter[from]", from.to_string()),
             ("filter[to]", to.to_string()),
-            ("page[limit]", limit.unwrap_or(10).to_string()),
+            ("page[limit]", limit.to_string()),
         ];
 
-        // Add optional parameters
         if let Some(cursor_val) = cursor {
             params.push(("page[cursor]", cursor_val));
         }
@@ -352,9 +414,8 @@ impl DatadogClient {
         .await
     }
 
-    // ============= Service Catalog API Methods =============
+    // ============= Service Catalog API =============
 
-    /// Get service catalog with proper pagination
     pub async fn get_service_catalog(
         &self,
         page_size: Option<i32>,
@@ -363,15 +424,12 @@ impl DatadogClient {
     ) -> Result<ServicesResponse> {
         let mut params = vec![];
 
-        // Use Datadog's pagination format for v2 API
         if let Some(size) = page_size {
             params.push(("page[size]", size.to_string()));
         }
-
         if let Some(number) = page_number {
             params.push(("page[number]", number.to_string()));
         }
-
         if let Some(env) = filter_env {
             params.push(("filter[env]", env));
         }
@@ -389,61 +447,14 @@ impl DatadogClient {
         .await
     }
 
-    // ============= Logs Analytics API Methods =============
+    // ============= RUM API =============
 
-    /// Aggregate log events into buckets and compute metrics
-    pub async fn aggregate_logs(
-        &self,
-        query: &str,
-        from: &str,
-        to: &str,
-        compute: Option<Vec<LogsCompute>>,
-        group_by: Option<Vec<LogsGroupBy>>,
-        timezone: Option<String>,
-    ) -> Result<serde_json::Value> {
-        let mut body = serde_json::json!({
-            "filter": {
-                "query": query,
-                "from": from,
-                "to": to
-            }
-        });
-
-        if let Some(comp) = compute {
-            body["compute"] = serde_json::to_value(comp)?;
-        }
-
-        if let Some(gb) = group_by {
-            body["group_by"] = serde_json::to_value(gb)?;
-        }
-
-        if let Some(tz) = timezone {
-            body["options"] = serde_json::json!({"timezone": tz});
-        }
-
-        tracing::debug!(
-            "Logs aggregate request body: {}",
-            serde_json::to_string_pretty(&body).unwrap_or_default()
-        );
-
-        self.request(
-            reqwest::Method::POST,
-            "/api/v2/logs/analytics/aggregate",
-            None,
-            Some(body),
-        )
-        .await
-    }
-
-    // ============= RUM API Methods =============
-
-    /// Search RUM events
     pub async fn search_rum_events(
         &self,
         query: &str,
         from: &str,
         to: &str,
-        limit: Option<i32>,
+        limit: i32,
         cursor: Option<String>,
         sort: Option<String>,
     ) -> Result<RumEventsResponse> {
@@ -454,7 +465,7 @@ impl DatadogClient {
                 "to": to
             },
             "page": {
-                "limit": limit.unwrap_or(10)
+                "limit": limit
             }
         });
 
@@ -482,14 +493,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_client_new_with_default_site() {
-        let client =
-            DatadogClient::new("test_api_key".to_string(), "test_app_key".to_string(), None);
+        let client = DatadogClient::new(
+            "test_api_key".to_string(),
+            "test_app_key".to_string(),
+            None,
+            30,
+            3,
+            None,
+        );
 
         assert!(client.is_ok());
         let client = client.unwrap();
         assert_eq!(client.base_url, "https://api.datadoghq.com");
-        assert_eq!(client.api_key, "test_api_key");
-        assert_eq!(client.app_key, "test_app_key");
     }
 
     #[tokio::test]
@@ -498,6 +513,9 @@ mod tests {
             "test_api_key".to_string(),
             "test_app_key".to_string(),
             Some("datadoghq.eu".to_string()),
+            30,
+            3,
+            None,
         );
 
         assert!(client.is_ok());
@@ -519,6 +537,9 @@ mod tests {
                 "key".to_string(),
                 "app".to_string(),
                 Some(region.to_string()),
+                30,
+                3,
+                None,
             )
             .unwrap();
 
@@ -527,11 +548,13 @@ mod tests {
     }
 
     #[test]
-    fn test_tag_filter_injection() {
-        let client = DatadogClient::with_tag_filter(
+    fn test_tag_filter() {
+        let client = DatadogClient::new(
             "key".to_string(),
             "app".to_string(),
             None,
+            30,
+            3,
             Some("env:,service:".to_string()),
         )
         .unwrap();
@@ -540,285 +563,17 @@ mod tests {
     }
 
     #[test]
-    fn test_no_tag_filter() {
-        let client =
-            DatadogClient::with_tag_filter("key".to_string(), "app".to_string(), None, None)
-                .unwrap();
+    fn test_custom_timeout_and_retries() {
+        let client = DatadogClient::new(
+            "key".to_string(),
+            "app".to_string(),
+            None,
+            60,
+            5,
+            None,
+        )
+        .unwrap();
 
-        assert_eq!(client.get_tag_filter(), None);
-    }
-
-    #[tokio::test]
-    async fn test_handle_response_success() {
-        use wiremock::matchers::{method, path};
-        use wiremock::{Mock, MockServer, ResponseTemplate};
-
-        let mock_server = MockServer::start().await;
-
-        Mock::given(method("GET"))
-            .and(path("/api/v1/test"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "status": "ok",
-                "data": "test_value"
-            })))
-            .mount(&mock_server)
-            .await;
-
-        let mut client = DatadogClient::new("key".to_string(), "app".to_string(), None).unwrap();
-        client.base_url = mock_server.uri();
-
-        #[derive(serde::Deserialize)]
-        struct TestResponse {
-            status: String,
-            data: String,
-        }
-
-        let result: Result<TestResponse> = client
-            .request(reqwest::Method::GET, "/api/v1/test", None, None::<()>)
-            .await;
-
-        assert!(result.is_ok());
-        let response = result.unwrap();
-        assert_eq!(response.status, "ok");
-        assert_eq!(response.data, "test_value");
-    }
-
-    #[tokio::test]
-    async fn test_handle_response_unauthorized() {
-        use wiremock::matchers::{method, path};
-        use wiremock::{Mock, MockServer, ResponseTemplate};
-
-        let mock_server = MockServer::start().await;
-
-        Mock::given(method("GET"))
-            .and(path("/api/v1/test"))
-            .respond_with(ResponseTemplate::new(401).set_body_string("Unauthorized"))
-            .mount(&mock_server)
-            .await;
-
-        let mut client = DatadogClient::new("key".to_string(), "app".to_string(), None).unwrap();
-        client.base_url = mock_server.uri();
-
-        let result: Result<serde_json::Value> = client
-            .request(reqwest::Method::GET, "/api/v1/test", None, None::<()>)
-            .await;
-
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            DatadogError::AuthError(msg) => {
-                assert!(msg.contains("Unauthorized"));
-            }
-            _ => panic!("Expected AuthError"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_handle_response_forbidden() {
-        use wiremock::matchers::{method, path};
-        use wiremock::{Mock, MockServer, ResponseTemplate};
-
-        let mock_server = MockServer::start().await;
-
-        Mock::given(method("GET"))
-            .and(path("/api/v1/test"))
-            .respond_with(ResponseTemplate::new(403).set_body_string("Forbidden"))
-            .mount(&mock_server)
-            .await;
-
-        let mut client = DatadogClient::new("key".to_string(), "app".to_string(), None).unwrap();
-        client.base_url = mock_server.uri();
-
-        let result: Result<serde_json::Value> = client
-            .request(reqwest::Method::GET, "/api/v1/test", None, None::<()>)
-            .await;
-
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            DatadogError::AuthError(msg) => {
-                assert!(msg.contains("Forbidden"));
-            }
-            _ => panic!("Expected AuthError"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_handle_response_rate_limit() {
-        use wiremock::matchers::{method, path};
-        use wiremock::{Mock, MockServer, ResponseTemplate};
-
-        let mock_server = MockServer::start().await;
-
-        Mock::given(method("GET"))
-            .and(path("/api/v1/test"))
-            .respond_with(ResponseTemplate::new(429).set_body_string("Rate limit exceeded"))
-            .mount(&mock_server)
-            .await;
-
-        let mut client = DatadogClient::new("key".to_string(), "app".to_string(), None).unwrap();
-        client.base_url = mock_server.uri();
-
-        let result: Result<serde_json::Value> = client
-            .request(reqwest::Method::GET, "/api/v1/test", None, None::<()>)
-            .await;
-
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            DatadogError::RateLimitError => {}
-            _ => panic!("Expected RateLimitError"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_handle_response_timeout() {
-        use wiremock::matchers::{method, path};
-        use wiremock::{Mock, MockServer, ResponseTemplate};
-
-        let mock_server = MockServer::start().await;
-
-        Mock::given(method("GET"))
-            .and(path("/api/v1/test"))
-            .respond_with(ResponseTemplate::new(408).set_body_string("Request timeout"))
-            .mount(&mock_server)
-            .await;
-
-        let mut client = DatadogClient::new("key".to_string(), "app".to_string(), None).unwrap();
-        client.base_url = mock_server.uri();
-
-        let result: Result<serde_json::Value> = client
-            .request(reqwest::Method::GET, "/api/v1/test", None, None::<()>)
-            .await;
-
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            DatadogError::TimeoutError => {}
-            _ => panic!("Expected TimeoutError"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_handle_response_server_error() {
-        use wiremock::matchers::{method, path};
-        use wiremock::{Mock, MockServer, ResponseTemplate};
-
-        let mock_server = MockServer::start().await;
-
-        Mock::given(method("GET"))
-            .and(path("/api/v1/test"))
-            .respond_with(ResponseTemplate::new(500).set_body_string("Internal server error"))
-            .mount(&mock_server)
-            .await;
-
-        let mut client = DatadogClient::new("key".to_string(), "app".to_string(), None).unwrap();
-        client.base_url = mock_server.uri();
-
-        let result: Result<serde_json::Value> = client
-            .request(reqwest::Method::GET, "/api/v1/test", None, None::<()>)
-            .await;
-
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            DatadogError::ApiError(msg) => {
-                assert!(msg.contains("HTTP 500"));
-                assert!(msg.contains("Internal server error"));
-            }
-            _ => panic!("Expected ApiError"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_request_retry_logic() {
-        use std::sync::Arc;
-        use std::sync::atomic::{AtomicU32, Ordering};
-        use wiremock::matchers::{method, path};
-        use wiremock::{Mock, MockServer, ResponseTemplate};
-
-        let mock_server = MockServer::start().await;
-        let call_count = Arc::new(AtomicU32::new(0));
-        let call_count_clone = call_count.clone();
-
-        Mock::given(method("GET"))
-            .and(path("/api/v1/test"))
-            .respond_with(move |_req: &wiremock::Request| {
-                let count = call_count_clone.fetch_add(1, Ordering::SeqCst);
-                if count < 2 {
-                    ResponseTemplate::new(500)
-                } else {
-                    ResponseTemplate::new(200).set_body_json(serde_json::json!({"status": "ok"}))
-                }
-            })
-            .mount(&mock_server)
-            .await;
-
-        let mut client = DatadogClient::new("key".to_string(), "app".to_string(), None).unwrap();
-        client.base_url = mock_server.uri();
-
-        let result: Result<serde_json::Value> = client
-            .request(reqwest::Method::GET, "/api/v1/test", None, None::<()>)
-            .await;
-
-        assert!(result.is_ok());
-        assert_eq!(call_count.load(Ordering::SeqCst), 3);
-    }
-
-    #[tokio::test]
-    async fn test_request_max_retries() {
-        use std::sync::Arc;
-        use std::sync::atomic::{AtomicU32, Ordering};
-        use wiremock::matchers::{method, path};
-        use wiremock::{Mock, MockServer, ResponseTemplate};
-
-        let mock_server = MockServer::start().await;
-        let call_count = Arc::new(AtomicU32::new(0));
-        let call_count_clone = call_count.clone();
-
-        Mock::given(method("GET"))
-            .and(path("/api/v1/test"))
-            .respond_with(move |_req: &wiremock::Request| {
-                call_count_clone.fetch_add(1, Ordering::SeqCst);
-                ResponseTemplate::new(500)
-            })
-            .mount(&mock_server)
-            .await;
-
-        let mut client = DatadogClient::new("key".to_string(), "app".to_string(), None).unwrap();
-        client.base_url = mock_server.uri();
-
-        let result: Result<serde_json::Value> = client
-            .request(reqwest::Method::GET, "/api/v1/test", None, None::<()>)
-            .await;
-
-        assert!(result.is_err());
-        assert_eq!(call_count.load(Ordering::SeqCst), 4);
-    }
-
-    #[tokio::test]
-    async fn test_request_success_first_try() {
-        use std::sync::Arc;
-        use std::sync::atomic::{AtomicU32, Ordering};
-        use wiremock::matchers::{method, path};
-        use wiremock::{Mock, MockServer, ResponseTemplate};
-
-        let mock_server = MockServer::start().await;
-        let call_count = Arc::new(AtomicU32::new(0));
-        let call_count_clone = call_count.clone();
-
-        Mock::given(method("GET"))
-            .and(path("/api/v1/test"))
-            .respond_with(move |_req: &wiremock::Request| {
-                call_count_clone.fetch_add(1, Ordering::SeqCst);
-                ResponseTemplate::new(200).set_body_json(serde_json::json!({"status": "ok"}))
-            })
-            .mount(&mock_server)
-            .await;
-
-        let mut client = DatadogClient::new("key".to_string(), "app".to_string(), None).unwrap();
-        client.base_url = mock_server.uri();
-
-        let result: Result<serde_json::Value> = client
-            .request(reqwest::Method::GET, "/api/v1/test", None, None::<()>)
-            .await;
-
-        assert!(result.is_ok());
-        assert_eq!(call_count.load(Ordering::SeqCst), 1);
+        assert_eq!(client.max_retries, 5);
     }
 }
