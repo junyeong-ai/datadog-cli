@@ -1,4 +1,4 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 
 use super::{Command, ConfigAction, DashboardsAction, LogsAction, MonitorsAction};
@@ -7,7 +7,11 @@ use crate::datadog::DatadogClient;
 use crate::error::{DatadogError, Result};
 use crate::handlers;
 
-pub async fn execute(command: &Command, client: Arc<DatadogClient>, config: &Config) -> Result<Value> {
+pub async fn execute(
+    command: &Command,
+    client: Arc<DatadogClient>,
+    config: &Config,
+) -> Result<Value> {
     match command {
         Command::Metrics {
             query,

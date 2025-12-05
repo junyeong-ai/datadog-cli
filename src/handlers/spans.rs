@@ -1,4 +1,4 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 
 use crate::datadog::DatadogClient;
@@ -139,7 +139,10 @@ mod tests {
 
         assert_eq!(handler.extract_query(&params, "*"), "service:web-api");
         assert_eq!(handler.extract_i32(&params, "limit", 10), 50);
-        assert_eq!(handler.extract_string(&params, "sort"), Some("timestamp".to_string()));
+        assert_eq!(
+            handler.extract_string(&params, "sort"),
+            Some("timestamp".to_string())
+        );
     }
 
     #[test]

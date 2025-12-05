@@ -1,8 +1,8 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 
-use crate::datadog::models::{LogsCompute, LogsGroupBy, LogsGroupBySort};
 use crate::datadog::DatadogClient;
+use crate::datadog::models::{LogsCompute, LogsGroupBy, LogsGroupBySort};
 use crate::error::Result;
 use crate::handlers::common::{
     PaginationInfo, ParameterParser, ResponseFilter, ResponseFormatter, TagFilter, TimeHandler,
@@ -68,10 +68,10 @@ impl LogsHandler {
                 if let Some(status) = attrs.and_then(|a| a.status.as_ref()) {
                     entry["status"] = json!(status);
                 }
-                if let Some(tags_vec) = tags {
-                    if !tags_vec.is_empty() {
-                        entry["tags"] = json!(tags_vec);
-                    }
+                if let Some(tags_vec) = tags
+                    && !tags_vec.is_empty()
+                {
+                    entry["tags"] = json!(tags_vec);
                 }
 
                 entry
@@ -218,7 +218,14 @@ impl LogsHandler {
         });
 
         let response = client
-            .aggregate_logs(&query, &from, &to, Some(compute), group_by, timezone.clone())
+            .aggregate_logs(
+                &query,
+                &from,
+                &to,
+                Some(compute),
+                group_by,
+                timezone.clone(),
+            )
             .await?;
 
         let data = response["data"].clone();

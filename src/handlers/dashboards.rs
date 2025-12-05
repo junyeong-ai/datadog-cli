@@ -1,4 +1,4 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 
 use crate::datadog::DatadogClient;
@@ -41,11 +41,7 @@ impl DashboardsHandler {
 
         let pagination = PaginationInfo::from_offset(data.len(), start as usize, count as usize);
 
-        Ok(handler.format_list(
-            json!(data),
-            Some(serde_json::to_value(pagination)?),
-            None,
-        ))
+        Ok(handler.format_list(json!(data), Some(serde_json::to_value(pagination)?), None))
     }
 
     pub async fn get(client: Arc<DatadogClient>, params: &Value) -> Result<Value> {

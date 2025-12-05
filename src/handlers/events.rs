@@ -1,9 +1,11 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 
 use crate::datadog::DatadogClient;
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ParameterParser, ResponseFormatter, TimeHandler, TimeParams};
+use crate::handlers::common::{
+    PaginationInfo, ParameterParser, ResponseFormatter, TimeHandler, TimeParams,
+};
 
 pub struct EventsHandler;
 
@@ -20,7 +22,10 @@ impl EventsHandler {
         let tags = handler.extract_string(params, "tags");
 
         let time = handler.parse_time(params, 1)?;
-        let TimeParams::Timestamp { from: start, to: end } = time;
+        let TimeParams::Timestamp {
+            from: start,
+            to: end,
+        } = time;
 
         let response = client
             .query_events(start, end, priority, sources, tags)
@@ -47,11 +52,7 @@ impl EventsHandler {
 
         let pagination = PaginationInfo::single_page(data.len(), 1000);
 
-        Ok(handler.format_list(
-            json!(data),
-            Some(serde_json::to_value(pagination)?),
-            None,
-        ))
+        Ok(handler.format_list(json!(data), Some(serde_json::to_value(pagination)?), None))
     }
 }
 
@@ -68,8 +69,17 @@ mod tests {
             "tags": "env:prod",
         });
 
-        assert_eq!(handler.extract_string(&params, "priority"), Some("normal".to_string()));
-        assert_eq!(handler.extract_string(&params, "sources"), Some("my_apps".to_string()));
-        assert_eq!(handler.extract_string(&params, "tags"), Some("env:prod".to_string()));
+        assert_eq!(
+            handler.extract_string(&params, "priority"),
+            Some("normal".to_string())
+        );
+        assert_eq!(
+            handler.extract_string(&params, "sources"),
+            Some("my_apps".to_string())
+        );
+        assert_eq!(
+            handler.extract_string(&params, "tags"),
+            Some("env:prod".to_string())
+        );
     }
 }

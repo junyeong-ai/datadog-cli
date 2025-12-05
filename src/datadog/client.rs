@@ -1,6 +1,6 @@
 use reqwest::{Client, Response, StatusCode};
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::time::Duration;
 
 use super::models::*;
@@ -564,15 +564,8 @@ mod tests {
 
     #[test]
     fn test_custom_timeout_and_retries() {
-        let client = DatadogClient::new(
-            "key".to_string(),
-            "app".to_string(),
-            None,
-            60,
-            5,
-            None,
-        )
-        .unwrap();
+        let client =
+            DatadogClient::new("key".to_string(), "app".to_string(), None, 60, 5, None).unwrap();
 
         assert_eq!(client.max_retries, 5);
     }

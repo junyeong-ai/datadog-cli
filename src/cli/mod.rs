@@ -8,7 +8,8 @@ use crate::config::Config;
 use crate::datadog::DatadogClient;
 use crate::error::Result;
 
-const TIME_HELP: &str = "Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp";
+const TIME_HELP: &str =
+    "Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp";
 const SORT_HELP: &str = "Sort order (use --sort=\"-timestamp\" for descending)";
 
 #[derive(Parser)]
@@ -233,10 +234,18 @@ pub enum LogsAction {
         #[arg(long, default_value = "now", help = TIME_HELP)]
         to: String,
 
-        #[arg(long, default_value = "1h", help = "Rollup interval (e.g., 5m, 1h, 1d)")]
+        #[arg(
+            long,
+            default_value = "1h",
+            help = "Rollup interval (e.g., 5m, 1h, 1d)"
+        )]
         interval: String,
 
-        #[arg(long, default_value = "count", help = "Aggregation type (count, avg, sum, min, max)")]
+        #[arg(
+            long,
+            default_value = "count",
+            help = "Aggregation type (count, avg, sum, min, max)"
+        )]
         aggregation: String,
 
         #[arg(long, help = "Metric field for aggregation")]

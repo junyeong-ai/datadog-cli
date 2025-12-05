@@ -1,4 +1,4 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 
 use crate::datadog::DatadogClient;
@@ -43,47 +43,54 @@ impl ServicesHandler {
                     s["tags"] = json!(attrs.tags);
 
                     if let Some(contacts) = &attrs.contacts {
-                        s["contacts"] = json!(contacts
-                            .iter()
-                            .map(|c| json!({
-                                "name": c.name,
-                                "email": c.email,
-                                "type": c.contact_type
-                            }))
-                            .collect::<Vec<_>>());
+                        s["contacts"] = json!(
+                            contacts
+                                .iter()
+                                .map(|c| json!({
+                                    "name": c.name,
+                                    "email": c.email,
+                                    "type": c.contact_type
+                                }))
+                                .collect::<Vec<_>>()
+                        );
                     }
 
                     if let Some(links) = &attrs.links {
-                        s["links"] = json!(links
-                            .iter()
-                            .map(|l| json!({
-                                "name": l.name,
-                                "url": l.url,
-                                "type": l.link_type
-                            }))
-                            .collect::<Vec<_>>());
+                        s["links"] = json!(
+                            links
+                                .iter()
+                                .map(|l| json!({
+                                    "name": l.name,
+                                    "url": l.url,
+                                    "type": l.link_type
+                                }))
+                                .collect::<Vec<_>>()
+                        );
                     }
 
                     if let Some(repos) = &attrs.repos {
-                        s["repos"] = json!(repos
-                            .iter()
-                            .map(|r| json!({
-                                "name": r.name,
-                                "url": r.url,
-                                "provider": r.provider
-                            }))
-                            .collect::<Vec<_>>());
+                        s["repos"] = json!(
+                            repos
+                                .iter()
+                                .map(|r| json!({
+                                    "name": r.name,
+                                    "url": r.url,
+                                    "provider": r.provider
+                                }))
+                                .collect::<Vec<_>>()
+                        );
                     }
 
                     if let Some(docs) = &attrs.docs {
-                        s["docs"] = json!(docs
-                            .iter()
-                            .map(|d| json!({
-                                "name": d.name,
-                                "url": d.url,
-                                "provider": d.provider
-                            }))
-                            .collect::<Vec<_>>());
+                        s["docs"] = json!(
+                            docs.iter()
+                                .map(|d| json!({
+                                    "name": d.name,
+                                    "url": d.url,
+                                    "provider": d.provider
+                                }))
+                                .collect::<Vec<_>>()
+                        );
                     }
 
                     if let Some(integrations) = &attrs.integrations {
@@ -138,7 +145,10 @@ mod tests {
             "page": 2,
         });
 
-        assert_eq!(handler.extract_string(&params, "env"), Some("production".to_string()));
+        assert_eq!(
+            handler.extract_string(&params, "env"),
+            Some("production".to_string())
+        );
         assert_eq!(handler.extract_i32(&params, "page_size", 100), 50);
         assert_eq!(handler.extract_i32(&params, "page", 0), 2);
     }
