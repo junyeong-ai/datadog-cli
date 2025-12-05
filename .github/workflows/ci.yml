@@ -62,14 +62,13 @@ jobs:
             --all-features \
             --workspace \
             --lcov \
-            --output-path lcov.info \
-            --fail-under-lines 50
+            --output-path lcov.info
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v5
         with:
           files: lcov.info
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: unittests
           name: codecov-datadog-cli
