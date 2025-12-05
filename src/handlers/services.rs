@@ -1,136 +1,119 @@
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::sync::Arc;
 
 use crate::datadog::DatadogClient;
 use crate::error::Result;
-use crate::handlers::common::{Paginator, ResponseFormatter};
+use crate::handlers::common::{ParameterParser, ResponseFormatter};
 
 pub struct ServicesHandler;
 
-impl Paginator for ServicesHandler {}
 impl ResponseFormatter for ServicesHandler {}
+impl ParameterParser for ServicesHandler {}
 
 impl ServicesHandler {
     pub async fn list(client: Arc<DatadogClient>, params: &Value) -> Result<Value> {
         let handler = ServicesHandler;
-        let (page, page_size) = handler.parse_pagination(params);
 
-        let page_size_param = Some(page_size as i32);
-        let page_number_param = Some(page as i32);
-        let filter_env = params["env"].as_str().map(|s| s.to_string());
+        let page_size = handler.extract_i32(params, "page_size", 100);
+        let page = handler.extract_i32(params, "page", 0);
+        let filter_env = handler.extract_string(params, "env");
 
         let response = client
-            .get_service_catalog(page_size_param, page_number_param, filter_env.clone())
+            .get_service_catalog(Some(page_size), Some(page), filter_env.clone())
             .await?;
 
-        let services_count = response.data.len();
+        let data: Vec<Value> = response
+            .data
+            .iter()
+            .map(|service| {
+                let mut s = json!({
+                    "id": service.id,
+                    "type": service.service_type,
+                });
 
-        let data = json!(
-            response
-                .data
-                .iter()
-                .map(|service| {
-                    let mut formatted_service = json!({
-                        "id": service.id,
-                        "type": service.service_type,
-                    });
+                if let Some(attrs) = &service.attributes {
+                    s["schema_version"] = json!(attrs.schema_version);
+                    s["dd_service"] = json!(attrs.dd_service);
+                    s["dd_team"] = json!(attrs.dd_team);
+                    s["application"] = json!(attrs.application);
+                    s["tier"] = json!(attrs.tier);
+                    s["lifecycle"] = json!(attrs.lifecycle);
+                    s["type_of_service"] = json!(attrs.type_of_service);
+                    s["languages"] = json!(attrs.languages);
+                    s["tags"] = json!(attrs.tags);
 
-                    if let Some(attributes) = &service.attributes {
-                        formatted_service["schema_version"] = json!(attributes.schema_version);
-                        formatted_service["dd_service"] = json!(attributes.dd_service);
-                        formatted_service["dd_team"] = json!(attributes.dd_team);
-                        formatted_service["application"] = json!(attributes.application);
-                        formatted_service["tier"] = json!(attributes.tier);
-                        formatted_service["lifecycle"] = json!(attributes.lifecycle);
-                        formatted_service["type_of_service"] = json!(attributes.type_of_service);
-                        formatted_service["languages"] = json!(attributes.languages);
-                        formatted_service["tags"] = json!(attributes.tags);
-
-                        if let Some(contacts) = &attributes.contacts {
-                            formatted_service["contacts"] = json!(
-                                contacts
-                                    .iter()
-                                    .map(|c| json!({
-                                        "name": c.name,
-                                        "email": c.email,
-                                        "type": c.contact_type
-                                    }))
-                                    .collect::<Vec<_>>()
-                            );
-                        }
-
-                        if let Some(links) = &attributes.links {
-                            formatted_service["links"] = json!(
-                                links
-                                    .iter()
-                                    .map(|l| json!({
-                                        "name": l.name,
-                                        "url": l.url,
-                                        "type": l.link_type
-                                    }))
-                                    .collect::<Vec<_>>()
-                            );
-                        }
-
-                        if let Some(repos) = &attributes.repos {
-                            formatted_service["repos"] = json!(
-                                repos
-                                    .iter()
-                                    .map(|r| json!({
-                                        "name": r.name,
-                                        "url": r.url,
-                                        "provider": r.provider
-                                    }))
-                                    .collect::<Vec<_>>()
-                            );
-                        }
-
-                        if let Some(docs) = &attributes.docs {
-                            formatted_service["docs"] = json!(
-                                docs.iter()
-                                    .map(|d| json!({
-                                        "name": d.name,
-                                        "url": d.url,
-                                        "provider": d.provider
-                                    }))
-                                    .collect::<Vec<_>>()
-                            );
-                        }
-
-                        if let Some(integrations) = &attributes.integrations {
-                            let mut integrations_json = json!({});
-
-                            if let Some(pagerduty) = &integrations.pagerduty {
-                                integrations_json["pagerduty"] = pagerduty.clone();
-                            }
-
-                            if let Some(slack) = &integrations.slack {
-                                integrations_json["slack"] = slack.clone();
-                            }
-
-                            for (key, value) in &integrations.others {
-                                integrations_json[key] = value.clone();
-                            }
-
-                            formatted_service["integrations"] = integrations_json;
-                        }
-
-                        // Include any extra attributes
-                        for (key, value) in &attributes.extra {
-                            if let Some(obj) = formatted_service.as_object()
-                                && !obj.contains_key(key)
-                            {
-                                formatted_service[key] = value.clone();
-                            }
-                        }
+                    if let Some(contacts) = &attrs.contacts {
+                        s["contacts"] = json!(contacts
+                            .iter()
+                            .map(|c| json!({
+                                "name": c.name,
+                                "email": c.email,
+                                "type": c.contact_type
+                            }))
+                            .collect::<Vec<_>>());
                     }
 
-                    formatted_service
-                })
-                .collect::<Vec<_>>()
-        );
+                    if let Some(links) = &attrs.links {
+                        s["links"] = json!(links
+                            .iter()
+                            .map(|l| json!({
+                                "name": l.name,
+                                "url": l.url,
+                                "type": l.link_type
+                            }))
+                            .collect::<Vec<_>>());
+                    }
 
-        let pagination = handler.format_pagination(page, page_size, services_count);
+                    if let Some(repos) = &attrs.repos {
+                        s["repos"] = json!(repos
+                            .iter()
+                            .map(|r| json!({
+                                "name": r.name,
+                                "url": r.url,
+                                "provider": r.provider
+                            }))
+                            .collect::<Vec<_>>());
+                    }
+
+                    if let Some(docs) = &attrs.docs {
+                        s["docs"] = json!(docs
+                            .iter()
+                            .map(|d| json!({
+                                "name": d.name,
+                                "url": d.url,
+                                "provider": d.provider
+                            }))
+                            .collect::<Vec<_>>());
+                    }
+
+                    if let Some(integrations) = &attrs.integrations {
+                        let mut i = json!({});
+                        if let Some(pagerduty) = &integrations.pagerduty {
+                            i["pagerduty"] = pagerduty.clone();
+                        }
+                        if let Some(slack) = &integrations.slack {
+                            i["slack"] = slack.clone();
+                        }
+                        for (key, value) in &integrations.others {
+                            i[key] = value.clone();
+                        }
+                        s["integrations"] = i;
+                    }
+
+                    for (key, value) in &attrs.extra {
+                        if let Some(obj) = s.as_object()
+                            && !obj.contains_key(key)
+                        {
+                            s[key] = value.clone();
+                        }
+                    }
+                }
+
+                s
+            })
+            .collect();
+
+        let pagination = handler.format_pagination(page as usize, page_size as usize, data.len());
 
         let meta = json!({
             "filter_env": filter_env,
@@ -138,50 +121,25 @@ impl ServicesHandler {
             "next": response.links.as_ref().and_then(|l| l.next.clone())
         });
 
-        Ok(handler.format_list(data, Some(pagination), Some(meta)))
+        Ok(handler.format_list(json!(data), Some(pagination), Some(meta)))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     #[test]
-    fn test_optional_env_filter() {
-        let params = json!({"env": "production"});
-        assert_eq!(params["env"].as_str(), Some("production"));
-    }
-
-    #[test]
-    fn test_pagination_parameters() {
+    fn test_parameter_parser() {
         let handler = ServicesHandler;
-        let params = json!({"page": 3, "page_size": 20});
+        let params = json!({
+            "env": "production",
+            "page_size": 50,
+            "page": 2,
+        });
 
-        let (page, page_size) = handler.parse_pagination(&params);
-        assert_eq!(page, 3);
-        assert_eq!(page_size, 20);
-    }
-
-    #[test]
-    fn test_paginator_trait() {
-        let handler = ServicesHandler;
-        let data = vec![1, 2, 3, 4, 5];
-
-        let page = handler.paginate(&data, 1, 2);
-        assert_eq!(page, &[3, 4]);
-    }
-
-    #[test]
-    fn test_response_formatter_trait() {
-        let handler = ServicesHandler;
-        let data = json!([{"service": "api"}]);
-        let pagination = json!({"page": 0});
-        let meta = json!({"filter_env": "prod"});
-
-        let response = handler.format_list(data, Some(pagination), Some(meta));
-        assert!(response.get("data").is_some());
-        assert!(response.get("pagination").is_some());
-        assert!(response.get("meta").is_some());
+        assert_eq!(handler.extract_string(&params, "env"), Some("production".to_string()));
+        assert_eq!(handler.extract_i32(&params, "page_size", 100), 50);
+        assert_eq!(handler.extract_i32(&params, "page", 0), 2);
     }
 }

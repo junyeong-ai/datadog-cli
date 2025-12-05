@@ -1,29 +1,26 @@
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::sync::Arc;
 
 use crate::datadog::DatadogClient;
 use crate::error::Result;
-use crate::handlers::common::{ResponseFormatter, TimeHandler, TimeParams};
+use crate::handlers::common::{PaginationInfo, ParameterParser, ResponseFormatter, TimeHandler, TimeParams};
 
 pub struct EventsHandler;
 
 impl TimeHandler for EventsHandler {}
 impl ResponseFormatter for EventsHandler {}
+impl ParameterParser for EventsHandler {}
 
 impl EventsHandler {
     pub async fn query(client: Arc<DatadogClient>, params: &Value) -> Result<Value> {
         let handler = EventsHandler;
 
-        let priority = params["priority"].as_str().map(|s| s.to_string());
-        let sources = params["sources"].as_str().map(|s| s.to_string());
-        let tags = params["tags"].as_str().map(|s| s.to_string());
+        let priority = handler.extract_string(params, "priority");
+        let sources = handler.extract_string(params, "sources");
+        let tags = handler.extract_string(params, "tags");
 
         let time = handler.parse_time(params, 1)?;
-
-        let TimeParams::Timestamp {
-            from: start,
-            to: end,
-        } = time;
+        let TimeParams::Timestamp { from: start, to: end } = time;
 
         let response = client
             .query_events(start, end, priority, sources, tags)
@@ -31,52 +28,48 @@ impl EventsHandler {
 
         let events = response.events.unwrap_or_default();
 
-        let data = json!(
-            events
-                .iter()
-                .map(|event| {
-                    json!({
-                        "id": event.id,
-                        "title": event.title,
-                        "text": event.text,
-                        "date": event.date_happened.map(crate::utils::format_timestamp),
-                        "priority": event.priority,
-                        "host": event.host,
-                        "source": event.source,
-                        "alert_type": event.alert_type,
-                        "tags": event.tags
-                    })
+        let data: Vec<Value> = events
+            .iter()
+            .map(|e| {
+                json!({
+                    "id": e.id,
+                    "title": e.title,
+                    "text": e.text,
+                    "date": e.date_happened.map(crate::utils::format_timestamp),
+                    "priority": e.priority,
+                    "host": e.host,
+                    "source": e.source,
+                    "alert_type": e.alert_type,
+                    "tags": e.tags,
                 })
-                .collect::<Vec<_>>()
-        );
+            })
+            .collect();
 
-        Ok(handler.format_detail(data))
+        let pagination = PaginationInfo::single_page(data.len(), 1000);
+
+        Ok(handler.format_list(
+            json!(data),
+            Some(serde_json::to_value(pagination)?),
+            None,
+        ))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
+    use super::*;
 
     #[test]
-    fn test_optional_parameters() {
-        let params_full = json!({
+    fn test_parameter_parser() {
+        let handler = EventsHandler;
+        let params = json!({
             "priority": "normal",
             "sources": "my_apps",
-            "tags": "env:prod"
+            "tags": "env:prod",
         });
 
-        assert_eq!(params_full["priority"].as_str(), Some("normal"));
-        assert_eq!(params_full["sources"].as_str(), Some("my_apps"));
-        assert_eq!(params_full["tags"].as_str(), Some("env:prod"));
-    }
-
-    #[test]
-    fn test_missing_optional_parameters() {
-        let params_empty = json!({});
-
-        assert_eq!(params_empty["priority"].as_str(), None);
-        assert_eq!(params_empty["sources"].as_str(), None);
-        assert_eq!(params_empty["tags"].as_str(), None);
+        assert_eq!(handler.extract_string(&params, "priority"), Some("normal".to_string()));
+        assert_eq!(handler.extract_string(&params, "sources"), Some("my_apps".to_string()));
+        assert_eq!(handler.extract_string(&params, "tags"), Some("env:prod".to_string()));
     }
 }

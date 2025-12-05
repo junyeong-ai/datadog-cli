@@ -1,61 +1,73 @@
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::sync::Arc;
 
 use crate::datadog::DatadogClient;
 use crate::error::Result;
-use crate::handlers::common::ResponseFormatter;
+use crate::handlers::common::{PaginationInfo, ParameterParser, ResponseFormatter};
 
 pub struct DashboardsHandler;
 
 impl ResponseFormatter for DashboardsHandler {}
+impl ParameterParser for DashboardsHandler {}
 
 impl DashboardsHandler {
-    pub async fn list(client: Arc<DatadogClient>, _params: &Value) -> Result<Value> {
+    pub async fn list(client: Arc<DatadogClient>, params: &Value) -> Result<Value> {
         let handler = DashboardsHandler;
 
-        let response = client.list_dashboards().await?;
-        let dashboards = response.dashboards;
+        let count = handler.extract_i32(params, "count", 100);
+        let start = handler.extract_i32(params, "start", 0);
+        let filter_shared = params["filter_shared"].as_bool();
+        let filter_deleted = params["filter_deleted"].as_bool();
 
-        let data = json!(
-            dashboards
-                .iter()
-                .map(|dashboard| {
-                    json!({
-                        "id": dashboard.id,
-                        "title": dashboard.title,
-                        "description": dashboard.description,
-                        "layout_type": dashboard.layout_type,
-                        "url": dashboard.url,
-                        "created": dashboard.created_at,
-                        "modified": dashboard.modified_at
-                    })
+        let response = client
+            .list_dashboards(Some(count), Some(start), filter_shared, filter_deleted)
+            .await?;
+
+        let data: Vec<Value> = response
+            .dashboards
+            .iter()
+            .map(|d| {
+                json!({
+                    "id": d.id,
+                    "title": d.title,
+                    "description": d.description,
+                    "layout_type": d.layout_type,
+                    "url": d.url,
+                    "created": d.created_at,
+                    "modified": d.modified_at,
                 })
-                .collect::<Vec<_>>()
-        );
+            })
+            .collect();
 
-        Ok(handler.format_detail(data))
+        let pagination = PaginationInfo::from_offset(data.len(), start as usize, count as usize);
+
+        Ok(handler.format_list(
+            json!(data),
+            Some(serde_json::to_value(pagination)?),
+            None,
+        ))
     }
 
     pub async fn get(client: Arc<DatadogClient>, params: &Value) -> Result<Value> {
         let handler = DashboardsHandler;
 
         let dashboard_id = params["dashboard_id"].as_str().ok_or_else(|| {
-            crate::error::DatadogError::InvalidInput("Missing 'dashboard_id' parameter".to_string())
+            crate::error::DatadogError::InvalidInput("Missing dashboard_id".into())
         })?;
 
-        let response = client.get_dashboard(dashboard_id).await?;
+        let d = client.get_dashboard(dashboard_id).await?;
 
         let data = json!({
-            "id": response.id,
-            "title": response.title,
-            "description": response.description,
-            "layout_type": response.layout_type,
-            "widgets": response.widgets,
-            "template_variables": response.template_variables,
-            "author": response.author_info,
-            "created": response.created_at,
-            "modified": response.modified_at,
-            "url": response.url
+            "id": d.id,
+            "title": d.title,
+            "description": d.description,
+            "layout_type": d.layout_type,
+            "widgets": d.widgets,
+            "template_variables": d.template_variables,
+            "author": d.author_info,
+            "created": d.created_at,
+            "modified": d.modified_at,
+            "url": d.url,
         });
 
         Ok(handler.format_detail(data))
@@ -64,19 +76,18 @@ impl DashboardsHandler {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
+    use super::*;
 
     #[test]
-    fn test_get_missing_dashboard_id() {
-        let params = json!({});
-        let dashboard_id = params["dashboard_id"].as_str();
-        assert_eq!(dashboard_id, None);
-    }
+    fn test_parameter_parser() {
+        let handler = DashboardsHandler;
+        let params = json!({
+            "count": 50,
+            "start": 10,
+            "filter_shared": true,
+        });
 
-    #[test]
-    fn test_get_valid_dashboard_id() {
-        let params = json!({"dashboard_id": "abc-123-def"});
-        let dashboard_id = params["dashboard_id"].as_str();
-        assert_eq!(dashboard_id, Some("abc-123-def"));
+        assert_eq!(handler.extract_i32(&params, "count", 100), 50);
+        assert_eq!(handler.extract_i32(&params, "start", 0), 10);
     }
 }

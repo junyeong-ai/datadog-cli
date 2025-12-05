@@ -241,7 +241,7 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let client = Arc::new(
-                DatadogClient::new("test_key".to_string(), "test_app_key".to_string(), None)
+                DatadogClient::new("test_key".to_string(), "test_app_key".to_string(), None, 30, 3, None)
                     .unwrap(),
             );
 

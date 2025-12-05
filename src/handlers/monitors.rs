@@ -1,63 +1,74 @@
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::sync::Arc;
 
 use crate::datadog::DatadogClient;
 use crate::error::Result;
-use crate::handlers::common::ResponseFormatter;
+use crate::handlers::common::{PaginationInfo, ParameterParser, ResponseFormatter};
 
 pub struct MonitorsHandler;
 
 impl ResponseFormatter for MonitorsHandler {}
+impl ParameterParser for MonitorsHandler {}
 
 impl MonitorsHandler {
     pub async fn list(client: Arc<DatadogClient>, params: &Value) -> Result<Value> {
         let handler = MonitorsHandler;
-        let tags = params["tags"].as_str().map(|s| s.to_string());
-        let monitor_tags = params["monitor_tags"].as_str().map(|s| s.to_string());
 
-        let monitors = client.list_monitors(tags, monitor_tags, None, None).await?;
+        let tags = handler.extract_string(params, "tags");
+        let monitor_tags = handler.extract_string(params, "monitor_tags");
+        let page = handler.extract_i32(params, "page", 0);
+        let page_size = handler.extract_i32(params, "page_size", 100);
 
-        let data = json!(
-            monitors
-                .iter()
-                .map(|monitor| {
-                    json!({
-                        "id": monitor.id,
-                        "name": monitor.name,
-                        "type": monitor.monitor_type,
-                        "query": monitor.query,
-                        "status": monitor.overall_state,
-                        "tags": monitor.tags,
-                        "priority": monitor.priority
-                    })
+        let monitors = client
+            .list_monitors(tags, monitor_tags, Some(page), Some(page_size))
+            .await?;
+
+        let data: Vec<Value> = monitors
+            .iter()
+            .map(|m| {
+                json!({
+                    "id": m.id,
+                    "name": m.name,
+                    "type": m.monitor_type,
+                    "overall_state": m.overall_state,
+                    "tags": m.tags,
+                    "priority": m.priority,
+                    "created": m.created,
+                    "modified": m.modified,
                 })
-                .collect::<Vec<_>>()
-        );
+            })
+            .collect();
 
-        Ok(handler.format_detail(data))
+        let pagination = PaginationInfo::single_page(data.len(), page_size as usize);
+
+        Ok(handler.format_list(
+            json!(data),
+            Some(serde_json::to_value(pagination)?),
+            None,
+        ))
     }
 
     pub async fn get(client: Arc<DatadogClient>, params: &Value) -> Result<Value> {
         let handler = MonitorsHandler;
 
-        let monitor_id = params["monitor_id"].as_i64().ok_or_else(|| {
-            crate::error::DatadogError::InvalidInput("Missing 'monitor_id' parameter".to_string())
-        })?;
+        let monitor_id = params["monitor_id"]
+            .as_i64()
+            .ok_or_else(|| crate::error::DatadogError::InvalidInput("Missing monitor_id".into()))?;
 
-        let response = client.get_monitor(monitor_id).await?;
+        let m = client.get_monitor(monitor_id).await?;
 
         let data = json!({
-            "id": response.id,
-            "name": response.name,
-            "type": response.monitor_type,
-            "query": response.query,
-            "message": response.message,
-            "tags": response.tags,
-            "created": response.created,
-            "modified": response.modified,
-            "overall_state": response.overall_state,
-            "priority": response.priority,
-            "options": response.options.as_ref().map(|o| {
+            "id": m.id,
+            "name": m.name,
+            "type": m.monitor_type,
+            "query": m.query,
+            "message": m.message,
+            "tags": m.tags,
+            "created": m.created,
+            "modified": m.modified,
+            "overall_state": m.overall_state,
+            "priority": m.priority,
+            "options": m.options.as_ref().map(|o| {
                 let mut opts = json!({
                     "thresholds": o.thresholds,
                     "notify_no_data": o.notify_no_data,
@@ -65,7 +76,6 @@ impl MonitorsHandler {
                     "timeout_h": o.timeout_h
                 });
 
-                // Only include silenced if it has entries
                 if let Some(ref silenced) = o.silenced
                     && let Some(obj) = silenced.as_object()
                     && !obj.is_empty()
@@ -83,34 +93,19 @@ impl MonitorsHandler {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
+    use super::*;
 
     #[test]
-    fn test_optional_tags_parameter() {
-        let params_with = json!({"tags": "env:prod"});
-        let params_without = json!({});
+    fn test_parameter_parser() {
+        let handler = MonitorsHandler;
+        let params = json!({
+            "page": 1,
+            "page_size": 50,
+            "tags": "env:prod"
+        });
 
-        assert_eq!(params_with["tags"].as_str(), Some("env:prod"));
-        assert_eq!(params_without["tags"].as_str(), None);
-    }
-
-    #[test]
-    fn test_optional_monitor_tags_parameter() {
-        let params = json!({"monitor_tags": "service:web"});
-        assert_eq!(params["monitor_tags"].as_str(), Some("service:web"));
-    }
-
-    #[test]
-    fn test_get_missing_monitor_id() {
-        let params = json!({});
-        let monitor_id = params["monitor_id"].as_i64();
-        assert_eq!(monitor_id, None);
-    }
-
-    #[test]
-    fn test_get_valid_monitor_id() {
-        let params = json!({"monitor_id": 12345});
-        let monitor_id = params["monitor_id"].as_i64();
-        assert_eq!(monitor_id, Some(12345));
+        assert_eq!(handler.extract_i32(&params, "page", 0), 1);
+        assert_eq!(handler.extract_i32(&params, "page_size", 100), 50);
+        assert_eq!(handler.extract_string(&params, "tags"), Some("env:prod".to_string()));
     }
 }
