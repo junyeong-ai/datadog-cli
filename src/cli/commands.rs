@@ -1,12 +1,13 @@
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::sync::Arc;
 
 use super::{Command, ConfigAction, DashboardsAction, LogsAction, MonitorsAction};
+use crate::config::Config;
 use crate::datadog::DatadogClient;
 use crate::error::{DatadogError, Result};
 use crate::handlers;
 
-pub async fn execute(command: &Command, client: Arc<DatadogClient>) -> Result<Value> {
+pub async fn execute(command: &Command, client: Arc<DatadogClient>, config: &Config) -> Result<Value> {
     match command {
         Command::Metrics {
             query,
@@ -29,6 +30,8 @@ pub async fn execute(command: &Command, client: Arc<DatadogClient>) -> Result<Va
                 from,
                 to,
                 limit,
+                cursor,
+                sort,
                 tag_filter,
             } => {
                 let params = json!({
@@ -36,7 +39,9 @@ pub async fn execute(command: &Command, client: Arc<DatadogClient>) -> Result<Va
                     "from": from,
                     "to": to,
                     "limit": limit,
-                    "tag_filter": tag_filter,
+                    "cursor": cursor,
+                    "sort": sort,
+                    "tag_filter": tag_filter.as_ref().or(config.defaults.tag_filter.as_ref()),
                 });
                 handlers::logs::LogsHandler::search(client, &params).await
             }
@@ -46,7 +51,7 @@ pub async fn execute(command: &Command, client: Arc<DatadogClient>) -> Result<Va
                     "from": from,
                     "to": to,
                 });
-                handlers::logs_aggregate::LogsAggregateHandler::aggregate(client, &params).await
+                handlers::logs::LogsHandler::aggregate(client, &params).await
             }
             LogsAction::Timeseries {
                 query,
@@ -64,22 +69,27 @@ pub async fn execute(command: &Command, client: Arc<DatadogClient>) -> Result<Va
                     "aggregation": aggregation,
                     "metric": metric,
                 });
-                handlers::logs_timeseries::LogsTimeseriesHandler::timeseries(client, &params).await
+                handlers::logs::LogsHandler::timeseries(client, &params).await
             }
         },
 
         Command::Monitors { action } => match action {
-            MonitorsAction::List { tags, monitor_tags } => {
+            MonitorsAction::List {
+                tags,
+                monitor_tags,
+                page,
+                page_size,
+            } => {
                 let params = json!({
                     "tags": tags,
                     "monitor_tags": monitor_tags,
+                    "page": page,
+                    "page_size": page_size,
                 });
                 handlers::monitors::MonitorsHandler::list(client, &params).await
             }
             MonitorsAction::Get { monitor_id } => {
-                let params = json!({
-                    "monitor_id": monitor_id,
-                });
+                let params = json!({ "monitor_id": monitor_id });
                 handlers::monitors::MonitorsHandler::get(client, &params).await
             }
         },
@@ -117,19 +127,28 @@ pub async fn execute(command: &Command, client: Arc<DatadogClient>) -> Result<Va
                 "sort_dir": sort_dir,
                 "start": start,
                 "count": count,
-                "tag_filter": tag_filter,
+                "tag_filter": tag_filter.as_ref().or(config.defaults.tag_filter.as_ref()),
             });
             handlers::hosts::HostsHandler::list(client, &params).await
         }
 
         Command::Dashboards { action } => match action {
-            DashboardsAction::List => {
-                handlers::dashboards::DashboardsHandler::list(client, &json!({})).await
+            DashboardsAction::List {
+                count,
+                start,
+                filter_shared,
+                filter_deleted,
+            } => {
+                let params = json!({
+                    "count": count,
+                    "start": start,
+                    "filter_shared": filter_shared,
+                    "filter_deleted": filter_deleted,
+                });
+                handlers::dashboards::DashboardsHandler::list(client, &params).await
             }
             DashboardsAction::Get { dashboard_id } => {
-                let params = json!({
-                    "dashboard_id": dashboard_id,
-                });
+                let params = json!({ "dashboard_id": dashboard_id });
                 handlers::dashboards::DashboardsHandler::get(client, &params).await
             }
         },
@@ -151,15 +170,21 @@ pub async fn execute(command: &Command, client: Arc<DatadogClient>) -> Result<Va
                 "limit": limit,
                 "cursor": cursor,
                 "sort": sort,
-                "tag_filter": tag_filter,
+                "tag_filter": tag_filter.as_ref().or(config.defaults.tag_filter.as_ref()),
                 "full_stack_trace": full_stack_trace,
             });
             handlers::spans::SpansHandler::list(client, &params).await
         }
 
-        Command::Services { env } => {
+        Command::Services {
+            env,
+            page_size,
+            page,
+        } => {
             let params = json!({
                 "env": env,
+                "page_size": page_size,
+                "page": page,
             });
             handlers::services::ServicesHandler::list(client, &params).await
         }
@@ -181,7 +206,7 @@ pub async fn execute(command: &Command, client: Arc<DatadogClient>) -> Result<Va
                 "limit": limit,
                 "cursor": cursor,
                 "sort": sort,
-                "tag_filter": tag_filter,
+                "tag_filter": tag_filter.as_ref().or(config.defaults.tag_filter.as_ref()),
                 "full_stack_trace": full_stack_trace,
             });
             handlers::rum::RumHandler::search_events(client, &params).await
@@ -194,25 +219,20 @@ pub async fn execute(command: &Command, client: Arc<DatadogClient>) -> Result<Va
 }
 
 pub fn handle_config(action: &ConfigAction) -> Result<()> {
-    use crate::config::Config;
-
     match action {
         ConfigAction::Init => {
             let path = Config::init()?;
             println!("Created: {}", path.display());
         }
-
         ConfigAction::Show => {
             let output = Config::show()?;
             println!("{}", output);
         }
-
         ConfigAction::Path => {
             let path = Config::global_config_path()
                 .ok_or_else(|| DatadogError::InvalidInput("Cannot determine config path".into()))?;
             println!("{}", path.display());
         }
-
         ConfigAction::Edit => {
             Config::edit()?;
         }
