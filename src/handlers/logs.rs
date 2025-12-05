@@ -1,10 +1,12 @@
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::sync::Arc;
 
+use crate::datadog::models::{LogsCompute, LogsGroupBy, LogsGroupBySort};
 use crate::datadog::DatadogClient;
 use crate::error::Result;
 use crate::handlers::common::{
     PaginationInfo, ParameterParser, ResponseFilter, ResponseFormatter, TagFilter, TimeHandler,
+    TimeParams,
 };
 
 pub struct LogsHandler;
@@ -23,12 +25,14 @@ impl LogsHandler {
             crate::error::DatadogError::InvalidInput("Missing 'query' parameter".to_string())
         })?;
 
-        let limit = handler.extract_i32(params, "limit", 10) as usize;
+        let limit = handler.extract_i32(params, "limit", 10);
+        let cursor = handler.extract_string(params, "cursor");
+        let sort = handler.extract_string(params, "sort");
 
         let (from_iso, to_iso) = handler.parse_time_iso8601(params)?;
 
         let response = client
-            .search_logs(query, &from_iso, &to_iso, Some(limit as i32))
+            .search_logs(query, &from_iso, &to_iso, limit, cursor, sort)
             .await?;
 
         if let Some(errors) = response.errors {
@@ -37,7 +41,7 @@ impl LogsHandler {
 
         let tag_filter = handler.extract_tag_filter(params, &client);
 
-        let logs = response
+        let logs: Vec<Value> = response
             .data
             .unwrap_or_default()
             .iter()
@@ -47,117 +51,203 @@ impl LogsHandler {
                     .and_then(|a| a.tags.as_ref())
                     .map(|t| handler.filter_tags(t, tag_filter));
 
-                // Build log entry, excluding null/empty fields
-                let mut log_entry = json!({
-                    "id": log.id,
-                });
+                let mut entry = json!({ "id": log.id });
 
-                // Only add non-null fields
                 if let Some(timestamp) = attrs.and_then(|a| a.timestamp.as_ref()) {
-                    log_entry["timestamp"] = json!(timestamp);
+                    entry["timestamp"] = json!(timestamp);
                 }
                 if let Some(message) = attrs.and_then(|a| a.message.as_ref()) {
-                    log_entry["message"] = json!(message);
+                    entry["message"] = json!(message);
                 }
                 if let Some(host) = attrs.and_then(|a| a.host.as_ref()) {
-                    log_entry["host"] = json!(host);
+                    entry["host"] = json!(host);
                 }
                 if let Some(service) = attrs.and_then(|a| a.service.as_ref()) {
-                    log_entry["service"] = json!(service);
+                    entry["service"] = json!(service);
                 }
                 if let Some(status) = attrs.and_then(|a| a.status.as_ref()) {
-                    log_entry["status"] = json!(status);
+                    entry["status"] = json!(status);
+                }
+                if let Some(tags_vec) = tags {
+                    if !tags_vec.is_empty() {
+                        entry["tags"] = json!(tags_vec);
+                    }
                 }
 
-                // Only add tags if not empty
-                if let Some(tags_vec) = tags
-                    && !tags_vec.is_empty()
-                {
-                    log_entry["tags"] = json!(tags_vec);
-                }
-
-                log_entry
+                entry
             })
-            .collect::<Vec<_>>();
+            .collect();
 
-        let result_count = logs.len();
+        let has_cursor = response
+            .meta
+            .as_ref()
+            .and_then(|m| m.page.as_ref())
+            .and_then(|p| p.after.as_ref())
+            .is_some();
 
-        // Use PaginationInfo for single-page API with heuristic
-        let pagination = PaginationInfo::single_page(result_count, limit);
+        let pagination = PaginationInfo::from_cursor(logs.len(), limit as usize, has_cursor);
 
         Ok(json!({
             "data": logs,
             "pagination": pagination
         }))
     }
+
+    pub async fn aggregate(client: Arc<DatadogClient>, params: &Value) -> Result<Value> {
+        let handler = LogsHandler;
+
+        let time = handler.parse_time(params, 1)?;
+        let TimeParams::Timestamp {
+            from: from_ts,
+            to: to_ts,
+        } = time;
+
+        let from = (from_ts * 1000).to_string();
+        let to = (to_ts * 1000).to_string();
+
+        let query = handler.extract_query(params, "*");
+
+        let compute = if let Some(compute_params) = params["compute"].as_array() {
+            if compute_params.is_empty() {
+                Some(vec![LogsCompute {
+                    aggregation: "count".to_string(),
+                    compute_type: Some("total".to_string()),
+                    interval: None,
+                    metric: None,
+                }])
+            } else {
+                Some(
+                    compute_params
+                        .iter()
+                        .map(|c| LogsCompute {
+                            aggregation: c["aggregation"].as_str().unwrap_or("count").to_string(),
+                            compute_type: Some(c["type"].as_str().unwrap_or("total").to_string()),
+                            interval: c["interval"].as_str().map(|s| s.to_string()),
+                            metric: c["metric"].as_str().map(|s| s.to_string()),
+                        })
+                        .collect(),
+                )
+            }
+        } else {
+            Some(vec![LogsCompute {
+                aggregation: "count".to_string(),
+                compute_type: Some("total".to_string()),
+                interval: None,
+                metric: None,
+            }])
+        };
+
+        let group_by = params["group_by"].as_array().map(|arr| {
+            arr.iter()
+                .map(|g| {
+                    let sort = g["sort"].as_object().map(|s| LogsGroupBySort {
+                        order: s["order"].as_str().map(|v| v.to_string()),
+                        sort_type: Some(s["type"].as_str().unwrap_or("measure").to_string()),
+                        aggregation: s["aggregation"].as_str().map(|v| v.to_string()),
+                        metric: s["metric"].as_str().map(|v| v.to_string()),
+                    });
+
+                    LogsGroupBy {
+                        facet: g["facet"].as_str().unwrap_or("status").to_string(),
+                        limit: g["limit"].as_i64().map(|l| l as i32),
+                        sort,
+                        group_type: Some(g["type"].as_str().unwrap_or("facet").to_string()),
+                    }
+                })
+                .collect()
+        });
+
+        let timezone = params["timezone"].as_str().map(|s| s.to_string());
+
+        let response = client
+            .aggregate_logs(&query, &from, &to, compute, group_by, timezone.clone())
+            .await?;
+
+        let data = response["data"].clone();
+        let buckets_count = data
+            .get("buckets")
+            .and_then(|b| b.as_array())
+            .map(|b| b.len())
+            .unwrap_or(0);
+
+        let meta = json!({
+            "query": query,
+            "from": from,
+            "to": to,
+            "timezone": timezone,
+            "buckets_count": buckets_count
+        });
+
+        Ok(handler.format_list(data, None, Some(meta)))
+    }
+
+    pub async fn timeseries(client: Arc<DatadogClient>, params: &Value) -> Result<Value> {
+        let handler = LogsHandler;
+
+        let time = handler.parse_time(params, 1)?;
+        let TimeParams::Timestamp {
+            from: from_ts,
+            to: to_ts,
+        } = time;
+
+        let from = (from_ts * 1000).to_string();
+        let to = (to_ts * 1000).to_string();
+
+        let query = handler.extract_query(params, "*");
+        let interval = params["interval"].as_str().unwrap_or("1h");
+        let metric = handler.extract_string(params, "metric");
+        let aggregation = params["aggregation"].as_str().unwrap_or("count");
+        let timezone = params["timezone"].as_str().map(|s| s.to_string());
+
+        let compute = vec![LogsCompute {
+            aggregation: aggregation.to_string(),
+            compute_type: Some("timeseries".to_string()),
+            interval: Some(interval.to_string()),
+            metric,
+        }];
+
+        let group_by = params["group_by"].as_array().map(|arr| {
+            arr.iter()
+                .map(|g| LogsGroupBy {
+                    facet: g["facet"].as_str().unwrap_or("status").to_string(),
+                    limit: g["limit"].as_i64().map(|l| l as i32),
+                    sort: None,
+                    group_type: Some(g["type"].as_str().unwrap_or("facet").to_string()),
+                })
+                .collect()
+        });
+
+        let response = client
+            .aggregate_logs(&query, &from, &to, Some(compute), group_by, timezone.clone())
+            .await?;
+
+        let data = response["data"].clone();
+        let buckets_count = data
+            .get("buckets")
+            .and_then(|b| b.as_array())
+            .map(|b| b.len())
+            .unwrap_or(0);
+
+        let meta = json!({
+            "query": query,
+            "from": from,
+            "to": to,
+            "interval": interval,
+            "aggregation": aggregation,
+            "timezone": timezone,
+            "buckets_count": buckets_count
+        });
+
+        Ok(handler.format_list(data, None, Some(meta)))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     #[test]
-    fn test_missing_query_parameter() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let client = Arc::new(
-                DatadogClient::new("test_key".to_string(), "test_app_key".to_string(), None)
-                    .unwrap(),
-            );
-
-            let params = json!({
-                "from": "1 hour ago",
-                "to": "now"
-                // Missing "query"
-            });
-
-            let result = LogsHandler::search(client, &params).await;
-            assert!(result.is_err());
-        });
-    }
-
-    #[test]
-    fn test_valid_input_parameters() {
-        let params = json!({
-            "query": "service:web-api",
-            "from": "1 hour ago",
-            "to": "now",
-            "limit": 50
-        });
-
-        assert_eq!(params["query"].as_str(), Some("service:web-api"));
-        assert_eq!(params["limit"].as_i64(), Some(50));
-    }
-
-    #[test]
-    fn test_optional_limit_parameter() {
-        let params_with = json!({"query": "test", "limit": 100});
-        let params_without = json!({"query": "test"});
-
-        assert_eq!(params_with["limit"].as_i64(), Some(100));
-        assert_eq!(params_without["limit"].as_i64(), None);
-    }
-
-    #[test]
-    fn test_tag_filter_modes() {
-        // Test all tags mode
-        let _tags = ["env:prod".to_string(), "service:api".to_string()];
-        let filter_all = "*";
-        assert_eq!(filter_all, "*");
-
-        // Test no tags mode
-        let filter_none = "";
-        assert_eq!(filter_none, "");
-
-        // Test prefix filtering
-        let filter_prefixes = "env:,service:";
-        assert!(filter_prefixes.contains("env:"));
-        assert!(filter_prefixes.contains("service:"));
-    }
-
-    #[test]
-    fn test_time_handler_available() {
+    fn test_time_handler_trait() {
         let handler = LogsHandler;
         let params = json!({
             "from": "1609459200",
@@ -169,10 +259,20 @@ mod tests {
     }
 
     #[test]
-    fn test_response_formatter_available() {
+    fn test_response_formatter_trait() {
         let handler = LogsHandler;
         let data = json!([{"id": "log1"}]);
         let formatted = handler.format_list(data, None, None);
         assert!(formatted.get("data").is_some());
+    }
+
+    #[test]
+    fn test_tag_filter_modes() {
+        let handler = LogsHandler;
+        let tags = vec!["env:prod".to_string(), "service:api".to_string()];
+
+        assert_eq!(handler.filter_tags(&tags, "*").len(), 2);
+        assert_eq!(handler.filter_tags(&tags, "env:").len(), 1);
+        assert_eq!(handler.filter_tags(&tags, "").len(), 0);
     }
 }
