@@ -8,16 +8,18 @@ Complete syntax for all commands. **Remember**: `--format` is a global option an
 
 ### logs search
 ```bash
-datadog-cli [--format <format>] logs search "<query>" [OPTIONS]
+datadog-cli [--format <format>] logs search [query] [OPTIONS]
 ```
 
 **Arguments:**
-- `<query>` - Log search query (required)
+- `[query]` - Log search query (default: "*")
 
 **Options:**
 - `--from <time>` - Start time (default: "1 hour ago")
 - `--to <time>` - End time (default: "now")
 - `--limit <n>` - Max results (default: 10)
+- `--cursor <token>` - Pagination cursor from previous response
+- `--sort <field>` - Sort order (use `--sort="-timestamp"` for descending)
 - `--tag-filter "<prefixes>"` - Tag filter (e.g., "env:,service:")
 
 **Query syntax:**
@@ -117,10 +119,12 @@ datadog-cli [--format <format>] monitors list [OPTIONS]
 **Options:**
 - `--tags "<tags>"` - Filter by tags
 - `--monitor-tags "<tags>"` - Filter by monitor tags
+- `--page <n>` - Page number (default: 0)
+- `--page-size <n>` - Results per page (default: 100)
 
 **Example:**
 ```bash
-datadog-cli --format json monitors list --tags "env:prod"
+datadog-cli --format json monitors list --tags "env:prod" --page-size 50
 ```
 
 ---
@@ -200,11 +204,11 @@ datadog-cli [--format <format>] spans "<query>" --from "<time>" --to "<time>" [O
 - `trace_id:<id>` - Specific trace
 
 **Options:**
-- `--from <time>` - Start time (required)
-- `--to <time>` - End time (required)
+- `--from <time>` - Start time (default: "1 hour ago")
+- `--to <time>` - End time (default: "now")
 - `--limit <n>` - Max results (default: 10)
 - `--cursor "<token>"` - Pagination cursor
-- `--sort "<field>"` - Sort field
+- `--sort "<field>"` - Sort order (use `--sort="-timestamp"` for descending)
 - `--tag-filter "<prefixes>"` - Tag filter
 - `--full-stack-trace` - Include full stack traces
 
@@ -212,7 +216,7 @@ datadog-cli [--format <format>] spans "<query>" --from "<time>" --to "<time>" [O
 ```bash
 datadog-cli --format jsonl spans "error:true service:api" \
   --from "10 minutes ago" --to "now" \
-  --limit 20 --tag-filter "env:,service:"
+  --limit 20 --sort="-timestamp" --tag-filter "env:,service:"
 ```
 
 ---
@@ -268,12 +272,18 @@ datadog-cli --format jsonl rum "@type:error @user.plan:premium" \
 
 ### dashboards list
 ```bash
-datadog-cli [--format <format>] dashboards list
+datadog-cli [--format <format>] dashboards list [OPTIONS]
 ```
+
+**Options:**
+- `--count <n>` - Results per page (default: 100)
+- `--start <n>` - Pagination offset (default: 0)
+- `--filter-shared` - Include shared dashboards only
+- `--filter-deleted` - Include deleted dashboards only
 
 **Example:**
 ```bash
-datadog-cli --format json dashboards list
+datadog-cli --format json dashboards list --count 50
 ```
 
 ---

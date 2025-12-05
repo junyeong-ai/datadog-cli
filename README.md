@@ -164,6 +164,17 @@ cd datadog-cli
 api_key = "your-api-key-here"
 app_key = "your-app-key-here"
 site = "datadoghq.com"  # 또는 datadoghq.eu, ddog-gov.com 등
+
+[defaults]
+format = "json"           # 출력 형식: json, jsonl, table
+time_range = "1 hour ago" # 기본 시간 범위
+limit = 10                # 기본 결과 수
+page_size = 100           # 페이지당 항목 수
+# tag_filter = "env:,service:"  # 태그 필터 (선택)
+
+[network]
+timeout_secs = 30         # 요청 타임아웃 (초)
+max_retries = 3           # 최대 재시도 횟수
 ```
 
 **프로젝트 설정** (`.datadog.toml`):

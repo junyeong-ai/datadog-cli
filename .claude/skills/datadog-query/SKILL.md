@@ -79,8 +79,10 @@ datadog-cli --format table <command>  # Human-readable tables
 
 ### Pagination
 
-- **logs search**: `--limit <n>` (default: 10)
-- **spans, rum**: `--cursor "<token>"` + `--limit <n>` (default: 10)
+- **logs search**: `--limit <n>` + `--cursor "<token>"` + `--sort "<field>"` (default: limit=10)
+- **spans, rum**: `--limit <n>` + `--cursor "<token>"` + `--sort "<field>"` (default: limit=10)
+- **monitors list**: `--page <n>` + `--page-size <n>` (default: page=0, page_size=100)
+- **dashboards list**: `--start <n>` + `--count <n>` (default: start=0, count=100)
 - **hosts**: `--start <n>` + `--count <n>` (default: start=0, count=100)
 
 ---
@@ -118,9 +120,13 @@ datadog-cli --format jsonl rum "@type:error" --from "1 hour ago" --to "now" --ta
 Commands use credentials from (priority order):
 
 1. CLI args: `--api-key`, `--app-key`, `--site`
-2. Environment: `DD_API_KEY`, `DD_APP_KEY`, `DD_SITE`
+2. Environment: `DD_API_KEY`, `DD_APP_KEY`, `DD_SITE`, `DD_TAG_FILTER`
 3. Project config: `.datadog.toml` (walks up directory tree)
 4. Global config: `~/.config/datadog-cli/config.toml`
+
+**Config sections:**
+- `[defaults]`: format, time_range, limit, page_size, tag_filter
+- `[network]`: timeout_secs, max_retries
 
 View config: `datadog-cli config show`
 Edit config: `datadog-cli config edit`

@@ -164,6 +164,17 @@ Installing the skill enables natural language Datadog queries in Claude Code.
 api_key = "your-api-key-here"
 app_key = "your-app-key-here"
 site = "datadoghq.com"  # or datadoghq.eu, ddog-gov.com, etc.
+
+[defaults]
+format = "json"           # Output format: json, jsonl, table
+time_range = "1 hour ago" # Default time range
+limit = 10                # Default result limit
+page_size = 100           # Items per page
+# tag_filter = "env:,service:"  # Tag filter (optional)
+
+[network]
+timeout_secs = 30         # Request timeout (seconds)
+max_retries = 3           # Max retry attempts
 ```
 
 **Project config** (`.datadog.toml`):

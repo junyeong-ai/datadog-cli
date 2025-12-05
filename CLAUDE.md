@@ -77,15 +77,16 @@ pub fn parse_time(input: &str) -> Result<i64> {
 
 **Implementation** (`src/datadog/retry.rs`):
 ```rust
-const MAX_RETRIES: u32 = 3;
-const DELAYS: [u64; 3] = [2, 4, 8];  // seconds
+pub fn calculate_backoff(retry_count: u32) -> Duration {
+    Duration::from_secs(2_u64.pow(retry_count))  // 2s, 4s, 8s...
+}
 
-pub async fn retry_with_backoff<F, Fut, T>(f: F) -> Result<T>
+pub fn should_retry(current_retry: u32, max_retries: u32) -> bool
 ```
 
 **Why**: Handles transient network errors, rate limits (429).
 
-**Behavior**: 3 retries with 2s, 4s, 8s delays. Total max wait: 14s.
+**Behavior**: Configurable retries (default: 3) with exponential backoff (2s, 4s, 8s). Settings in `config.toml` `[network]` section.
 
 ---
 
@@ -245,17 +246,18 @@ let params = self.apply_tag_filter(base_params, tag_filter);
 
 ---
 
-## Key Constants
+## Key Constants & Configuration
 
-**Locations**:
+**Configurable via `config.toml`**:
+- `[defaults]`: format, time_range, limit, page_size, tag_filter
+- `[network]`: timeout_secs, max_retries
+
+**Hardcoded constants**:
 - `src/config.rs`: Default site (`datadoghq.com`), config paths
-- `src/datadog/retry.rs`: Max retries (3), delays (2s, 4s, 8s)
 - `src/utils.rs`: Time parsing logic
-- `src/datadog/client.rs`: Tag filter env var (`DD_TAG_FILTER`)
-- `src/handlers/logs.rs`: Default query (`*`), default limit (100)
-- `src/handlers/metrics.rs`: Rollup interval calculation constants
+- `src/handlers/common.rs`: DEFAULT_STACK_TRACE_LINES (10)
 
-**To modify**: Edit constant or add to `Config` struct for user configuration.
+**To modify**: Edit `config.toml` for user-configurable settings, or edit source for hardcoded constants.
 
 ---
 
