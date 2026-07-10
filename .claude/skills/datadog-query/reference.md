@@ -20,6 +20,7 @@ datadog-cli [--format <format>] logs search [query] [OPTIONS]
 - `--limit <n>` - Max results (default: 10)
 - `--cursor <token>` - Pagination cursor from previous response
 - `--sort <field>` - Sort order (use `--sort="-timestamp"` for descending)
+- `--storage-tier <tier>` - indexes, online-archives, or flex (default: indexes)
 - `--tag-filter "<prefixes>"` - Tag filter (e.g., "env:,service:")
 
 **Query syntax:**
@@ -146,19 +147,22 @@ datadog-cli --format json monitors get 12345678
 
 ### events
 ```bash
-datadog-cli [--format <format>] events [OPTIONS]
+datadog-cli [--format <format>] events "<query>" [OPTIONS]
 ```
+
+**Arguments:**
+- `<query>` - Event search query, v2 syntax (default: "*"; e.g. "source:alert status:error")
 
 **Options:**
 - `--from <time>` - Start time (default: "1 hour ago")
 - `--to <time>` - End time (default: "now")
-- `--priority "<level>"` - Filter by priority (low, normal)
-- `--sources "<source>"` - Filter by source
-- `--tags "<tags>"` - Filter by tags
+- `--limit <n>` - Max results (default: 10)
+- `--cursor "<token>"` - Pagination cursor (from `.pagination.next_cursor`)
+- `--sort "<field>"` - `timestamp` or `-timestamp`
 
 **Example:**
 ```bash
-datadog-cli --format json events --from "1 hour ago" --priority "normal"
+datadog-cli --format json events "source:alert" --from "1 hour ago"
 ```
 
 ---
@@ -221,17 +225,21 @@ datadog-cli --format jsonl spans "error:true service:api" \
 
 ---
 
-### services
+### services (Software Catalog)
 ```bash
 datadog-cli [--format <format>] services [OPTIONS]
 ```
 
 **Options:**
-- `--env "<environment>"` - Filter by environment
+- `--kind "<kind>"` - Entity kind: service, system, datastore, queue, api (default: service)
+- `--name "<name>"` - Filter by entity name
+- `--owner "<owner>"` - Filter by owner
+- `--include <what>` - schema, raw_schema, oncall, incident, relation
+- `--start <n>` / `--count <n>` - Offset pagination
 
 **Example:**
 ```bash
-datadog-cli --format json services --env "production"
+datadog-cli --format json services --kind service --owner platform-team
 ```
 
 ---
@@ -390,7 +398,7 @@ datadog-cli --format json logs search "query" --limit 100
 datadog-cli --format json spans "query" --from "1h ago" --to "now" --limit 100 > page1.json
 
 # Get cursor from response
-CURSOR=$(jq -r '.meta.page.after' page1.json)
+CURSOR=$(jq -r '.pagination.next_cursor' page1.json)
 
 # Next page
 datadog-cli --format json spans "query" --from "1h ago" --to "now" --limit 100 --cursor "$CURSOR"
@@ -442,3 +450,75 @@ These apply to ALL commands:
 - `us3.datadoghq.com` - US3
 - `us5.datadoghq.com` - US5
 - `ddog-gov.com` - US1-FED
+
+---
+
+## v2 Metric Queries
+
+### timeseries
+```bash
+datadog-cli timeseries "<query>" ["<query>"...] [--formula "<expr>"] [OPTIONS]
+```
+Queries are auto-named a, b, c… for formulas. Options: `--from`, `--to`, `--interval <secs>`, repeatable `--formula`.
+
+```bash
+datadog-cli timeseries "sum:errors{*}" "sum:hits{*}" --formula "a / b * 100" --from "1 hour ago"
+```
+
+### scalar
+```bash
+datadog-cli scalar "<query>" ["<query>"...] --aggregator <agg> [--formula "<expr>"]
+```
+Aggregators: avg, min, max, sum, last, percentile, mean, l2norm, area. Output: one record per group.
+
+---
+
+## SLOs, Incidents, Error Tracking
+
+### slo
+```bash
+datadog-cli slo list [--query "<text>"] [--tags-query "<tags>"] [--limit <n>] [--offset <n>]
+datadog-cli slo get <slo_id>
+```
+
+### incidents (requires Incident Management product)
+```bash
+datadog-cli incidents list [--count <n>] [--start <n>] [--include users|attachments]
+datadog-cli incidents get <incident_uuid> [--include users|attachments]
+```
+
+### error-tracking
+```bash
+datadog-cli error-tracking search "<query>" --track trace|logs|rum [--from] [--to] [--include ...]
+datadog-cli error-tracking get <issue_id>
+```
+No pagination — the search is single-shot.
+
+---
+
+## Downtimes, Audit, Teams
+
+### downtimes
+```bash
+datadog-cli downtimes [--current-only] [--start <n>] [--count <n>]
+```
+
+### audit
+```bash
+datadog-cli audit "<query>" [--from] [--to] [--limit <n, max 1000>] [--cursor] [--sort]
+```
+Cursor pagination like logs.
+
+### teams
+```bash
+datadog-cli teams [--keyword "<text>"] [--me] [--page <n>] [--page-size <n, max 100>]
+```
+
+---
+
+## LLM Observability (preview API)
+
+```bash
+datadog-cli llm-obs "<query>" [--ml-app "<app>"] [--span-kind <kind>] [--from] [--to] [--limit <n, max 5000>] [--cursor] [--sort]
+```
+Span kinds: agent, workflow, llm, tool, task, embedding, retrieval. The underlying Datadog endpoint is in preview and may change.

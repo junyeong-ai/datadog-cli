@@ -2,91 +2,111 @@
 
 Essential knowledge for implementing features and debugging this Rust CLI tool.
 
+Toolchain: Rust 1.97 (pinned in `rust-toolchain.toml`), edition 2024.
+
 ---
 
 ## Core Patterns
 
-### 4-Tier Configuration System
+### Typed CLI Args Flow End-to-End
 
-**Implementation** (`src/config.rs:23-56`):
+Clap arg structs (`src/cli/mod.rs`) are passed directly to handlers — there is
+no intermediate parameter representation. Defaults, ranges, and enums live in
+exactly one place: the clap attributes.
+
 ```rust
-pub fn load(
-    cli_api_key: Option<String>,
-    cli_app_key: Option<String>,
-    cli_site: Option<String>,
-) -> Result<Self> {
-    // 1. Load file (project or global)
-    // 2. Override with env vars (DD_API_KEY, DD_APP_KEY, DD_SITE)
-    // 3. Override with CLI args
-    // 4. Validate
+// src/cli/mod.rs — definition
+#[derive(Args)]
+pub struct LogsSearchArgs {
+    #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000))]
+    pub limit: i32,
+    ...
 }
+
+// src/handlers/logs.rs — consumption
+pub async fn search(client: &DatadogClient, args: &LogsSearchArgs) -> Result<Value>
 ```
 
-**Why**: Flexible configuration for different environments. Project config (`.datadog.toml`) discovered by walking up directories.
+**Why**: input validation happens once at the clap boundary (invalid values are
+rejected before any request is built); handlers trust their inputs.
 
-**Priority**: CLI args → ENV vars → Project config → Global config
+### 4-Tier Configuration System
 
-**Location**: Global config at `~/.config/datadog-cli/config.toml`
+**Implementation** (`src/config.rs`): two types.
 
----
+- `ConfigFile` (private, serde): every field `Option` so merging is
+  presence-based — a tier overrides only fields it actually sets.
+- `Config` (public, resolved): non-optional fields. If a `Config` exists,
+  credentials are present and the site is valid.
+
+**Priority**: CLI args → ENV vars (`DD_API_KEY`, `DD_APP_KEY`, `DD_TOKEN`,
+`DD_SITE`, `DD_TAG_FILTER`) → Project config (`.datadog.toml`, found by
+walking up directories) → Global config (`~/.config/datadog-cli/config.toml`).
+
+**Auth** is a `Credentials` enum: classic `Keys {api_key, app_key}`
+(`DD-API-KEY`/`DD-APPLICATION-KEY` headers) or `Token` — a personal access
+token (`ddpat_…`) sent as `Authorization: Bearer`, verified working across
+v1 and v2 endpoints. A configured token takes precedence over keys.
+
+A missing config file is fine; a malformed one is a hard error (never
+silently ignored). Valid sites are whitelisted in `config::VALID_SITES`
+(9 regional sites incl. ap2/uk1/us2-fed).
 
 ### Handler Trait System
 
 **Location**: `src/handlers/common.rs`
 
-**Traits**:
-- `TimeHandler`: Parse natural language, ISO8601, Unix timestamps
-- `ParameterParser`: Build API query parameters
-- `TagFilter`: Apply tag filters from env (`DD_TAG_FILTER`)
-- `ResponseFormatter`: Format API responses (JSON, JSONL, Table)
-- `Paginator`: Handle pagination for list operations
-- `ResponseFilter`: Filter response data
+- `TimeHandler`: `parse_time_range(from, to)` / `parse_time_range_iso8601` —
+  natural language, ISO8601, Unix timestamps (via `src/utils.rs::parse_time`)
+- `TagFilter`: `resolve_tag_filter(arg, client)` + `filter_tags`/`filter_tags_map`
+- `ResponseFilter`: stack-trace truncation, verbose-field stripping
+- `ResponseFormatter`: `format_list` / `format_detail` (`{data, pagination?, meta?}`)
+- `PaginationInfo`: one output schema, four constructors matching Datadog's
+  pagination families — `from_offset` (server reports total), `from_offset_without_total`,
+  `from_page_number`, `from_cursor` (exposes `next_cursor` in output)
 
-**Why**: Shared logic across 11 handlers without duplication. Each handler implements only the traits it needs.
+Each handler is a unit struct implementing only the traits it needs.
 
-**Example**:
-```rust
-impl TimeHandler for LogsHandler {}
-impl TagFilter for LogsHandler {}
-impl ResponseFormatter for LogsHandler {}
-```
+### HTTP Client & Retry
 
----
+**Location**: `src/datadog/client.rs` + `src/datadog/retry.rs`
 
-### Natural Language Time Parsing
+- `DatadogClient::new(&Config)`; `with_base_url(&Config, url)` exists for
+  integration tests against wiremock.
+- `SearchParams` bundles the shared v2 search fields (query/from/to/limit/
+  cursor/sort); `search_body()` builds the common `filter/page/sort` body.
+- Retry policy (`retry::next_delay`): retries ONLY transient failures —
+  transport errors, timeouts, HTTP 408/429/5xx. 4xx and decode errors fail
+  immediately. 429 waits for the server's `x-ratelimit-reset` when present;
+  a reset beyond 30s returns the error instead of blocking. Backoff is
+  exponential (2s, 4s, 8s…) capped at 30s.
+- Retries emit `tracing::warn!` events; the subscriber writes to **stderr**
+  (stdout is reserved for data so pipes stay clean).
 
-**Implementation** (`src/utils.rs`):
-```rust
-pub fn parse_time(input: &str) -> Result<i64> {
-    // "1 hour ago" -> Unix timestamp
-    // ISO8601 -> Unix timestamp
-    // Unix timestamp -> Unix timestamp
-}
-```
+### Request Body Shapes (verified against Datadog docs, July 2026)
 
-**Why**: User-friendly time input. Uses `interim` + `chrono` crates.
+Not all v2 search endpoints share one shape — don't copy templates across:
 
-**Supported formats**:
-- Natural: "1 hour ago", "30 minutes ago", "now"
-- ISO8601: "2024-01-01T00:00:00Z"
-- Unix: "1704067200"
+| Endpoint | Body shape |
+|---|---|
+| `POST /api/v2/logs/events/search`, `events/search`, `audit/events/search` | **flat** `{filter, page, sort}` |
+| `POST /api/v2/spans/events/search` | JSON:API envelope, `type: "search_request"` |
+| `POST /api/v2/query/timeseries` / `scalar` | JSON:API envelope, `type: "timeseries_request"` / `"scalar_request"`, from/to in **epoch ms** |
+| `POST /api/v2/llm-obs/v1/spans/events/search` | JSON:API envelope, `type: "spans"`, requires `Content-Type: application/vnd.api+json` (preview API) |
+| `POST /api/v2/error-tracking/issues/search` | envelope `data.attributes`, from/to epoch ms, **no pagination** |
 
----
+### Error Handling
 
-### Exponential Backoff Retry
+**Location**: `src/error.rs` (`thiserror`)
 
-**Implementation** (`src/datadog/retry.rs`):
-```rust
-pub fn calculate_backoff(retry_count: u32) -> Duration {
-    Duration::from_secs(2_u64.pow(retry_count))  // 2s, 4s, 8s...
-}
+Variants: `ApiError {status, message}`, `AuthError`, `DateParseError`,
+`NetworkError` (transport only — no `#[from]`, mapped explicitly at the send
+site), `DecodeError`, `JsonError`, `IoError`, `InvalidInput`,
+`RateLimitError {reset_secs}`, `TimeoutError`.
 
-pub fn should_retry(current_retry: u32, max_retries: u32) -> bool
-```
-
-**Why**: Handles transient network errors, rate limits (429).
-
-**Behavior**: Configurable retries (default: 3) with exponential backoff (2s, 4s, 8s). Settings in `config.toml` `[network]` section.
+`DatadogError::exit_code()` maps classes to process exit codes
+(3 auth, 4 API, 5 rate-limit, 6 network/timeout, 7 decode, 1 other);
+`main.rs` uses it. Code 2 is clap's.
 
 ---
 
@@ -94,293 +114,89 @@ pub fn should_retry(current_retry: u32, max_retries: u32) -> bool
 
 ### Add New Command
 
-1. **Add to `Command` enum** (`src/cli/mod.rs:36-177`)
+1. **Define args + enum variant** (`src/cli/mod.rs`)
    ```rust
-   #[derive(Subcommand)]
-   pub enum Command {
-       NewCommand {
-           #[arg(long)]
-           param: String,
-       },
-   }
+   #[command(about = "...")]
+   NewCommand(NewCommandArgs),
+
+   #[derive(Args)]
+   pub struct NewCommandArgs { ... }   // clap owns defaults/ranges/enums
    ```
-
-2. **Add handler** (`src/handlers/new_command.rs`)
-   ```rust
-   pub async fn handle(param: String) -> Result<()> {
-       // Implementation
-   }
-   ```
-
-3. **Add to dispatcher** (`src/cli/commands.rs`)
-   ```rust
-   Command::NewCommand { param } => {
-       handlers::new_command::handle(param).await?;
-   }
-   ```
-
-4. **Implement traits** if using shared patterns
-   ```rust
-   impl TimeHandler for NewCommandHandler {}
-   impl ResponseFormatter for NewCommandHandler {}
-   ```
-
----
-
-### Add Handler Trait Method
-
-1. **Define in `common.rs`** (`src/handlers/common.rs`)
-   ```rust
-   pub trait NewTrait {
-       fn new_method(&self) -> Result<String>;
-   }
-   ```
-
-2. **Provide default impl** if possible
-   ```rust
-   impl<T> NewTrait for T {
-       fn new_method(&self) -> Result<String> {
-           Ok("default".to_string())
-       }
-   }
-   ```
-
-3. **Use in handlers** where needed
-
----
+2. **Add client method** (`src/datadog/client.rs`) — verify the endpoint's
+   exact body shape/pagination against docs.datadoghq.com first; model
+   responses loosely (`serde_json::Value` passthrough) unless fields are
+   verified stable.
+3. **Add handler** (`src/handlers/new_command.rs`) mirroring the nearest
+   sibling; register in `src/handlers/mod.rs`.
+4. **Dispatch** (`src/cli/commands.rs`).
+5. **Integration test** (`tests/client_test.rs`) asserting the request shape
+   with wiremock `body_partial_json`/`query_param` matchers.
 
 ### Modify Config
 
-1. **Update `Config` struct** (`src/config.rs:7-16`)
-   ```rust
-   pub struct Config {
-       pub new_field: Option<String>,
-   }
-   ```
-
-2. **Update `merge()` logic** if needed (`src/config.rs:113-124`)
-   ```rust
-   if other.new_field.is_some() {
-       self.new_field = other.new_field;
-   }
-   ```
-
-3. **Update `validate()`** for new constraints (`src/config.rs:126-147`)
-
-4. **Update `init()` template** (`src/config.rs:149-180`, template at 164-167)
+1. Add the field to `ConfigFile` (as `Option`) AND `Config` (resolved) in
+   `src/config.rs`; resolve it in `Config::resolve()`.
+2. Update the `init()` template and `show()`.
 
 ---
 
-## Common Issues
+## API Endpoint Map (as of July 2026)
 
-### Time Parsing Fails
+| Command | Endpoint | Pagination |
+|---|---|---|
+| metrics | `GET /api/v1/query` (canonical, not deprecated) | — |
+| timeseries / scalar | `POST /api/v2/query/timeseries` / `scalar` | — |
+| logs search | `POST /api/v2/logs/events/search` (`--storage-tier` indexes/online-archives/flex) | cursor |
+| logs aggregate/timeseries | `POST /api/v2/logs/analytics/aggregate` | — |
+| monitors | `GET /api/v1/monitor` (v1 is canonical; no v2 CRUD exists) | page |
+| events | `POST /api/v2/events/search` (v1 events is deprecated) | cursor |
+| hosts | `GET /api/v1/hosts` (canonical) | offset+total |
+| dashboards | `GET /api/v1/dashboard` (canonical) | offset |
+| spans | `POST /api/v2/spans/events/search` | cursor |
+| services | `GET /api/v2/catalog/entity` (Software Catalog; successor to services/definitions) | offset |
+| rum | `POST /api/v2/rum/events/search` | cursor |
+| slo | `GET /api/v1/slo` | offset + `metadata.page.total_filtered_count` |
+| incidents | `GET /api/v2/incidents` (requires Incident Management product) | offset, max 100 |
+| error-tracking | `POST /api/v2/error-tracking/issues/search` | **none** |
+| downtimes | `GET /api/v2/downtime` | offset |
+| audit | `POST /api/v2/audit/events/search` | cursor, max 1000 |
+| teams | `GET /api/v2/team` | page number, max 100 |
+| llm-obs | `POST /api/v2/llm-obs/v1/spans/events/search` (**preview**) | cursor, max 5000 |
 
-**Symptom**: `DateParseError`
+Rate limits: logs/spans search are 300 req/hour per org; the client reads
+`x-ratelimit-reset` on 429 rather than hardcoding limits.
 
-**Cause**: Invalid time format
+---
 
-**Fix**: Check supported formats in `src/utils.rs`:
-- Natural: "1 hour ago", "30 minutes ago", "now"
-- ISO8601: "2024-01-01T00:00:00Z"
-- Unix: "1704067200"
+## Testing
 
-**Example**:
+- **Unit tests**: colocated `#[cfg(test)]` modules (retry policy, config
+  resolution, pagination math, time parsing, tag filtering).
+- **Integration tests**: `tests/client_test.rs` — wiremock-backed; cover the
+  HTTP layer (auth headers, status→error mapping, retry/no-retry behavior,
+  rate-limit reset handling, request body shapes per endpoint). Retry tests
+  use `max_retries: 1` so real backoff stays ~2s; nextest runs them in parallel.
+- **Benches**: `benches/parsing.rs` (criterion).
+
 ```bash
-# Good
-datadog-cli logs search "query" --from "1 hour ago"
-
-# Bad
-datadog-cli logs search "query" --from "yesterday"  # Not supported
+cargo fmt --all && cargo clippy --all-targets --all-features -- -D warnings && cargo test
 ```
 
----
+## CI
 
-### Config Not Found
-
-**Symptom**: `Config not found` error
-
-**Check**:
-```bash
-datadog-cli config path
-```
-
-**Fix**:
-```bash
-datadog-cli config init
-```
-
-**Note**: Searches for `.datadog.toml` in current directory and parents, then falls back to `~/.config/datadog-cli/config.toml`.
+`.github/workflows/`: ci.yml (nextest on ubuntu/macos, MSRV 1.97 check,
+coverage→Codecov, release build, cargo-audit, cargo-deny with `deny.toml`),
+lint.yml (fmt + clippy), release.yml (tag-triggered multi-target build).
+Warnings are denied via `CARGO_BUILD_WARNINGS: deny` (cache-friendly, Rust 1.97+).
 
 ---
 
-### Handler Not Using Traits
+## Performance
 
-**Symptom**: Code duplication across handlers
-
-**Fix**: Implement traits from `common.rs`:
-```rust
-impl TimeHandler for MyHandler {}
-impl ParameterParser for MyHandler {}
-impl ResponseFormatter for MyHandler {}
-```
-
-**Benefit**: Automatic access to shared functionality without reimplementation.
-
----
-
-### Tag Filter Not Working
-
-**Symptom**: Response includes all tags despite `--tag-filter`
-
-**Cause**: Not implementing `TagFilter` trait or not calling it
-
-**Fix**:
-```rust
-impl TagFilter for MyHandler {}
-
-// In handler
-let params = self.apply_tag_filter(base_params, tag_filter);
-```
-
-**Note**: Tag filtering reduces response size by 30-70% by excluding unwanted tag prefixes.
-
----
-
-## Key Constants & Configuration
-
-**Configurable via `config.toml`**:
-- `[defaults]`: format, time_range, limit, page_size, tag_filter
-- `[network]`: timeout_secs, max_retries
-
-**Hardcoded constants**:
-- `src/config.rs`: Default site (`datadoghq.com`), config paths
-- `src/utils.rs`: Time parsing logic
-- `src/handlers/common.rs`: DEFAULT_STACK_TRACE_LINES (10)
-
-**To modify**: Edit `config.toml` for user-configurable settings, or edit source for hardcoded constants.
-
----
-
-## Module Reference
-
-### src/config.rs
-
-**4-tier config system**: CLI args → ENV vars → Project → Global
-
-**Methods**:
-- `load()`: Load with priority system
-- `find_project_config()`: Walk up directories for `.datadog.toml`
-- `global_config_path()`: Returns `~/.config/datadog-cli/config.toml`
-- `init()`: Create default config at global path
-- `show()`: Display with masked secrets
-- `edit()`: Open in `$EDITOR`
-- `validate()`: Check required fields and site validity
-
----
-
-### src/datadog/client.rs
-
-**HTTP client**: reqwest with rustls, retry logic
-
-**Methods**:
-- `new()`: Create client with config
-- `request()`: Generic request with retry
-- Specific methods: `query_metrics()`, `search_logs()`, `list_monitors()`, etc.
-
-**Features**:
-- TLS 1.3 with rustls (no OpenSSL dependency)
-- Exponential backoff retry (3 attempts)
-- Rate limit handling (429 errors)
-- Regional site support
-
----
-
-### src/cli/commands.rs
-
-**Command dispatcher**: Routes commands to handlers
-
-**Pattern**: Each command calls appropriate handler from `src/handlers/`
-
-**Example**:
-```rust
-Command::Logs { subcommand } => match subcommand {
-    LogsSubcommand::Search { query, from, to, .. } => {
-        handlers::logs::handle_search(query, from, to, ..).await?;
-    }
-}
-```
-
----
-
-### src/handlers/
-
-**11 handlers**:
-- metrics
-- logs (search, aggregate, timeseries)
-- monitors (list, get)
-- events
-- hosts
-- dashboards (list, get)
-- spans
-- services
-- rum
-
-**Common traits**: `TimeHandler`, `ParameterParser`, `TagFilter`, `ResponseFormatter`, `Paginator`, `ResponseFilter`
-
-**Pattern**: Each handler implements only the traits it needs, inheriting shared functionality automatically.
-
----
-
-## Architecture Highlights
-
-### Trait-Based Design
-
-**Philosophy**: Composition over inheritance. Each handler is a thin wrapper that composes shared traits.
-
-**Benefits**:
-- Zero code duplication across handlers
-- Easy to add new handlers (implement relevant traits)
-- Type-safe shared functionality
-- Compile-time verification of correct API usage
-
----
-
-### Error Handling
-
-**Strategy**: Centralized error types using `thiserror`
-
-**Location**: `src/error.rs`
-
-**Types**:
-- `AuthError`: API key/app key issues
-- `ApiError`: Datadog API errors (4xx, 5xx)
-- `RateLimitError`: 429 errors
-- `TimeoutError`: Request timeouts
-- `DateParseError`: Time parsing failures
-- `InvalidInput`: User input validation errors
-
-**Why**: Type-safe error handling with automatic conversion and display formatting.
-
----
-
-### Performance Optimizations
-
-**Tokio**: Minimal features (`rt-multi-thread`, `macros`, `time`)
-
-**Reqwest**: `rustls-tls` (no OpenSSL), `json` only
-
-**Release profile** (`Cargo.toml`):
-```toml
-[profile.release]
-opt-level = 3
-lto = true
-codegen-units = 1
-strip = true
-panic = "abort"
-```
-
-**Result**: ~3.6MB binary, 10x faster than Python SDK
-
----
+- Tokio minimal features; reqwest 0.13 with `rustls` (no OpenSSL), `json`,
+  `query` features only.
+- Release profile: `opt-level=3, lto=true, codegen-units=1, strip=true, panic="abort"`.
+  `panic="abort"` means any panic is a hard abort — validate at boundaries,
+  never index/divide on unvalidated input.
 
 This guide contains only implementation-critical knowledge. For user documentation, see [README.md](README.md).

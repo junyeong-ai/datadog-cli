@@ -1,6 +1,7 @@
 ---
 name: datadog-query
-version: 0.1.0
+# version is consumed by scripts/install.sh upgrade comparison — bump with the crate
+version: 0.2.0
 description: Execute Datadog CLI observability queries. Use when investigating production errors, analyzing metrics/performance, checking monitors/alerts, searching APM traces, querying logs, or building dashboards. Activates on - Datadog, observability, monitoring, logs, metrics, APM, RUM, traces, spans, monitors, alerts, performance. Supports natural time ("1 hour ago"), tag filtering, Unix pipelines (jq/grep).
 allowed-tools: Bash, Read
 ---
@@ -19,16 +20,12 @@ Execute Datadog observability queries via `datadog-cli` command-line tool.
 
 ---
 
-## Critical Usage Pattern
+## Usage Pattern
 
-**`--format` is a GLOBAL option - must be placed BEFORE the command:**
+**`--format` is a global option and works in either position:**
 
 ```bash
-# ✅ CORRECT
 datadog-cli --format json logs search "query" --from "1 hour ago"
-datadog-cli --format jsonl spans "service:api" --from "10 minutes ago" --to "now"
-
-# ❌ WRONG (will fail with "unexpected argument" error)
 datadog-cli logs search "query" --from "1 hour ago" --format json
 ```
 
@@ -36,12 +33,15 @@ datadog-cli logs search "query" --from "1 hour ago" --format json
 
 ## Available Commands
 
-**Logs**: `search`, `aggregate`, `timeseries`
-**Monitoring**: `monitors list|get`, `events`
+**Logs**: `logs search|aggregate|timeseries` (search supports `--storage-tier indexes|online-archives|flex`)
+**Metrics**: `metrics` (v1 query), `timeseries` (v2 multi-query + `--formula "a/b"`), `scalar` (v2 aggregate + `--aggregator`)
+**Monitoring**: `monitors list|get`, `events "<query>"` (v2 search syntax), `downtimes`, `slo list|get`
+**Incidents & Errors**: `incidents list|get`, `error-tracking search|get` (`--track trace|logs|rum`)
 **Infrastructure**: `hosts`, `dashboards list|get`
-**APM**: `spans`, `services`
+**APM**: `spans`, `services` (Software Catalog: `--kind --name --owner`)
 **RUM**: `rum`
-**Metrics**: `metrics`
+**LLM Observability**: `llm-obs "<query>"` (`--ml-app`, `--span-kind`; preview API)
+**Org**: `teams`, `audit "<query>"`
 **Config**: `config init|show|path|edit`
 
 ---
@@ -71,11 +71,13 @@ Applies to: `logs search`, `spans`, `rum`, `hosts`
 
 ### Pagination
 
-- **logs search**: `--limit <n>` + `--cursor "<token>"` + `--sort "<field>"` (default: limit=10)
-- **spans, rum**: `--limit <n>` + `--cursor "<token>"` + `--sort "<field>"` (default: limit=10)
-- **monitors list**: `--page <n>` + `--page-size <n>` (default: page=0, page_size=100)
-- **dashboards list**: `--start <n>` + `--count <n>` (default: start=0, count=100)
-- **hosts**: `--start <n>` + `--count <n>` (default: start=0, count=100)
+Cursor-based commands expose the next cursor at `.pagination.next_cursor` — feed it back via `--cursor`:
+
+- **logs search, events, spans, rum, audit, llm-obs**: `--limit <n>` + `--cursor "<token>"` + `--sort "<field>"` (default: limit=10)
+- **monitors list, teams**: `--page <n>` + `--page-size <n>`
+- **dashboards list, hosts, services, downtimes**: `--start <n>` + `--count <n>`
+- **slo list, incidents list**: offset-based (`--offset`/`--limit`, `--start`/`--count`)
+- **error-tracking search**: no pagination (single-shot API)
 
 ---
 
@@ -93,6 +95,9 @@ datadog-cli --format json metrics "avg:system.cpu.user{*}" --from "1 hour ago" -
 
 # List monitors
 datadog-cli --format json monitors list
+
+# Error rate formula across two metric queries
+datadog-cli timeseries "sum:trace.http.request.errors{*}" "sum:trace.http.request.hits{*}" --formula "a / b * 100"
 
 # RUM errors with tag filtering
 datadog-cli --format jsonl rum "@type:error" --from "1 hour ago" --to "now" --tag-filter "user_id:,session_id:"
@@ -143,13 +148,13 @@ datadog-cli --format jsonl logs search "status:error" | head -5    # first 5
 
 Commands use credentials from (priority order):
 
-1. CLI args: `--api-key`, `--app-key`, `--site`
-2. Environment: `DD_API_KEY`, `DD_APP_KEY`, `DD_SITE`, `DD_TAG_FILTER`
+1. CLI args: `--api-key`, `--app-key`, `--token`, `--site`
+2. Environment: `DD_API_KEY`, `DD_APP_KEY`, `DD_TOKEN` (personal access token, alternative to key pair), `DD_SITE`, `DD_TAG_FILTER`
 3. Project config: `.datadog.toml` (walks up directory tree)
 4. Global config: `~/.config/datadog-cli/config.toml`
 
 **Config sections:**
-- `[defaults]`: format, time_range, limit, page_size, tag_filter
+- `[defaults]`: format, tag_filter
 - `[network]`: timeout_secs, max_retries
 
 View config: `datadog-cli config show`
