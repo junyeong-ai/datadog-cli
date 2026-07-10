@@ -15,6 +15,8 @@ pub struct PaginationInfo {
     pub has_next: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_offset: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
 }
 
 impl PaginationInfo {
@@ -25,10 +27,12 @@ impl PaginationInfo {
             page_size: limit,
             has_next: result_count >= limit,
             next_offset: None,
+            next_cursor: None,
         }
     }
 
     pub fn from_offset(total: usize, start: usize, count: usize) -> Self {
+        debug_assert!(count > 0);
         let page = start / count;
         let next_offset = start + count;
         let has_next = next_offset < total;
@@ -39,32 +43,54 @@ impl PaginationInfo {
             page_size: count,
             has_next,
             next_offset: if has_next { Some(next_offset) } else { None },
+            next_cursor: None,
         }
     }
 
-    pub fn from_cursor(total: usize, page_size: usize, has_cursor: bool) -> Self {
+    /// Offset pagination for APIs that report no total: a full page implies
+    /// more results may exist (the boundary case yields one extra empty page).
+    pub fn from_offset_without_total(returned: usize, start: usize, count: usize) -> Self {
+        debug_assert!(count > 0);
+        let has_next = returned >= count;
+
+        Self {
+            total: returned,
+            page: start / count,
+            page_size: count,
+            has_next,
+            next_offset: has_next.then_some(start + returned),
+            next_cursor: None,
+        }
+    }
+
+    /// Page-number pagination for APIs that report no total: a full page
+    /// implies more results may exist.
+    pub fn from_page_number(returned: usize, page: usize, page_size: usize) -> Self {
+        Self {
+            total: returned,
+            page,
+            page_size,
+            has_next: returned >= page_size,
+            next_offset: None,
+            next_cursor: None,
+        }
+    }
+
+    pub fn from_cursor(total: usize, page_size: usize, next_cursor: Option<String>) -> Self {
         Self {
             total,
             page: 0,
             page_size,
-            has_next: has_cursor,
+            has_next: next_cursor.is_some(),
             next_offset: None,
+            next_cursor,
         }
     }
 }
 
-pub enum TimeParams {
-    Timestamp { from: i64, to: i64 },
-}
-
 pub trait TimeHandler {
-    fn parse_time(&self, params: &Value, _api_version: u8) -> Result<TimeParams> {
-        let from_str = params["from"].as_str().unwrap_or("1 hour ago").to_string();
-        let to_str = params["to"].as_str().unwrap_or("now").to_string();
-
-        let from = parse_time(&from_str)?;
-        let to = parse_time(&to_str)?;
-        Ok(TimeParams::Timestamp { from, to })
+    fn parse_time_range(&self, from: &str, to: &str) -> Result<(i64, i64)> {
+        Ok((parse_time(from)?, parse_time(to)?))
     }
 
     fn timestamp_to_iso8601(&self, timestamp: i64) -> Result<String> {
@@ -73,44 +99,24 @@ pub trait TimeHandler {
             .ok_or_else(|| DatadogError::InvalidInput("Invalid timestamp".to_string()))
     }
 
-    fn parse_time_iso8601(&self, params: &Value) -> Result<(String, String)> {
-        let time = self.parse_time(params, 1)?;
-        let TimeParams::Timestamp { from, to } = time;
-        let from_iso = self.timestamp_to_iso8601(from)?;
-        let to_iso = self.timestamp_to_iso8601(to)?;
-        Ok((from_iso, to_iso))
-    }
-}
-
-pub trait Paginator {
-    fn parse_pagination(&self, params: &Value) -> (usize, usize) {
-        let page = params["page"].as_u64().unwrap_or(0) as usize;
-        let page_size = params["page_size"].as_u64().unwrap_or(50) as usize;
-        (page, page_size)
-    }
-
-    fn paginate<'a, T>(&self, data: &'a [T], page: usize, page_size: usize) -> &'a [T] {
-        let start = page * page_size;
-        let end = std::cmp::min(start + page_size, data.len());
-
-        if start < data.len() {
-            &data[start..end]
-        } else {
-            &data[0..0]
-        }
+    fn parse_time_range_iso8601(&self, from: &str, to: &str) -> Result<(String, String)> {
+        let (from_ts, to_ts) = self.parse_time_range(from, to)?;
+        Ok((
+            self.timestamp_to_iso8601(from_ts)?,
+            self.timestamp_to_iso8601(to_ts)?,
+        ))
     }
 }
 
 pub trait TagFilter {
-    fn extract_tag_filter<'a>(
+    /// The effective filter: explicit argument, then the config default
+    /// carried by the client, then `"*"` (keep everything).
+    fn resolve_tag_filter<'a>(
         &self,
-        params: &'a Value,
+        arg: Option<&'a str>,
         client: &'a crate::datadog::DatadogClient,
     ) -> &'a str {
-        params["tag_filter"]
-            .as_str()
-            .or_else(|| client.get_tag_filter())
-            .unwrap_or("*")
+        arg.or_else(|| client.get_tag_filter()).unwrap_or("*")
     }
 
     fn filter_tags(&self, tags: &[String], filter: &str) -> Vec<String> {
@@ -158,13 +164,6 @@ pub trait TagFilter {
 }
 
 pub trait ResponseFilter {
-    fn should_truncate_stack_trace(&self, params: &Value) -> bool {
-        !params
-            .get("full_stack_trace")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false)
-    }
-
     fn truncate_stack_trace(&self, stack: &str, max_lines: usize) -> String {
         crate::utils::truncate_stack_trace(stack, max_lines)
     }
@@ -177,24 +176,16 @@ pub trait ResponseFilter {
 
     fn truncate_long_string(&self, s: &str, max_len: usize) -> String {
         if s.len() <= max_len {
-            s.to_string()
-        } else {
-            format!("{}...", &s[..max_len])
+            return s.to_string();
         }
-    }
-}
 
-pub trait ParameterParser {
-    fn extract_string(&self, params: &Value, key: &str) -> Option<String> {
-        params[key].as_str().map(|s| s.to_string())
-    }
-
-    fn extract_i32(&self, params: &Value, key: &str, default: i32) -> i32 {
-        params[key].as_i64().map(|l| l as i32).unwrap_or(default)
-    }
-
-    fn extract_query(&self, params: &Value, default: &str) -> String {
-        params["query"].as_str().unwrap_or(default).to_string()
+        // API data may contain multi-byte characters; cut at the nearest
+        // char boundary at or below max_len so the slice cannot panic.
+        let mut end = max_len;
+        while !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        format!("{}...", &s[..end])
     }
 }
 
@@ -216,15 +207,6 @@ pub trait ResponseFormatter {
     fn format_detail(&self, data: Value) -> Value {
         json!({ "data": data })
     }
-
-    fn format_pagination(&self, page: usize, page_size: usize, total: usize) -> Value {
-        json!({
-            "page": page,
-            "page_size": page_size,
-            "total": total,
-            "has_next": (page + 1) * page_size < total
-        })
-    }
 }
 
 #[cfg(test)]
@@ -234,73 +216,47 @@ mod tests {
 
     struct TestHandler;
     impl TimeHandler for TestHandler {}
-    impl Paginator for TestHandler {}
     impl ResponseFormatter for TestHandler {}
 
     #[test]
-    fn test_time_handler_parse_time() {
+    fn test_time_handler_parse_time_range() {
         let handler = TestHandler;
-        let params = json!({
-            "from": "1609459200",
-            "to": "1609462800"
-        });
-
-        let result = handler.parse_time(&params, 1);
-        assert!(result.is_ok());
-
-        if let Ok(TimeParams::Timestamp { from, to }) = result {
-            assert!(from > 0);
-            assert!(to > from);
-        }
+        let (from, to) = handler
+            .parse_time_range("1609459200", "1609462800")
+            .unwrap();
+        assert_eq!(from, 1609459200);
+        assert_eq!(to, 1609462800);
     }
 
     #[test]
-    fn test_time_handler_defaults() {
+    fn test_time_handler_parse_time_range_iso8601() {
         let handler = TestHandler;
-        let params = json!({});
-        let result = handler.parse_time(&params, 1);
-        assert!(result.is_ok());
+        let (from, to) = handler
+            .parse_time_range_iso8601("1609459200", "1609462800")
+            .unwrap();
+        assert!(from.starts_with("2021-01-01T00:00:00"));
+        assert!(to.starts_with("2021-01-01T01:00:00"));
     }
 
     #[test]
-    fn test_paginator_parse() {
-        let handler = TestHandler;
-        let params = json!({
-            "page": 2,
-            "page_size": 25
-        });
+    fn test_from_offset_without_total_full_page() {
+        let pagination = PaginationInfo::from_offset_without_total(100, 0, 100);
+        assert!(pagination.has_next);
+        assert_eq!(pagination.next_offset, Some(100));
+        assert_eq!(pagination.page, 0);
 
-        let (page, page_size) = handler.parse_pagination(&params);
-        assert_eq!(page, 2);
-        assert_eq!(page_size, 25);
+        let next = PaginationInfo::from_offset_without_total(100, 100, 100);
+        assert!(next.has_next);
+        assert_eq!(next.next_offset, Some(200));
+        assert_eq!(next.page, 1);
     }
 
     #[test]
-    fn test_paginator_defaults() {
-        let handler = TestHandler;
-        let params = json!({});
-
-        let (page, page_size) = handler.parse_pagination(&params);
-        assert_eq!(page, 0);
-        assert_eq!(page_size, 50);
-    }
-
-    #[test]
-    fn test_paginator_paginate() {
-        let handler = TestHandler;
-        let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-
-        let page1 = handler.paginate(&data, 0, 3);
-        assert_eq!(page1, &[1, 2, 3]);
-
-        let page2 = handler.paginate(&data, 1, 3);
-        assert_eq!(page2, &[4, 5, 6]);
-
-        let page4 = handler.paginate(&data, 3, 3);
-        assert_eq!(page4, &[10]);
-
-        let page_empty = handler.paginate(&data, 10, 3);
-        assert_eq!(page_empty.len(), 0);
+    fn test_from_offset_without_total_partial_page() {
+        let pagination = PaginationInfo::from_offset_without_total(37, 200, 100);
+        assert!(!pagination.has_next);
+        assert_eq!(pagination.next_offset, None);
+        assert_eq!(pagination.page, 2);
     }
 
     #[test]
@@ -326,20 +282,28 @@ mod tests {
     }
 
     #[test]
-    fn test_response_formatter_pagination() {
-        let handler = TestHandler;
+    fn test_from_page_number() {
+        let full = PaginationInfo::from_page_number(50, 2, 50);
+        assert!(full.has_next);
+        assert_eq!(full.page, 2);
 
-        let pagination = handler.format_pagination(0, 50, 150);
-        assert_eq!(pagination["page"], 0);
-        assert_eq!(pagination["page_size"], 50);
-        assert_eq!(pagination["total"], 150);
-        assert_eq!(pagination["has_next"], true);
+        let partial = PaginationInfo::from_page_number(10, 3, 50);
+        assert!(!partial.has_next);
+    }
 
-        let last_page = handler.format_pagination(2, 50, 150);
-        assert_eq!(last_page["has_next"], false);
+    #[test]
+    fn test_truncate_long_string_multibyte_boundary() {
+        struct Filter;
+        impl ResponseFilter for Filter {}
 
-        let mid_page = handler.format_pagination(1, 50, 150);
-        assert_eq!(mid_page["has_next"], true);
+        // 99 ASCII bytes followed by a 3-byte char: byte 100 is not a char
+        // boundary, so truncation must back up instead of panicking.
+        let s = format!("{}\u{3042}\u{3042}", "a".repeat(99));
+        let truncated = Filter.truncate_long_string(&s, 100);
+        assert_eq!(truncated, format!("{}...", "a".repeat(99)));
+
+        let short = "짧은 문자열";
+        assert_eq!(Filter.truncate_long_string(short, 100), short);
     }
 
     #[test]

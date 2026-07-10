@@ -2,4 +2,4 @@ pub mod client;
 pub mod models;
 mod retry;
 
-pub use client::DatadogClient;
+pub use client::{DatadogClient, SearchParams};

@@ -1,85 +1,69 @@
 use serde_json::{Value, json};
-use std::sync::Arc;
 
-use crate::datadog::DatadogClient;
+use crate::cli::EventsArgs;
+use crate::datadog::{DatadogClient, SearchParams};
 use crate::error::Result;
-use crate::handlers::common::{
-    PaginationInfo, ParameterParser, ResponseFormatter, TimeHandler, TimeParams,
-};
+use crate::handlers::common::{PaginationInfo, ResponseFormatter, TimeHandler};
 
 pub struct EventsHandler;
 
 impl TimeHandler for EventsHandler {}
 impl ResponseFormatter for EventsHandler {}
-impl ParameterParser for EventsHandler {}
 
 impl EventsHandler {
-    pub async fn query(client: Arc<DatadogClient>, params: &Value) -> Result<Value> {
+    pub async fn search(client: &DatadogClient, args: &EventsArgs) -> Result<Value> {
         let handler = EventsHandler;
 
-        let priority = handler.extract_string(params, "priority");
-        let sources = handler.extract_string(params, "sources");
-        let tags = handler.extract_string(params, "tags");
-
-        let time = handler.parse_time(params, 1)?;
-        let TimeParams::Timestamp {
-            from: start,
-            to: end,
-        } = time;
+        let (from_iso, to_iso) = handler.parse_time_range_iso8601(&args.from, &args.to)?;
 
         let response = client
-            .query_events(start, end, priority, sources, tags)
+            .search_events(&SearchParams {
+                query: &args.query,
+                from: &from_iso,
+                to: &to_iso,
+                limit: args.limit,
+                cursor: args.cursor.as_deref(),
+                sort: args.sort.as_deref(),
+            })
             .await?;
 
-        let events = response.events.unwrap_or_default();
-
-        let data: Vec<Value> = events
+        let events: Vec<Value> = response
+            .data
+            .unwrap_or_default()
             .iter()
-            .map(|e| {
-                json!({
-                    "id": e.id,
-                    "title": e.title,
-                    "text": e.text,
-                    "date": e.date_happened.map(crate::utils::format_timestamp),
-                    "priority": e.priority,
-                    "host": e.host,
-                    "source": e.source,
-                    "alert_type": e.alert_type,
-                    "tags": e.tags,
-                })
+            .map(|event| {
+                let mut entry = json!({ "id": event.id });
+
+                if let Some(event_type) = &event.event_type {
+                    entry["type"] = json!(event_type);
+                }
+
+                if let Some(attrs) = &event.attributes {
+                    for key in ["timestamp", "message", "tags", "attributes"] {
+                        if let Some(value) = attrs.get(key)
+                            && !value.is_null()
+                        {
+                            entry[key] = value.clone();
+                        }
+                    }
+                }
+
+                entry
             })
             .collect();
 
-        let pagination = PaginationInfo::single_page(data.len(), 1000);
+        let next_cursor = response
+            .meta
+            .as_ref()
+            .and_then(|m| m.page.as_ref())
+            .and_then(|p| p.after.clone());
 
-        Ok(handler.format_list(json!(data), Some(serde_json::to_value(pagination)?), None))
-    }
-}
+        let pagination =
+            PaginationInfo::from_cursor(events.len(), args.limit as usize, next_cursor);
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parameter_parser() {
-        let handler = EventsHandler;
-        let params = json!({
-            "priority": "normal",
-            "sources": "my_apps",
-            "tags": "env:prod",
-        });
-
-        assert_eq!(
-            handler.extract_string(&params, "priority"),
-            Some("normal".to_string())
-        );
-        assert_eq!(
-            handler.extract_string(&params, "sources"),
-            Some("my_apps".to_string())
-        );
-        assert_eq!(
-            handler.extract_string(&params, "tags"),
-            Some("env:prod".to_string())
-        );
+        Ok(json!({
+            "data": events,
+            "pagination": pagination
+        }))
     }
 }

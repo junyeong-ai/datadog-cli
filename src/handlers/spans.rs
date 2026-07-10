@@ -1,10 +1,10 @@
 use serde_json::{Value, json};
-use std::sync::Arc;
 
-use crate::datadog::DatadogClient;
+use crate::cli::SpansArgs;
+use crate::datadog::{DatadogClient, SearchParams};
 use crate::error::Result;
 use crate::handlers::common::{
-    DEFAULT_STACK_TRACE_LINES, MAX_STRING_LENGTH, PaginationInfo, ParameterParser, ResponseFilter,
+    DEFAULT_STACK_TRACE_LINES, MAX_STRING_LENGTH, PaginationInfo, ResponseFilter,
     ResponseFormatter, TagFilter, TimeHandler,
 };
 
@@ -14,28 +14,30 @@ impl TimeHandler for SpansHandler {}
 impl TagFilter for SpansHandler {}
 impl ResponseFilter for SpansHandler {}
 impl ResponseFormatter for SpansHandler {}
-impl ParameterParser for SpansHandler {}
 
 impl SpansHandler {
-    pub async fn list(client: Arc<DatadogClient>, params: &Value) -> Result<Value> {
+    pub async fn list(client: &DatadogClient, args: &SpansArgs) -> Result<Value> {
         let handler = SpansHandler;
 
-        let query = handler.extract_query(params, "*");
-        let (from, to) = handler.parse_time_iso8601(params)?;
-
-        let limit = handler.extract_i32(params, "limit", 10);
-        let cursor = handler.extract_string(params, "cursor");
-        let sort = handler.extract_string(params, "sort");
+        let (from, to) = handler.parse_time_range_iso8601(&args.from, &args.to)?;
 
         let response = client
-            .list_spans(&query, &from, &to, limit, cursor, sort)
+            .search_spans(&SearchParams {
+                query: &args.query,
+                from: &from,
+                to: &to,
+                limit: args.limit,
+                cursor: args.cursor.as_deref(),
+                sort: args.sort.as_deref(),
+            })
             .await?;
 
-        let tag_filter = handler.extract_tag_filter(params, &client);
+        let tag_filter = handler.resolve_tag_filter(args.tag_filter.as_deref(), client);
 
         let data: Vec<Value> = response["data"]
             .as_array()
-            .unwrap_or(&vec![])
+            .map(Vec::as_slice)
+            .unwrap_or_default()
             .iter()
             .filter_map(|span| {
                 let mut span_obj = span.as_object()?.clone();
@@ -82,7 +84,7 @@ impl SpansHandler {
                             && let Some(error_obj) = error.as_object_mut()
                             && let Some(stack) = error_obj.get_mut("stack")
                             && let Some(stack_str) = stack.as_str()
-                            && handler.should_truncate_stack_trace(params)
+                            && !args.full_stack_trace
                         {
                             let truncated =
                                 handler.truncate_stack_trace(stack_str, DEFAULT_STACK_TRACE_LINES);
@@ -109,51 +111,18 @@ impl SpansHandler {
             })
             .collect();
 
-        let has_cursor = response
+        let next_cursor = response
             .get("meta")
             .and_then(|m| m.get("page"))
             .and_then(|p| p.get("after"))
-            .is_some();
+            .and_then(|a| a.as_str())
+            .map(String::from);
 
-        let pagination = PaginationInfo::from_cursor(data.len(), limit as usize, has_cursor);
+        let pagination = PaginationInfo::from_cursor(data.len(), args.limit as usize, next_cursor);
 
         Ok(json!({
             "data": data,
             "pagination": pagination
         }))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parameter_parser() {
-        let handler = SpansHandler;
-        let params = json!({
-            "query": "service:web-api",
-            "limit": 50,
-            "sort": "timestamp",
-        });
-
-        assert_eq!(handler.extract_query(&params, "*"), "service:web-api");
-        assert_eq!(handler.extract_i32(&params, "limit", 10), 50);
-        assert_eq!(
-            handler.extract_string(&params, "sort"),
-            Some("timestamp".to_string())
-        );
-    }
-
-    #[test]
-    fn test_time_handler_trait() {
-        let handler = SpansHandler;
-        let params = json!({
-            "from": "1 hour ago",
-            "to": "now"
-        });
-
-        let result = handler.parse_time(&params, 1);
-        assert!(result.is_ok());
     }
 }

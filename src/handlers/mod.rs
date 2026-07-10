@@ -1,10 +1,17 @@
+pub mod audit;
 pub mod common;
 pub mod dashboards;
+pub mod downtimes;
+pub mod error_tracking;
 pub mod events;
 pub mod hosts;
+pub mod incidents;
+pub mod llm_obs;
 pub mod logs;
 pub mod metrics;
 pub mod monitors;
 pub mod rum;
 pub mod services;
+pub mod slo;
 pub mod spans;
+pub mod teams;

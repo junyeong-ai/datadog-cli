@@ -1,26 +1,25 @@
 use serde_json::{Value, json};
-use std::sync::Arc;
 
+use crate::cli::MonitorsListArgs;
 use crate::datadog::DatadogClient;
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ParameterParser, ResponseFormatter};
+use crate::handlers::common::{PaginationInfo, ResponseFormatter};
 
 pub struct MonitorsHandler;
 
 impl ResponseFormatter for MonitorsHandler {}
-impl ParameterParser for MonitorsHandler {}
 
 impl MonitorsHandler {
-    pub async fn list(client: Arc<DatadogClient>, params: &Value) -> Result<Value> {
+    pub async fn list(client: &DatadogClient, args: &MonitorsListArgs) -> Result<Value> {
         let handler = MonitorsHandler;
 
-        let tags = handler.extract_string(params, "tags");
-        let monitor_tags = handler.extract_string(params, "monitor_tags");
-        let page = handler.extract_i32(params, "page", 0);
-        let page_size = handler.extract_i32(params, "page_size", 100);
-
         let monitors = client
-            .list_monitors(tags, monitor_tags, Some(page), Some(page_size))
+            .list_monitors(
+                args.tags.as_deref(),
+                args.monitor_tags.as_deref(),
+                Some(args.page),
+                Some(args.page_size),
+            )
             .await?;
 
         let data: Vec<Value> = monitors
@@ -39,17 +38,17 @@ impl MonitorsHandler {
             })
             .collect();
 
-        let pagination = PaginationInfo::single_page(data.len(), page_size as usize);
+        let pagination = PaginationInfo::from_page_number(
+            data.len(),
+            args.page as usize,
+            args.page_size as usize,
+        );
 
         Ok(handler.format_list(json!(data), Some(serde_json::to_value(pagination)?), None))
     }
 
-    pub async fn get(client: Arc<DatadogClient>, params: &Value) -> Result<Value> {
+    pub async fn get(client: &DatadogClient, monitor_id: i64) -> Result<Value> {
         let handler = MonitorsHandler;
-
-        let monitor_id = params["monitor_id"]
-            .as_i64()
-            .ok_or_else(|| crate::error::DatadogError::InvalidInput("Missing monitor_id".into()))?;
 
         let m = client.get_monitor(monitor_id).await?;
 
@@ -84,27 +83,5 @@ impl MonitorsHandler {
         });
 
         Ok(handler.format_detail(data))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parameter_parser() {
-        let handler = MonitorsHandler;
-        let params = json!({
-            "page": 1,
-            "page_size": 50,
-            "tags": "env:prod"
-        });
-
-        assert_eq!(handler.extract_i32(&params, "page", 0), 1);
-        assert_eq!(handler.extract_i32(&params, "page_size", 100), 50);
-        assert_eq!(
-            handler.extract_string(&params, "tags"),
-            Some("env:prod".to_string())
-        );
     }
 }

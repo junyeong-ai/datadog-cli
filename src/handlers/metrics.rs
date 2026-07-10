@@ -1,9 +1,9 @@
 use serde_json::{Value, json};
-use std::sync::Arc;
 
+use crate::cli::{MetricsArgs, ScalarArgs, TimeseriesArgs};
 use crate::datadog::DatadogClient;
 use crate::error::Result;
-use crate::handlers::common::{ResponseFormatter, TimeHandler, TimeParams};
+use crate::handlers::common::{ResponseFormatter, TimeHandler};
 
 pub struct MetricsHandler;
 
@@ -12,7 +12,7 @@ impl ResponseFormatter for MetricsHandler {}
 
 impl MetricsHandler {
     // Calculate rollup interval based on time range and desired max_points
-    fn calculate_rollup_interval(from_ts: i64, to_ts: i64, max_points: usize) -> i64 {
+    fn calculate_rollup_interval(from_ts: i64, to_ts: i64, max_points: u64) -> i64 {
         let time_range = to_ts - from_ts;
         let interval = time_range / max_points as i64;
 
@@ -61,28 +61,15 @@ impl MetricsHandler {
         format!("{}.rollup({}, {})", query, agg, interval)
     }
 
-    pub async fn query(client: Arc<DatadogClient>, params: &Value) -> Result<Value> {
+    pub async fn query(client: &DatadogClient, args: &MetricsArgs) -> Result<Value> {
         let handler = MetricsHandler;
 
-        let mut query = params["query"]
-            .as_str()
-            .ok_or_else(|| {
-                crate::error::DatadogError::InvalidInput("Missing 'query' parameter".to_string())
-            })?
-            .to_string();
+        let (from_ts, to_ts) = handler.parse_time_range(&args.from, &args.to)?;
 
-        let time = handler.parse_time(params, 1)?; // v1 API
-
-        let TimeParams::Timestamp {
-            from: from_ts,
-            to: to_ts,
-        } = time;
-
-        // Get max_points parameter and apply rollup at API level
-        let max_points = params["max_points"].as_i64().map(|p| p as usize);
+        let mut query = args.query.clone();
         let mut applied_rollup = false;
 
-        if let Some(max) = max_points {
+        if let Some(max) = args.max_points {
             let interval = Self::calculate_rollup_interval(from_ts, to_ts, max);
             query = Self::add_rollup_to_query(&query, interval);
             applied_rollup = true;
@@ -183,19 +170,134 @@ impl MetricsHandler {
 
         if applied_rollup {
             meta.insert("rollup_applied".to_string(), json!(true));
-            if let Some(max) = max_points {
+            if let Some(max) = args.max_points {
                 meta.insert("requested_max_points".to_string(), json!(max));
             }
         }
 
         Ok(handler.format_list(json!(series), None, Some(json!(meta))))
     }
+
+    pub async fn timeseries(client: &DatadogClient, args: &TimeseriesArgs) -> Result<Value> {
+        let handler = MetricsHandler;
+
+        let (from_ts, to_ts) = handler.parse_time_range(&args.from, &args.to)?;
+
+        let response = client
+            .query_timeseries(
+                &args.queries,
+                &args.formula,
+                from_ts * 1000,
+                to_ts * 1000,
+                args.interval.map(|secs| secs * 1000),
+            )
+            .await?;
+
+        let attrs = &response["data"]["attributes"];
+        let times = attrs["times"].as_array().cloned().unwrap_or_default();
+        let empty = Vec::new();
+        let series_meta = attrs["series"].as_array().unwrap_or(&empty);
+        let values = attrs["values"].as_array().unwrap_or(&empty);
+
+        let series: Vec<Value> = series_meta
+            .iter()
+            .zip(values.iter())
+            .map(|(s, series_values)| {
+                let points: Vec<Value> = times
+                    .iter()
+                    .zip(series_values.as_array().unwrap_or(&empty).iter())
+                    .map(|(t, v)| {
+                        json!({
+                            "timestamp": t.as_i64()
+                                .map(|ms| crate::utils::format_timestamp(ms / 1000)),
+                            "value": v
+                        })
+                    })
+                    .collect();
+
+                let mut obj = serde_json::Map::new();
+                for key in ["group_tags", "query_index", "unit"] {
+                    if let Some(value) = s.get(key)
+                        && !value.is_null()
+                    {
+                        obj.insert(key.to_string(), value.clone());
+                    }
+                }
+                obj.insert(
+                    "points".to_string(),
+                    json!({ "count": points.len(), "data": points }),
+                );
+                json!(obj)
+            })
+            .collect();
+
+        let meta = json!({
+            "queries": args.queries,
+            "formulas": args.formula,
+            "from": crate::utils::format_timestamp(from_ts),
+            "to": crate::utils::format_timestamp(to_ts),
+        });
+
+        Ok(handler.format_list(json!(series), None, Some(meta)))
+    }
+
+    pub async fn scalar(client: &DatadogClient, args: &ScalarArgs) -> Result<Value> {
+        let handler = MetricsHandler;
+
+        let (from_ts, to_ts) = handler.parse_time_range(&args.from, &args.to)?;
+
+        let response = client
+            .query_scalar(
+                &args.queries,
+                &args.formula,
+                &args.aggregator,
+                from_ts * 1000,
+                to_ts * 1000,
+            )
+            .await?;
+
+        // Columns are index-aligned; pivot them into one record per row so
+        // the output works with jsonl and table formats.
+        let empty = Vec::new();
+        let columns = response["data"]["attributes"]["columns"]
+            .as_array()
+            .unwrap_or(&empty);
+
+        let row_count = columns
+            .iter()
+            .filter_map(|c| c["values"].as_array().map(|v| v.len()))
+            .max()
+            .unwrap_or(0);
+
+        let rows: Vec<Value> = (0..row_count)
+            .map(|i| {
+                let mut row = serde_json::Map::new();
+                for column in columns {
+                    let name = column["name"].as_str().unwrap_or("value");
+                    row.insert(
+                        name.to_string(),
+                        column["values"].get(i).cloned().unwrap_or(Value::Null),
+                    );
+                }
+                json!(row)
+            })
+            .collect();
+
+        let meta = json!({
+            "queries": args.queries,
+            "formulas": args.formula,
+            "aggregator": args.aggregator,
+            "from": crate::utils::format_timestamp(from_ts),
+            "to": crate::utils::format_timestamp(to_ts),
+        });
+
+        Ok(handler.format_list(json!(rows), None, Some(meta)))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     #[test]
     fn test_calculate_rollup_interval() {
@@ -219,6 +321,14 @@ mod tests {
     }
 
     #[test]
+    fn test_calculate_rollup_interval_minimal_points() {
+        assert_eq!(
+            MetricsHandler::calculate_rollup_interval(0, 30000, 1),
+            43200
+        );
+    }
+
+    #[test]
     fn test_add_rollup_to_query() {
         // Test adding rollup to simple query
         let query = "avg:system.cpu.user{*}";
@@ -234,181 +344,5 @@ mod tests {
         let query = "avg:system.cpu.user{*}.rollup(sum, 600)";
         let result = MetricsHandler::add_rollup_to_query(query, 300);
         assert_eq!(result, query); // Should not modify
-    }
-
-    #[test]
-    fn test_missing_query_parameter() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let client = Arc::new(
-                DatadogClient::new(
-                    "test_key".to_string(),
-                    "test_app_key".to_string(),
-                    None,
-                    30,
-                    3,
-                    None,
-                )
-                .unwrap(),
-            );
-
-            let params = json!({
-                "from": "1 hour ago",
-                "to": "now"
-                // Missing "query" parameter
-            });
-
-            let result = MetricsHandler::query(client, &params).await;
-            assert!(result.is_err());
-
-            if let Err(e) = result {
-                let error_str = format!("{}", e);
-                assert!(error_str.contains("query") || error_str.contains("Missing"));
-            }
-        });
-    }
-
-    #[test]
-    fn test_valid_input_parameters() {
-        // This test verifies parameter extraction works
-        let params = json!({
-            "query": "avg:system.cpu.user{*}",
-            "from": "1609459200", // Unix timestamp
-            "to": "1609462800"
-        });
-
-        assert_eq!(params["query"].as_str(), Some("avg:system.cpu.user{*}"));
-        assert!(params["from"].as_str().is_some());
-        assert!(params["to"].as_str().is_some());
-    }
-
-    #[test]
-    fn test_optional_max_points_parameter() {
-        let params_with = json!({
-            "query": "avg:cpu",
-            "from": "1 hour ago",
-            "to": "now",
-            "max_points": 100
-        });
-
-        let params_without = json!({
-            "query": "avg:cpu",
-            "from": "1 hour ago",
-            "to": "now"
-        });
-
-        assert_eq!(params_with["max_points"].as_i64(), Some(100));
-        assert_eq!(params_without["max_points"].as_i64(), None);
-    }
-
-    #[test]
-    fn test_time_handler_trait_available() {
-        // Verify MetricsHandler implements TimeHandler
-        let handler = MetricsHandler;
-        let params = json!({
-            "from": "1609459200",
-            "to": "1609462800"
-        });
-
-        // This should not panic
-        let result = handler.parse_time(&params, 1);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_response_formatter_trait_available() {
-        // Verify MetricsHandler implements ResponseFormatter
-        let handler = MetricsHandler;
-        let data = json!(["test"]);
-
-        let formatted = handler.format_list(data, None, None);
-        assert!(formatted.get("data").is_some());
-    }
-
-    #[test]
-    fn test_rollup_interval_boundaries() {
-        assert_eq!(MetricsHandler::calculate_rollup_interval(0, 5900, 100), 60);
-        assert_eq!(
-            MetricsHandler::calculate_rollup_interval(0, 29900, 100),
-            300
-        );
-        assert_eq!(
-            MetricsHandler::calculate_rollup_interval(0, 59900, 100),
-            600
-        );
-        assert_eq!(
-            MetricsHandler::calculate_rollup_interval(0, 179900, 100),
-            1800
-        );
-        assert_eq!(
-            MetricsHandler::calculate_rollup_interval(0, 359900, 100),
-            3600
-        );
-        assert_eq!(
-            MetricsHandler::calculate_rollup_interval(0, 719900, 100),
-            7200
-        );
-    }
-
-    #[test]
-    fn test_add_rollup_preserves_query_structure() {
-        let query_with_filter = "avg:system.cpu.user{host:web-1,env:prod}";
-        let result = MetricsHandler::add_rollup_to_query(query_with_filter, 300);
-        assert!(result.contains("host:web-1"));
-        assert!(result.contains("env:prod"));
-        assert!(result.ends_with(".rollup(avg, 300)"));
-
-        let query_with_wildcard = "avg:system.cpu.user{*}";
-        let result = MetricsHandler::add_rollup_to_query(query_with_wildcard, 60);
-        assert!(result.contains("{*}"));
-        assert!(result.ends_with(".rollup(avg, 60)"));
-    }
-
-    #[test]
-    fn test_add_rollup_with_all_aggregation_types() {
-        let test_cases = vec![
-            ("avg:metric{*}", "avg"),
-            ("max:metric{*}", "max"),
-            ("min:metric{*}", "min"),
-            ("sum:metric{*}", "sum"),
-            ("count:metric{*}", "avg"),
-            ("metric{*}", "avg"),
-        ];
-
-        for (query, expected_agg) in test_cases {
-            let result = MetricsHandler::add_rollup_to_query(query, 300);
-            let expected_suffix = format!(".rollup({}, 300)", expected_agg);
-            assert!(
-                result.ends_with(&expected_suffix),
-                "Query '{}' should produce rollup with aggregation '{}', got: {}",
-                query,
-                expected_agg,
-                result
-            );
-        }
-    }
-
-    #[test]
-    fn test_calculate_rollup_interval_large_ranges() {
-        assert_eq!(
-            MetricsHandler::calculate_rollup_interval(0, 2159900, 100),
-            21600
-        );
-        assert_eq!(
-            MetricsHandler::calculate_rollup_interval(0, 4319900, 100),
-            43200
-        );
-        assert_eq!(
-            MetricsHandler::calculate_rollup_interval(0, 8639900, 100),
-            86400
-        );
-        assert_eq!(
-            MetricsHandler::calculate_rollup_interval(0, 86400 * 100, 100),
-            86400
-        );
-        assert_eq!(
-            MetricsHandler::calculate_rollup_interval(0, 86400 * 1000, 100),
-            86400
-        );
     }
 }

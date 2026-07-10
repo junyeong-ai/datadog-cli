@@ -1,11 +1,11 @@
 use serde_json::{Value, json};
-use std::sync::Arc;
 
-use crate::datadog::DatadogClient;
+use crate::cli::RumArgs;
+use crate::datadog::{DatadogClient, SearchParams};
 use crate::error::Result;
 use crate::handlers::common::{
-    DEFAULT_STACK_TRACE_LINES, PaginationInfo, ParameterParser, ResponseFilter, ResponseFormatter,
-    TagFilter, TimeHandler,
+    DEFAULT_STACK_TRACE_LINES, PaginationInfo, ResponseFilter, ResponseFormatter, TagFilter,
+    TimeHandler,
 };
 
 pub struct RumHandler;
@@ -14,24 +14,25 @@ impl TimeHandler for RumHandler {}
 impl TagFilter for RumHandler {}
 impl ResponseFilter for RumHandler {}
 impl ResponseFormatter for RumHandler {}
-impl ParameterParser for RumHandler {}
 
 impl RumHandler {
-    pub async fn search_events(client: Arc<DatadogClient>, params: &Value) -> Result<Value> {
+    pub async fn search_events(client: &DatadogClient, args: &RumArgs) -> Result<Value> {
         let handler = RumHandler;
 
-        let query = handler.extract_query(params, "*");
-        let (from_iso, to_iso) = handler.parse_time_iso8601(params)?;
-
-        let limit = handler.extract_i32(params, "limit", 10);
-        let cursor = handler.extract_string(params, "cursor");
-        let sort = handler.extract_string(params, "sort");
+        let (from_iso, to_iso) = handler.parse_time_range_iso8601(&args.from, &args.to)?;
 
         let response = client
-            .search_rum_events(&query, &from_iso, &to_iso, limit, cursor, sort)
+            .search_rum_events(&SearchParams {
+                query: &args.query,
+                from: &from_iso,
+                to: &to_iso,
+                limit: args.limit,
+                cursor: args.cursor.as_deref(),
+                sort: args.sort.as_deref(),
+            })
             .await?;
 
-        let tag_filter = handler.extract_tag_filter(params, &client);
+        let tag_filter = handler.resolve_tag_filter(args.tag_filter.as_deref(), client);
 
         let events: Vec<Value> = response
             .data
@@ -154,10 +155,10 @@ impl RumHandler {
                         e["type"] = json!(error_type);
                     }
                     if let Some(stack) = &error.stack {
-                        let stack_str = if handler.should_truncate_stack_trace(params) {
-                            handler.truncate_stack_trace(stack, DEFAULT_STACK_TRACE_LINES)
-                        } else {
+                        let stack_str = if args.full_stack_trace {
                             stack.clone()
+                        } else {
+                            handler.truncate_stack_trace(stack, DEFAULT_STACK_TRACE_LINES)
                         };
                         e["stack"] = json!(stack_str);
                     }
@@ -181,14 +182,14 @@ impl RumHandler {
             })
             .collect();
 
-        let has_cursor = response
+        let next_cursor = response
             .meta
             .as_ref()
             .and_then(|m| m.page.as_ref())
-            .and_then(|p| p.after.as_ref())
-            .is_some();
+            .and_then(|p| p.after.clone());
 
-        let pagination = PaginationInfo::from_cursor(events.len(), limit as usize, has_cursor);
+        let pagination =
+            PaginationInfo::from_cursor(events.len(), args.limit as usize, next_cursor);
 
         Ok(json!({
             "data": events,
@@ -202,23 +203,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parameter_parser() {
-        let handler = RumHandler;
-        let params = json!({
-            "query": "@type:session",
-            "limit": 25,
-            "sort": "timestamp",
-        });
-
-        assert_eq!(handler.extract_query(&params, "*"), "@type:session");
-        assert_eq!(handler.extract_i32(&params, "limit", 10), 25);
-        assert_eq!(
-            handler.extract_string(&params, "sort"),
-            Some("timestamp".to_string())
-        );
-    }
-
-    #[test]
     fn test_tag_filter_trait() {
         let handler = RumHandler;
         let tags = vec!["env:prod".to_string(), "service:web".to_string()];
@@ -226,16 +210,5 @@ mod tests {
         assert_eq!(handler.filter_tags(&tags, "*").len(), 2);
         assert_eq!(handler.filter_tags(&tags, "env:").len(), 1);
         assert_eq!(handler.filter_tags(&tags, "").len(), 0);
-    }
-
-    #[test]
-    fn test_response_filter_trait() {
-        let handler = RumHandler;
-
-        let params = json!({});
-        assert!(handler.should_truncate_stack_trace(&params));
-
-        let params = json!({"full_stack_trace": true});
-        assert!(!handler.should_truncate_stack_trace(&params));
     }
 }

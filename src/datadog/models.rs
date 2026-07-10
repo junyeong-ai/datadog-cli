@@ -4,19 +4,10 @@ use std::collections::HashMap;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MetricsResponse {
     pub status: String,
-    pub res_type: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub resp_version: Option<i32>,
-    pub from_date: i64,
-    pub to_date: i64,
     pub series: Vec<MetricSeries>,
     pub query: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub values: Option<Vec<Vec<Option<f64>>>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub times: Option<Vec<i64>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -51,11 +42,22 @@ pub struct Unit {
     pub id: Option<i64>,
 }
 
+/// Cursor pagination envelope shared by the v2 search APIs
+/// (logs, events, RUM): the next-page cursor lives at `meta.page.after`.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CursorMeta {
+    pub page: Option<CursorPage>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CursorPage {
+    pub after: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LogsResponse {
     pub data: Option<Vec<LogEntry>>,
-    pub meta: Option<LogsMeta>,
-    pub errors: Option<Vec<String>>,
+    pub meta: Option<CursorMeta>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -75,17 +77,6 @@ pub struct LogAttributes {
     pub message: Option<String>,
     pub status: Option<String>,
     pub attributes: Option<HashMap<String, serde_json::Value>>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct LogsMeta {
-    pub page: Option<LogsPage>,
-    pub elapsed: Option<i64>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct LogsPage {
-    pub after: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,30 +131,19 @@ pub struct MonitorThresholds {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EventsResponse {
-    pub events: Option<Vec<Event>>,
-    pub status: Option<String>,
+    pub data: Option<Vec<Event>>,
+    pub meta: Option<CursorMeta>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// v2 event. Attributes vary by event category (only `timestamp`,
+/// `message`, `tags`, and the nested `attributes` object are stable),
+/// so they are kept as raw JSON.
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Event {
-    pub id: Option<i64>,
-    pub id_str: Option<String>,
-    pub title: Option<String>,
-    pub text: Option<String>,
-    pub date_happened: Option<i64>,
-    pub priority: Option<String>,
-    pub host: Option<String>,
-    pub tags: Option<Vec<String>>,
-    pub source: Option<String>,
-    pub alert_type: Option<String>,
-    pub comments: Option<Vec<String>>,
-    pub device_name: Option<String>,
-    pub is_aggregate: Option<bool>,
-    pub monitor_group_status: Option<i32>,
-    pub monitor_groups: Option<Vec<String>>,
-    pub monitor_id: Option<i64>,
-    pub resource: Option<String>,
-    pub url: Option<String>,
+    pub id: String,
+    #[serde(rename = "type")]
+    pub event_type: Option<String>,
+    pub attributes: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -266,96 +246,6 @@ pub struct WidgetLayout {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServicesResponse {
-    pub data: Vec<Service>,
-    pub meta: Option<ServicesMeta>,
-    pub links: Option<ServicesLinks>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Service {
-    pub id: Option<String>,
-    #[serde(rename = "type")]
-    pub service_type: Option<String>,
-    pub attributes: Option<ServiceAttributes>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServiceAttributes {
-    pub schema_version: Option<String>,
-    pub dd_service: Option<String>,
-    pub dd_team: Option<String>,
-    pub application: Option<String>,
-    pub tier: Option<String>,
-    pub lifecycle: Option<String>,
-    pub type_of_service: Option<String>,
-    pub languages: Option<Vec<String>>,
-    pub contacts: Option<Vec<ServiceContact>>,
-    pub links: Option<Vec<ServiceLink>>,
-    pub repos: Option<Vec<ServiceRepo>>,
-    pub docs: Option<Vec<ServiceDoc>>,
-    pub tags: Option<Vec<String>>,
-    pub integrations: Option<ServiceIntegrations>,
-    #[serde(flatten)]
-    pub extra: HashMap<String, serde_json::Value>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServiceContact {
-    pub name: Option<String>,
-    pub email: Option<String>,
-    #[serde(rename = "type")]
-    pub contact_type: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServiceLink {
-    pub name: Option<String>,
-    pub url: Option<String>,
-    #[serde(rename = "type")]
-    pub link_type: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServiceRepo {
-    pub name: Option<String>,
-    pub url: Option<String>,
-    pub provider: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServiceDoc {
-    pub name: Option<String>,
-    pub url: Option<String>,
-    pub provider: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServiceIntegrations {
-    pub pagerduty: Option<serde_json::Value>,
-    pub slack: Option<serde_json::Value>,
-    #[serde(flatten)]
-    pub others: HashMap<String, serde_json::Value>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServicesMeta {
-    pub warnings: Option<Vec<ServicesWarning>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServicesWarning {
-    pub code: Option<String>,
-    pub detail: Option<String>,
-    pub title: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServicesLinks {
-    pub next: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogsCompute {
     pub aggregation: String,
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
@@ -366,34 +256,10 @@ pub struct LogsCompute {
     pub metric: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LogsGroupBy {
-    pub facet: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub limit: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sort: Option<LogsGroupBySort>,
-    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub group_type: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LogsGroupBySort {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub order: Option<String>,
-    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub sort_type: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aggregation: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub metric: Option<String>,
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RumEventsResponse {
     pub data: Option<Vec<RumEvent>>,
-    pub meta: Option<RumMeta>,
-    pub links: Option<RumLinks>,
+    pub meta: Option<CursorMeta>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -479,30 +345,4 @@ pub struct RumError {
     pub error_type: Option<String>,
     pub stack: Option<String>,
     pub is_crash: Option<bool>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RumMeta {
-    pub page: Option<RumPage>,
-    pub elapsed: Option<i64>,
-    pub request_id: Option<String>,
-    pub status: Option<String>,
-    pub warnings: Option<Vec<RumWarning>>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RumPage {
-    pub after: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RumLinks {
-    pub next: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RumWarning {
-    pub code: Option<String>,
-    pub detail: Option<String>,
-    pub title: Option<String>,
 }

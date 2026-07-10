@@ -1,6 +1,6 @@
 use comfy_table::{Table, presets::UTF8_FULL};
 use serde_json::Value;
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 
 pub enum Format {
     Json,
@@ -30,7 +30,13 @@ pub fn print(data: &Value, format: &Format) -> io::Result<()> {
 fn print_json(data: &Value) -> io::Result<()> {
     let stdout = io::stdout();
     let mut handle = stdout.lock();
-    serde_json::to_writer_pretty(&mut handle, data)?;
+
+    // Pretty for humans at a terminal, compact for pipes (jq etc.).
+    if stdout.is_terminal() {
+        serde_json::to_writer_pretty(&mut handle, data)?;
+    } else {
+        serde_json::to_writer(&mut handle, data)?;
+    }
     writeln!(handle)?;
     Ok(())
 }
@@ -75,15 +81,25 @@ fn print_table(data: &Value) -> io::Result<()> {
     let mut table = Table::new();
     table.load_preset(UTF8_FULL);
 
-    if let Some(first) = items[0].as_object() {
-        let headers: Vec<_> = first.keys().collect();
-        table.set_header(&headers);
-
-        for item in items {
-            if let Some(obj) = item.as_object() {
-                let row: Vec<_> = headers.iter().map(|k| format_value(obj.get(*k))).collect();
-                table.add_row(row);
+    // Union of keys across all rows, in first-seen order, so rows with
+    // sparse or differing fields still render every column.
+    let mut headers: Vec<&String> = Vec::new();
+    for item in items {
+        if let Some(obj) = item.as_object() {
+            for key in obj.keys() {
+                if !headers.contains(&key) {
+                    headers.push(key);
+                }
             }
+        }
+    }
+
+    table.set_header(&headers);
+
+    for item in items {
+        if let Some(obj) = item.as_object() {
+            let row: Vec<_> = headers.iter().map(|k| format_value(obj.get(*k))).collect();
+            table.add_row(row);
         }
     }
 

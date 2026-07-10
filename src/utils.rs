@@ -2,12 +2,23 @@ use crate::error::{DatadogError, Result};
 use chrono::{DateTime, Utc};
 use interim::{Dialect, parse_date_string};
 
+/// Latest accepted Unix timestamp: 9999-12-31T23:59:59Z. Anything larger is
+/// almost always a millisecond timestamp pasted where seconds are expected,
+/// and bounding here keeps second→millisecond conversions overflow-free.
+const MAX_UNIX_TIMESTAMP: i64 = 253_402_300_799;
+
 pub fn parse_time(input: &str) -> Result<i64> {
     if input.trim().to_lowercase() == "now" {
         return Ok(Utc::now().timestamp());
     }
 
     if let Ok(timestamp) = input.parse::<i64>() {
+        if timestamp.abs() > MAX_UNIX_TIMESTAMP {
+            return Err(DatadogError::DateParseError(format!(
+                "Timestamp out of range: '{}' (expected Unix seconds; is this milliseconds?)",
+                input
+            )));
+        }
         return Ok(timestamp);
     }
 
@@ -84,6 +95,18 @@ mod tests {
     fn test_parse_time_invalid() {
         let result = parse_time("invalid time string");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_time_rejects_millisecond_timestamps() {
+        let result = parse_time("1704067200000");
+        assert!(result.is_err());
+        assert!(format!("{}", result.unwrap_err()).contains("milliseconds"));
+    }
+
+    #[test]
+    fn test_parse_time_accepts_boundary_timestamp() {
+        assert_eq!(parse_time("253402300799").unwrap(), 253402300799);
     }
 
     #[test]
