@@ -1,6 +1,8 @@
 use crate::error::{DatadogError, Result};
 use serde::Deserialize;
-use std::path::{Path, PathBuf};
+#[cfg(unix)]
+use std::path::Path;
+use std::path::PathBuf;
 use std::{env, fs};
 
 /// All Datadog regional sites (https://docs.datadoghq.com/getting_started/site/).
