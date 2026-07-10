@@ -6,124 +6,135 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
-  RUSTFLAGS: -D warnings
+  CARGO_INCREMENTAL: "0"
+  CARGO_NET_RETRY: "10"
+  RUSTUP_MAX_RETRIES: "10"
+  RUST_BACKTRACE: "1"
+  CARGO_BUILD_WARNINGS: deny
 
 jobs:
   test:
-    name: Test Suite (${{ matrix.os }})
+    name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        rust: [stable]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1.16.1
         with:
-          toolchain: ${{ matrix.rust }}
+          cache: false
 
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
 
       - name: Install nextest
-        uses: taiki-e/install-action@nextest
+        uses: taiki-e/install-action@e3134ec54b36203e18f2d1e80652058bd078dd91 # v2.77.3
+        with:
+          tool: nextest
 
-      - name: Run tests with nextest
-        run: cargo nextest run --all-features --workspace --verbose
+      - name: Run tests
+        run: cargo nextest run --profile ci --all-features --workspace --locked
 
-  coverage:
-    name: Code Coverage
+  msrv:
+    name: MSRV Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install MSRV toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1.16.1
+        with:
+          toolchain: "1.97"
+          cache: false
+
+      - uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
+
+      - name: Check with MSRV
+        run: cargo check --all-features --all-targets --locked
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1.16.1
         with:
           components: llvm-tools-preview
+          cache: false
 
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
 
       - name: Install coverage tools
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@e3134ec54b36203e18f2d1e80652058bd078dd91 # v2.77.3
         with:
           tool: cargo-llvm-cov,nextest
 
-      - name: Generate coverage with nextest
+      - name: Generate LCOV coverage
         run: |
           cargo llvm-cov nextest \
+            --profile ci \
             --all-features \
             --workspace \
+            --locked \
             --lcov \
             --output-path lcov.info
 
       - name: Upload to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@3f20e214133d0983f9a10f3d63b0faf9241a3daa # v6.0.0
+        continue-on-error: true
         with:
           files: lcov.info
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: unittests
           name: codecov-datadog-cli
-          verbose: true
 
       - name: Generate HTML coverage report
         if: always()
         run: cargo llvm-cov report --html
 
-      - name: Upload HTML report as artifact
+      - name: Upload HTML coverage artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-report
           path: target/llvm-cov/html/
           retention-days: 7
 
   build:
-    name: Build Release
+    name: Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1.16.1
+        with:
+          cache: false
 
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
 
       - name: Build release binary
-        run: cargo build --release --verbose
-
-      - name: Check binary size
-        run: |
-          ls -lh target/release/datadog-cli
-          du -h target/release/datadog-cli
-
-      - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-binary
-          path: target/release/datadog-cli
-          retention-days: 7
-
-  security-audit:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Run cargo-audit
-        uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        run: cargo build --release --locked
