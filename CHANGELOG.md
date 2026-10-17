@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Global configuration uses the standard library's home-directory resolution, honoring `USERPROFILE` on Windows and removing the `dirs` dependency.
 - Skill installation and removal no longer create discoverable backup copies. Installation stages replacement files in temporary storage outside the skill directory.
 
 ## [0.7.0] - 2026-10-17

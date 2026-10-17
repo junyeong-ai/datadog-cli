@@ -21,7 +21,6 @@ thiserror = "2.0.21"
 chrono = { version = "0.4.45", features = ["serde"] }
 interim = { version = "0.2.1", features = ["chrono_0_4"] }
 toml = { version = "1.1.8", default-features = false, features = ["parse", "serde", "std"] }
-dirs = "7.0.0"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 clap = { version = "4.6.7", features = ["derive"] }

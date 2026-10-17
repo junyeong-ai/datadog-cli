@@ -92,6 +92,7 @@ Each OAuth API command invokes `pup auth token --org=<session>` once. Pup owns s
 Fields merge in ascending priority: **global file → nearest project file → environment → CLI arguments**.
 Project configuration is `.datadog.toml`, searched from the current directory through its ancestors.
 Global configuration is `~/.config/datadog-cli/config.toml`.
+Home resolution honors `HOME` on Linux/macOS and `USERPROFILE` on Windows.
 
 Within a source, a nonempty token takes precedence over keys. Explicit keys in a higher source replace a lower source's token.
 Missing key fields inherit lower values. An empty token clears a lower token; an empty key clears that key.

@@ -555,7 +555,7 @@ impl Config {
     }
 
     pub fn global_config_path() -> Option<PathBuf> {
-        dirs::home_dir().map(|h| h.join(".config/datadog-cli/config.toml"))
+        env::home_dir().map(|home| home.join(".config/datadog-cli/config.toml"))
     }
 
     #[cfg(unix)]
