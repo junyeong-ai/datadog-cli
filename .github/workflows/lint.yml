@@ -32,15 +32,19 @@ jobs:
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
-      - name: Install script linters
+      - name: Install ShellCheck
         uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
         with:
-          tool: actionlint@1.7.12,shellcheck@0.11.0
+          tool: shellcheck@0.11.0
+          fallback: none
 
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets --all-features --locked -- -D warnings
       - run: shellcheck scripts/install.sh scripts/uninstall.sh
-      - run: actionlint
+      - name: Validate workflows
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
+        with:
+          version: "1.7.12"
 
       - name: Check generated command reference
         shell: bash

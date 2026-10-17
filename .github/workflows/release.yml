@@ -110,6 +110,23 @@ jobs:
             "$CARGO" build --release --locked --target "$MATRIX_TARGET"
           fi
 
+      - name: Execute native release binary
+        if: matrix.target != 'aarch64-unknown-linux-gnu'
+        shell: bash
+        env:
+          MATRIX_TARGET: ${{ matrix.target }}
+          MATRIX_OS: ${{ matrix.os }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          binary="target/${MATRIX_TARGET}/release/datadog-cli"
+          if [ "$MATRIX_OS" = "windows-latest" ]; then
+            binary="${binary}.exe"
+          fi
+          actual_version=$("$binary" --version)
+          test "$actual_version" = "datadog-cli ${RELEASE_TAG#v}"
+          "$binary" --help > /dev/null
+
       - name: Package binary
         id: package
         shell: bash
