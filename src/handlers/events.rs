@@ -61,9 +61,12 @@ impl EventsHandler {
         let pagination =
             PaginationInfo::from_cursor(events.len(), args.limit as usize, next_cursor);
 
-        Ok(json!({
-            "data": events,
-            "pagination": pagination
-        }))
+        Ok(handler.with_api_meta(
+            json!({
+                "data": events,
+                "pagination": pagination
+            }),
+            response.meta.map(serde_json::to_value).transpose()?,
+        ))
     }
 }

@@ -69,12 +69,18 @@ pub struct Unit {
 /// (logs, events, RUM): the next-page cursor lives at `meta.page.after`.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CursorMeta {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<CursorPage>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CursorPage {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -298,76 +304,7 @@ pub struct RumAttributes {
     pub timestamp: Option<String>,
     pub tags: Option<Vec<String>>,
     pub service: Option<String>,
-    pub application: Option<RumApplication>,
-    pub view: Option<RumView>,
-    pub session: Option<RumSession>,
-    pub action: Option<RumAction>,
-    pub resource: Option<RumResource>,
-    pub error: Option<RumError>,
     pub attributes: Option<HashMap<String, serde_json::Value>>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RumApplication {
-    pub id: Option<String>,
-    pub name: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RumView {
-    pub id: Option<String>,
-    pub name: Option<String>,
-    pub url: Option<String>,
-    pub url_path: Option<String>,
-    pub time_spent: Option<i64>,
-    pub loading_time: Option<i64>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RumSession {
-    pub id: Option<String>,
-    #[serde(rename = "type")]
-    pub session_type: Option<String>,
-    pub has_replay: Option<bool>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RumAction {
-    pub id: Option<String>,
-    pub name: Option<String>,
-    #[serde(rename = "type")]
-    pub action_type: Option<String>,
-    pub target: Option<RumActionTarget>,
-    pub loading_time: Option<i64>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RumActionTarget {
-    pub name: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RumResource {
-    pub id: Option<String>,
-    pub name: Option<String>,
-    #[serde(rename = "type")]
-    pub resource_type: Option<String>,
-    pub url: Option<String>,
-    pub method: Option<String>,
-    pub status_code: Option<i32>,
-    pub duration: Option<i64>,
-    pub size: Option<i64>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RumError {
-    pub id: Option<String>,
-    pub message: Option<String>,
-    pub source: Option<String>,
-    #[serde(rename = "type")]
-    pub error_type: Option<String>,
-    pub stack: Option<String>,
-    pub is_crash: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]

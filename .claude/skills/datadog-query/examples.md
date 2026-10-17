@@ -16,6 +16,8 @@ datadog-cli spans "service:api error:true" --from "$FROM" --to "$TO" --limit 20 
   jq -r '[.id, .attributes.service] | @tsv'
 ```
 
+Inspect `.meta.api.status` and `.meta.api.warnings` before treating a count as complete. Server timeout and warning diagnostics also appear on stderr; exit code 0 alone does not guarantee completeness.
+
 The log sample is not the total count. Span results keep API attributes nested; custom fields depend on instrumentation. Inspect those attributes before correlating by trace ID or extracting resource/error fields.
 
 ## Bounded cursor pagination

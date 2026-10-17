@@ -12,6 +12,8 @@ Rust 2024 CLI. `rust-toolchain.toml` pins development Rust; `Cargo.toml` declare
 - `src/handlers/`: endpoint-specific transformation and pagination. `common.rs` owns shared time, tag, pagination, and output-envelope behavior.
 - `src/output.rs`: JSON/JSONL/table writers. Stdout contains results; tracing writes to stderr. Propagate I/O errors so closed pipelines exit quietly.
 
+Preserve query API metadata under `meta.api`; server timeout and warning diagnostics must remain visible on stderr in every format, independently of logging filters. Keep pagination separate from query completeness. RUM event details live in the record's `attributes` map; only the explicit stack option changes `attributes.error.stack`.
+
 Keep scalar column arrays ordered; column names are optional attributes, not unique identifiers. Scalar table projection is explicit in `src/output.rs`.
 
 Pass metric query expressions unchanged. Use the structured timeseries interval for server-side rollup; do not infer query syntax or aggregation from string patterns.

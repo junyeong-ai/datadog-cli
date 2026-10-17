@@ -1175,3 +1175,191 @@ async fn v1_metric_processing_errors_preserve_api_failure_exit_code() {
     assert_eq!(error.exit_code(), 4);
     assert!(matches!(error, DatadogError::QueryError(_)));
 }
+
+#[tokio::test]
+async fn rum_preserves_nested_attributes_and_applies_only_the_stack_option() {
+    use clap::Parser;
+    use datadog_cli::cli::{Cli, Command};
+    use datadog_cli::handlers::rum::RumHandler;
+
+    let stack = (1..=12)
+        .map(|line| format!("frame {line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let attributes = json!({
+        "type":"error", "id":"custom-id", "tags":["custom:retained"],
+        "application":{"id":"app-1", "name":"web", "extension":true},
+        "view":{"url":"https://example.test/path", "extension":null},
+        "session":{"has_replay":false}, "resource":{"status_code":0},
+        "action":{"target":{"name":"submit"}},
+        "error":{"message":"failure", "stack":stack, "is_crash":false},
+        "custom":{"nested":[1,false,null]}
+    });
+    let server = MockServer::start().await;
+    Mock::given(path("/api/v2/rum/events/search"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data":[
+                {"id":"event-1", "type":"rum", "attributes":{
+                    "service":"web", "timestamp":"2026-10-17T00:00:00Z",
+                    "tags":["env:prod", "team:web"], "attributes":attributes
+                }},
+                {"id":"event-2", "attributes":{"attributes":{}}},
+                {"id":"event-3"}
+            ]
+        })))
+        .expect(2)
+        .mount(&server)
+        .await;
+    for full in [false, true] {
+        let mut argv = vec!["datadog-cli", "rum", "*", "--tag-filter", "env:"];
+        if full {
+            argv.push("--full-stack-trace");
+        }
+        let Command::Rum(args) = Cli::try_parse_from(argv).unwrap().command else {
+            panic!()
+        };
+        let result = RumHandler::search_events(&client_for(&server, 0), &args)
+            .await
+            .unwrap();
+        let record = &result["data"][0];
+        assert_eq!(record["id"], "event-1");
+        assert_eq!(record["type"], "rum");
+        assert_eq!(record["tags"], json!(["env:prod"]));
+        let mut expected = attributes.clone();
+        if !full {
+            expected["error"]["stack"] = json!(format!(
+                "{}\n... (2 more lines)",
+                stack.lines().take(10).collect::<Vec<_>>().join("\n")
+            ));
+        }
+        assert_eq!(record["attributes"], expected);
+        assert_eq!(result["data"][1]["attributes"], json!({}));
+        assert!(result["data"][2].get("attributes").is_none());
+    }
+}
+
+#[tokio::test]
+async fn cursor_handlers_preserve_api_metadata_and_pagination_independently() {
+    use clap::Parser;
+    use datadog_cli::cli::{Cli, Command, LogsAction};
+    use datadog_cli::handlers::{
+        audit::AuditHandler, events::EventsHandler, llm_obs::LlmObsHandler, logs::LogsHandler,
+        rum::RumHandler, spans::SpansHandler,
+    };
+    let metadata = json!({"status":"timeout", "warnings":[{"code":"partial", "detail":"some indexes unavailable"}], "request_id":"request-1", "elapsed":42, "extension":{"retained":true}, "page":{"after":"next-page", "extension":true}});
+    let server = MockServer::start().await;
+    for (argv, endpoint) in [
+        (
+            vec!["datadog-cli", "logs", "search"],
+            "/api/v2/logs/events/search",
+        ),
+        (vec!["datadog-cli", "events"], "/api/v2/events/search"),
+        (vec!["datadog-cli", "rum"], "/api/v2/rum/events/search"),
+        (vec!["datadog-cli", "spans"], "/api/v2/spans/events/search"),
+        (vec!["datadog-cli", "audit"], "/api/v2/audit/events/search"),
+        (
+            vec!["datadog-cli", "llm-obs"],
+            "/api/v2/llm-obs/v1/spans/events/search",
+        ),
+    ] {
+        Mock::given(path(endpoint))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(json!({"data":[], "meta":metadata})),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        let client = client_for(&server, 0);
+        let result = match Cli::try_parse_from(argv).unwrap().command {
+            Command::Logs {
+                action: LogsAction::Search(args),
+            } => LogsHandler::search(&client, &args).await,
+            Command::Events(args) => EventsHandler::search(&client, &args).await,
+            Command::Rum(args) => RumHandler::search_events(&client, &args).await,
+            Command::Spans(args) => SpansHandler::list(&client, &args).await,
+            Command::Audit(args) => AuditHandler::search(&client, &args).await,
+            Command::LlmObs(args) => LlmObsHandler::search(&client, &args).await,
+            _ => panic!(),
+        }
+        .unwrap();
+        assert_eq!(result["meta"]["api"], metadata, "{endpoint}");
+        assert_eq!(result["data"], json!([]));
+        assert_eq!(result["pagination"]["next_cursor"], "next-page");
+        assert_eq!(result["pagination"]["has_next"], true);
+    }
+}
+
+#[tokio::test]
+async fn log_aggregation_preserves_partial_result_metadata_without_overwriting_query_metadata() {
+    use clap::Parser;
+    use datadog_cli::cli::{Cli, Command, LogsAction};
+    use datadog_cli::handlers::logs::LogsHandler;
+    let server = MockServer::start().await;
+    let metadata = json!({"status":"timeout", "warnings":[{"code":"partial"}], "query":"api-query", "request_id":"request-1"});
+    let data = json!({"buckets":[{"computes":{"c0":7}}]});
+    Mock::given(path("/api/v2/logs/analytics/aggregate"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"data":data, "meta":metadata})),
+        )
+        .expect(2)
+        .mount(&server)
+        .await;
+    for action in ["aggregate", "timeseries"] {
+        let Command::Logs { action: args } =
+            Cli::try_parse_from(["datadog-cli", "logs", action, "service:web"])
+                .unwrap()
+                .command
+        else {
+            panic!()
+        };
+        let client = client_for(&server, 0);
+        let result = match args {
+            LogsAction::Aggregate(args) => LogsHandler::aggregate(&client, &args).await,
+            LogsAction::Timeseries(args) => LogsHandler::timeseries(&client, &args).await,
+            _ => panic!(),
+        }
+        .unwrap();
+        assert_eq!(result["data"], data);
+        assert_eq!(result["meta"]["api"], metadata);
+        assert_eq!(result["meta"]["query"], "service:web");
+    }
+}
+
+#[tokio::test]
+async fn incident_detail_preserves_requested_included_resources() {
+    use clap::Parser;
+    use datadog_cli::cli::{Cli, Command, IncidentsAction};
+    use datadog_cli::handlers::incidents::IncidentsHandler;
+    let server = MockServer::start().await;
+    let data = json!({"id":"incident-1", "type":"incidents", "relationships":{"commander_user":{"data":{"id":"user-1", "type":"users"}}}});
+    let included =
+        json!([{"id":"user-1", "type":"users", "attributes":{"name":"Incident Commander"}}]);
+    Mock::given(path("/api/v2/incidents/incident-1"))
+        .and(query_param("include", "users"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"data":data, "included":included})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let Command::Incidents {
+        action: IncidentsAction::Get(args),
+    } = Cli::try_parse_from([
+        "datadog-cli",
+        "incidents",
+        "get",
+        "incident-1",
+        "--include",
+        "users",
+    ])
+    .unwrap()
+    .command
+    else {
+        panic!()
+    };
+    let result = IncidentsHandler::get(&client_for(&server, 0), &args)
+        .await
+        .unwrap();
+    assert_eq!(result["data"], data);
+    assert_eq!(result["meta"]["included"], included);
+}

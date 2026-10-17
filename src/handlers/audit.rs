@@ -39,9 +39,12 @@ impl AuditHandler {
 
         let pagination = PaginationInfo::from_cursor(returned, args.limit as usize, next_cursor);
 
-        Ok(json!({
-            "data": data,
-            "pagination": pagination
-        }))
+        Ok(handler.with_api_meta(
+            json!({
+                "data": data,
+                "pagination": pagination
+            }),
+            response.get("meta").cloned(),
+        ))
     }
 }

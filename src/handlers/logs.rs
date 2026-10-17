@@ -79,10 +79,13 @@ impl LogsHandler {
 
         let pagination = PaginationInfo::from_cursor(logs.len(), args.limit as usize, next_cursor);
 
-        Ok(json!({
-            "data": logs,
-            "pagination": pagination
-        }))
+        Ok(handler.with_api_meta(
+            json!({
+                "data": logs,
+                "pagination": pagination
+            }),
+            response.meta.map(serde_json::to_value).transpose()?,
+        ))
     }
 
     pub async fn aggregate(client: &DatadogClient, args: &LogsAggregateArgs) -> Result<Value> {
@@ -117,7 +120,10 @@ impl LogsHandler {
             "buckets_count": buckets_count
         });
 
-        Ok(handler.format_list(data, None, Some(meta)))
+        Ok(handler.with_api_meta(
+            handler.format_list(data, None, Some(meta)),
+            response.get("meta").cloned(),
+        ))
     }
 
     pub async fn timeseries(client: &DatadogClient, args: &LogsTimeseriesArgs) -> Result<Value> {
@@ -154,7 +160,10 @@ impl LogsHandler {
             "buckets_count": buckets_count
         });
 
-        Ok(handler.format_list(data, None, Some(meta)))
+        Ok(handler.with_api_meta(
+            handler.format_list(data, None, Some(meta)),
+            response.get("meta").cloned(),
+        ))
     }
 }
 

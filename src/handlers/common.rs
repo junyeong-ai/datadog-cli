@@ -206,6 +206,13 @@ pub trait ResponseFilter {
 }
 
 pub trait ResponseFormatter {
+    fn with_api_meta(&self, mut output: Value, meta: Option<Value>) -> Value {
+        if let Some(meta) = meta.filter(|meta| !meta.is_null()) {
+            output["meta"]["api"] = meta;
+        }
+        output
+    }
+
     fn format_list(&self, data: Value, pagination: Option<Value>, meta: Option<Value>) -> Value {
         let mut response = json!({ "data": data });
 

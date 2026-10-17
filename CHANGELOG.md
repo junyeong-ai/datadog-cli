@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-10-17
+
+### Changed
+
+- RUM records preserve the full event details map at `attributes`, including application, view, session, resource, error, and custom fields. Stack truncation and `--full-stack-trace` apply to `attributes.error.stack`.
+- Rust RUM models follow the official nested API schema. The separate detail models were removed; cursor metadata and page models now retain extension fields in `extra` maps.
+
+### Fixed
+
+- Cursor searches and log aggregations retain server metadata at `meta.api`. Server timeouts and response warnings are also written to stderr independently of logging filters, including JSONL and table output. Nonfatal warnings retain successful partial results and exit code 0.
+- Incident detail queries preserve requested related resources at `meta.included`, consistently with incident lists.
+
 ## [0.5.0] - 2026-10-17
 
 ### Changed

@@ -42,6 +42,11 @@ impl IncidentsHandler {
             .await?;
         let data = response.get("data").cloned().unwrap_or(Value::Null);
 
-        Ok(handler.format_detail(data))
+        let meta = response
+            .get("included")
+            .filter(|value| !value.is_null())
+            .map(|included| json!({ "included": included }));
+
+        Ok(handler.format_list(data, None, meta))
     }
 }

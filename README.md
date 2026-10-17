@@ -19,7 +19,7 @@ curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/script
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
-DATADOG_CLI_VERSION=0.5.0 bash install.sh
+DATADOG_CLI_VERSION=0.6.0 bash install.sh
 ```
 
 소스 빌드는 Rustup과 C 빌드 도구가 필요합니다. 개발 도구체인은 `rust-toolchain.toml`의 Rust 1.99.1이며, 최소 지원 버전은 Rust 1.97입니다.
@@ -96,6 +96,13 @@ datadog-cli config edit   # 위 경로를 $EDITOR로 열기; 기본값 vim
 
 `config init`은 전역 파일을 만듭니다. `DD_TAG_FILTER`는 기본 태그 필터, `RUST_LOG`는 로그 수준을 설정합니다.
 지원 사이트와 전체 옵션은 [명령 참조](.claude/skills/datadog-query/reference.md)를 확인하세요.
+
+## 0.6 업그레이드
+
+RUM 상세 속성은 레코드의 `attributes`에 보존됩니다. 오류 스택은 `.data[].attributes.error.stack`, 페이지 정보는 `.data[].attributes.view`에서 확인하세요. `--full-stack-trace`는 이 오류 스택에 적용됩니다.
+조회 API의 상태·경고·요청 ID 등 서버 메타데이터는 `.meta.api`에 보존합니다. 서버 timeout과 응답 경고는 모든 출력 형식에서 stderr에도 표시되며, 비치명 경고가 있는 부분 결과의 종료 코드는 0입니다. 경고가 있는 집계를 전체 건수로 해석하지 마세요.
+Incident 목록·상세 조회의 `--include` 리소스는 `.meta.included`에 있습니다. 메타데이터가 필요한 스크립트는 `--format json`을 사용하세요.
+Rust `RumAttributes`는 공식 API 구조를 따르며 상세 속성은 `attributes` 맵에 있습니다. 기존 `RumApplication` 등 별도 상세 모델은 제거됐고, `CursorMeta`·`CursorPage`는 확장 필드를 `extra` 맵에 보존합니다.
 
 ## 0.5 업그레이드
 

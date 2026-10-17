@@ -622,6 +622,7 @@ pub async fn run(cli: Cli) -> Result<()> {
         output::Format::from_str(format_str).map_err(crate::error::DatadogError::InvalidInput)?;
 
     let result = commands::execute(&cli.command, &client).await?;
+    output::print_api_diagnostics(&result)?;
     if matches!(cli.command, Command::Scalar(_)) {
         output::print_scalar(&result, &format)?;
     } else {

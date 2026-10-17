@@ -19,6 +19,36 @@ impl Format {
     }
 }
 
+pub fn print_api_diagnostics(data: &Value) -> io::Result<()> {
+    let stderr = io::stderr();
+    write_api_diagnostics(data, &mut stderr.lock())
+}
+
+fn write_api_diagnostics(data: &Value, writer: &mut impl Write) -> io::Result<()> {
+    let result = (|| -> io::Result<()> {
+        let meta = &data["meta"]["api"];
+        if meta["status"].as_str() == Some("timeout") {
+            writeln!(
+                writer,
+                "Warning: Datadog response timed out; results may be incomplete"
+            )?;
+        }
+        if let Some(warnings) = meta["warnings"].as_array() {
+            for warning in warnings {
+                writeln!(
+                    writer,
+                    "Warning: Datadog returned a response warning: {warning}"
+                )?;
+            }
+        }
+        Ok(())
+    })();
+    match result {
+        Err(error) if error.kind() == io::ErrorKind::BrokenPipe => Ok(()),
+        result => result,
+    }
+}
+
 pub fn print(data: &Value, format: &Format) -> io::Result<()> {
     let stdout = io::stdout();
     let mut writer = io::BufWriter::new(stdout.lock());
@@ -167,6 +197,80 @@ fn format_value(value: Option<&Value>) -> String {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn api_diagnostics_are_explicit_and_independent_of_the_record_format() {
+        let data = json!({
+            "data": [{"message":"timeout", "warnings":["record warning"]}],
+            "meta": {"api": {"status":"timeout", "warnings":[{"code":"partial", "detail":"line one\nline two"}]}}
+        });
+        for format in [Format::Json, Format::JsonLines, Format::Table] {
+            let mut diagnostics = Vec::new();
+            write_api_diagnostics(&data, &mut diagnostics).unwrap();
+            let diagnostics = String::from_utf8(diagnostics).unwrap();
+            assert_eq!(diagnostics.lines().count(), 2);
+            assert!(diagnostics.contains("results may be incomplete"));
+            assert!(diagnostics.contains("partial"));
+            let mut output = Vec::new();
+            write(&data, &format, &mut output, false).unwrap();
+            let output = String::from_utf8(output).unwrap();
+            assert!(!output.contains("Warning:"));
+            if matches!(format, Format::JsonLines) {
+                assert_eq!(
+                    serde_json::from_str::<Value>(&output).unwrap(),
+                    data["data"][0]
+                );
+            }
+        }
+        for meta in [
+            json!({}),
+            json!({"status":"done", "warnings":[]}),
+            json!({"status":"future-status"}),
+        ] {
+            let mut diagnostics = Vec::new();
+            write_api_diagnostics(
+                &json!({"data":[{"status":"timeout", "warnings":["custom"]}], "meta":{"api":meta}}),
+                &mut diagnostics,
+            )
+            .unwrap();
+            assert!(diagnostics.is_empty());
+        }
+        for meta in [
+            json!({"warnings":[{"code":"partial"}]}),
+            json!({"status":"timeout"}),
+        ] {
+            let mut diagnostics = Vec::new();
+            write_api_diagnostics(&json!({"meta":{"api":meta}}), &mut diagnostics).unwrap();
+            assert_eq!(String::from_utf8(diagnostics).unwrap().lines().count(), 1);
+        }
+    }
+
+    #[test]
+    fn closed_diagnostic_pipes_do_not_discard_results() {
+        struct Failed(io::ErrorKind);
+        impl Write for Failed {
+            fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+                Err(self.0.into())
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+        let data = json!({"data":[{"id":1}], "meta":{"api":{"status":"timeout"}}});
+        write_api_diagnostics(&data, &mut Failed(io::ErrorKind::BrokenPipe)).unwrap();
+        let mut output = Vec::new();
+        write(&data, &Format::JsonLines, &mut output, false).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<Value>(&output).unwrap(),
+            json!({"id":1})
+        );
+        assert_eq!(
+            write_api_diagnostics(&data, &mut Failed(io::ErrorKind::PermissionDenied))
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::PermissionDenied
+        );
+    }
 
     #[test]
     fn jsonlines_preserves_records_without_metadata() {

@@ -19,7 +19,7 @@ The accompanying skill comes from the same release tag. Non-interactive installa
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
-DATADOG_CLI_VERSION=0.5.0 bash install.sh
+DATADOG_CLI_VERSION=0.6.0 bash install.sh
 ```
 
 Source builds require Rustup and C build tools. Development uses Rust 1.99.1 from `rust-toolchain.toml`; the minimum supported Rust version is 1.97.
@@ -96,6 +96,13 @@ datadog-cli config edit   # Open that path in $EDITOR; defaults to vim
 
 `config init` creates the global file. `DD_TAG_FILTER` sets the default tag filter; `RUST_LOG` sets the log level.
 See the [command reference](.claude/skills/datadog-query/reference.md) for supported sites and options.
+
+## Upgrading to 0.6
+
+RUM event details are preserved in each record's `attributes`: read `.data[].attributes.error.stack` for error stacks and `.data[].attributes.view` for page details. `--full-stack-trace` applies to that error stack.
+Server query metadata, including status, warnings, and request IDs, is preserved at `.meta.api`. Server timeouts and response warnings also appear on stderr in every output format. Partial results with nonfatal warnings retain exit code 0; do not interpret a warned aggregate as a complete count.
+Incident list and detail `--include` resources are available at `.meta.included`. Use `--format json` when scripts need metadata.
+Rust `RumAttributes` follows the API schema, with event details in its `attributes` map. The separate detail models such as `RumApplication` were removed; `CursorMeta` and `CursorPage` preserve extension fields in an `extra` map.
 
 ## Upgrading to 0.5
 

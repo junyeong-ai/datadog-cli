@@ -14,6 +14,8 @@ Use `datadog-cli <command> --help` or the relevant section in [reference.md](ref
 
 - Select the narrowest useful service, environment, and time window. Time inputs accept relative expressions, RFC3339, or Unix seconds.
 - Use `--format json` when pagination or metadata matters. Use `--format jsonl` for record pipelines. Global flags work before or after subcommands; diagnostics go to stderr.
+- Inspect `.meta.api.status` and `.meta.api.warnings` in JSON. Server timeouts and warnings are also reported on stderr in every format, even when the command exits 0. Treat warned results as potentially incomplete; do not interpret warned aggregates as complete counts.
+- RUM details are at `.attributes`, including `.attributes.error.stack` and `.attributes.view`. Incident `--include` resources are at `.meta.included` in JSON.
 - Search commands return one page. State when results are sampled or incomplete; never interpret a limited sample as a total. Use `logs aggregate` for log counts.
 - Cursor searches return `.pagination.next_cursor`; pass it back with `--cursor`. Fix absolute time bounds across pages, bound requests to the investigation, and stop on API errors or a repeated cursor. Offset/page-number commands have different flags; error-tracking search has no pagination.
 - Logs expose fields such as `.service` and `.message` at record level. Spans preserve the API envelope: read `.attributes.service`, not `.service`. Inspect a record before assuming optional/custom field paths. Log output does not currently expose trace IDs.
