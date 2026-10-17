@@ -3,7 +3,7 @@ set -euo pipefail
 
 BINARY_NAME="datadog-cli"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
-USER_SKILL_DIR="$HOME/.claude/skills/datadog-query"
+USER_SKILL_DIR="${DATADOG_CLI_SKILL_DIR:-$HOME/.claude/skills/datadog-query}"
 
 prompt_choice() {
     local prompt="$1"

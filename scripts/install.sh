@@ -6,7 +6,7 @@ INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 REPO="junyeong-ai/datadog-cli"
 SKILL_NAME="datadog-query"
 SKILL_FILES=("SKILL.md" "reference.md" "examples.md")
-USER_SKILL_DIR="$HOME/.claude/skills/$SKILL_NAME"
+USER_SKILL_DIR="${DATADOG_CLI_SKILL_DIR:-$HOME/.claude/skills/$SKILL_NAME}"
 SCRIPT_PATH="${BASH_SOURCE[0]:-$0}"
 ORIGINAL_DIR="$(pwd)"
 if SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" 2>/dev/null && pwd -P)"; then
@@ -102,10 +102,7 @@ get_latest_version() {
             ;;
     esac
 
-    curl -sf "https://api.github.com/repos/$REPO/releases/latest" \
-        | grep '"tag_name"' \
-        | sed -E 's/.*"v([^"]+)".*/\1/' \
-        || echo ""
+    return 1
 }
 
 download_binary() {
@@ -180,7 +177,7 @@ build_from_source() {
     fi
 
     echo "🔨 Building from source..." >&2
-    if ! (cd "$PROJECT_ROOT" && cargo +1.97.0 build --release) >&2; then
+    if ! (cd "$PROJECT_ROOT" && cargo build --release --locked) >&2; then
         echo "❌ Build failed" >&2
         exit 1
     fi
@@ -191,63 +188,25 @@ install_binary() {
     local binary_path="$1"
 
     mkdir -p "$INSTALL_DIR"
-    cp "$binary_path" "$INSTALL_DIR/$BINARY_NAME"
-    chmod +x "$INSTALL_DIR/$BINARY_NAME"
-
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        codesign --force --deep --sign - "$INSTALL_DIR/$BINARY_NAME" 2>/dev/null || true
+    local staged_binary
+    staged_binary=$(mktemp "$INSTALL_DIR/.$BINARY_NAME.XXXXXX")
+    if ! cp "$binary_path" "$staged_binary" || ! chmod +x "$staged_binary" || ! mv -f "$staged_binary" "$INSTALL_DIR/$BINARY_NAME"; then
+        rm -f "$staged_binary"
+        return 1
     fi
 
     echo "✅ Installed to $INSTALL_DIR/$BINARY_NAME" >&2
 }
 
-get_skill_version() {
-    local skill_md="$1"
-    [ -f "$skill_md" ] && grep "^version:" "$skill_md" 2>/dev/null | sed 's/version: *//' || echo "unknown"
-}
-
 check_skill_exists() {
-    [ -d "$USER_SKILL_DIR" ] && [ -f "$USER_SKILL_DIR/SKILL.md" ]
+    [ -f "$USER_SKILL_DIR/SKILL.md" ]
 }
 
-compare_versions() {
-    local ver1="$1"
-    local ver2="$2"
-    local key1
-    local key2
-
-    if [ "$ver1" = "$ver2" ]; then
-        echo "equal"
-    elif [ "$ver1" = "unknown" ] || [ "$ver2" = "unknown" ]; then
-        echo "unknown"
-    elif ! key1=$(version_key "$ver1") || ! key2=$(version_key "$ver2"); then
-        echo "unknown"
-    elif [[ "$key1" < "$key2" ]]; then
-        echo "older"
-    elif [[ "$key1" > "$key2" ]]; then
-        echo "newer"
-    else
-        echo "equal"
-    fi
-}
-
-version_key() {
-    local version="${1#v}"
-    local major
-    local minor
-    local patch
-
-    version="${version%%[-+]*}"
-    IFS=. read -r major minor patch _ <<<"$version"
-    major="${major:-0}"
-    minor="${minor:-0}"
-    patch="${patch:-0}"
-
-    [[ "$major" =~ ^[0-9]+$ ]] || return 1
-    [[ "$minor" =~ ^[0-9]+$ ]] || return 1
-    [[ "$patch" =~ ^[0-9]+$ ]] || return 1
-
-    printf '%09d.%09d.%09d\n' "$major" "$minor" "$patch"
+skills_match() {
+    local file
+    for file in "${SKILL_FILES[@]}"; do
+        cmp -s "$SKILL_SOURCE_DIR/$file" "$USER_SKILL_DIR/$file" || return 1
+    done
 }
 
 backup_skill() {
@@ -263,9 +222,15 @@ backup_skill() {
 
 install_skill() {
     echo "📋 Installing skill to $USER_SKILL_DIR" >&2
+    local staged_skill
     mkdir -p "$(dirname "$USER_SKILL_DIR")"
+    staged_skill=$(mktemp -d "$(dirname "$USER_SKILL_DIR")/.datadog-query.XXXXXX")
+    if ! cp -R "$SKILL_SOURCE_DIR/." "$staged_skill/"; then
+        rm -rf "$staged_skill"
+        return 1
+    fi
     rm -rf "$USER_SKILL_DIR"
-    cp -r "$SKILL_SOURCE_DIR" "$USER_SKILL_DIR"
+    mv "$staged_skill" "$USER_SKILL_DIR"
     echo "   ✅ Skill installed" >&2
 }
 
@@ -286,7 +251,7 @@ fetch_skill_files() {
 prepare_skill_source() {
     local ref="$1"
 
-    if [ -f "$PROJECT_SKILL_DIR/SKILL.md" ]; then
+    if [ "$ref" = "main" ] && [ -f "$PROJECT_SKILL_DIR/SKILL.md" ]; then
         SKILL_SOURCE_DIR="$PROJECT_SKILL_DIR"
         return 0
     fi
@@ -296,13 +261,6 @@ prepare_skill_source() {
     mkdir -p "$SKILL_SOURCE_DIR"
 
     if ! fetch_skill_files "$ref"; then
-        if [ "$ref" != "main" ]; then
-            echo "⚠️  Skill not found at $ref; trying main" >&2
-            if fetch_skill_files "main"; then
-                return 0
-            fi
-        fi
-
         rm -rf "$SKILL_TMP_DIR"
         SKILL_TMP_DIR=""
         SKILL_SOURCE_DIR=""
@@ -322,83 +280,25 @@ prompt_skill_installation() {
         return 0
     fi
 
-    local project_version
-    project_version=$(get_skill_version "$SKILL_SOURCE_DIR/SKILL.md")
-
     echo "" >&2
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
-    echo "🤖 Claude Code Skill Installation" >&2
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
-    echo "" >&2
-    echo "Skill: $SKILL_NAME (v$project_version)" >&2
-    echo "" >&2
-
+    echo "🤖 Datadog query skill ($ref)" >&2
     if check_skill_exists; then
-        local existing_version
-        local comparison
-        existing_version=$(get_skill_version "$USER_SKILL_DIR/SKILL.md")
-        comparison=$(compare_versions "$existing_version" "$project_version")
-
-        echo "Status: Already installed (v$existing_version)" >&2
-        echo "" >&2
-
-        case "$comparison" in
-            equal)
-                echo "✅ Latest version installed" >&2
-                echo "" >&2
-                choice=$(prompt_choice "Reinstall? [y/N]: " "")
-                [[ "$choice" =~ ^[yY]$ ]] && { backup_skill; rm -rf "$USER_SKILL_DIR"; install_skill; } || echo "   ⏭️  Skipped" >&2
-                ;;
-            older)
-                echo "🔄 New version available: v$project_version" >&2
-                echo "" >&2
-                choice=$(prompt_choice "Update? [Y/n]: " "")
-                [[ ! "$choice" =~ ^[nN]$ ]] && { backup_skill; rm -rf "$USER_SKILL_DIR"; install_skill; echo "   ✅ Updated to v$project_version" >&2; } || echo "   ⏭️  Keeping current version" >&2
-                ;;
-            newer)
-                echo "⚠️  Installed version (v$existing_version) > project version (v$project_version)" >&2
-                echo "" >&2
-                choice=$(prompt_choice "Downgrade? [y/N]: " "")
-                [[ "$choice" =~ ^[yY]$ ]] && { backup_skill; rm -rf "$USER_SKILL_DIR"; install_skill; } || echo "   ⏭️  Keeping current version" >&2
-                ;;
-            *)
-                echo "⚠️  Version comparison failed" >&2
-                echo "" >&2
-                choice=$(prompt_choice "Reinstall? [y/N]: " "")
-                [[ "$choice" =~ ^[yY]$ ]] && { backup_skill; rm -rf "$USER_SKILL_DIR"; install_skill; } || echo "   ⏭️  Skipped" >&2
-                ;;
-        esac
+        if skills_match; then
+            echo "✅ Matching skill already installed" >&2
+            return 0
+        fi
+        choice=$(prompt_choice "Replace installed skill with $ref? [Y/n]: " "")
+        if [[ "$choice" =~ ^[nN]$ ]]; then
+            echo "⏭️  Keeping installed skill" >&2
+            return 0
+        fi
+        backup_skill
+        install_skill
     else
-        echo "Installation options:" >&2
-        echo "" >&2
-        echo "  [1] User-level install (RECOMMENDED)" >&2
-        echo "      → ~/.claude/skills/ (available in all projects)" >&2
-        echo "" >&2
-        echo "  [2] Skip" >&2
-        echo "" >&2
-
-        choice=$(prompt_choice "Choose [1-2] (default: 1): " "1")
-        case "$choice" in
-            2)
-                echo "" >&2
-                echo "⏭️  Skipped" >&2
-                ;;
-            1|"")
-                echo "" >&2
-                install_skill
-                echo "" >&2
-                echo "🎉 Skill installed successfully!" >&2
-                echo "" >&2
-                echo "Claude Code can now:" >&2
-                echo "  • Execute Datadog queries automatically" >&2
-                echo "  • Parse natural language time expressions" >&2
-                echo "  • Search logs, metrics, traces, and RUM events" >&2
-                ;;
-            *)
-                echo "" >&2
-                echo "❌ Invalid choice. Skipped." >&2
-                ;;
-        esac
+        choice=$(prompt_choice "Install query skill to $USER_SKILL_DIR? [Y/n]: " "")
+        if [[ ! "$choice" =~ ^[nN]$ ]]; then
+            install_skill
+        fi
     fi
 
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
@@ -423,53 +323,60 @@ main() {
         version=""
     fi
 
-    if command -v curl >/dev/null; then
-        if [ -z "$version" ]; then
-            version=$(get_latest_version)
-            version="${version#v}"
-        fi
-
-        if [ -n "$version" ] && ! is_valid_release_version "$version"; then
-            echo "❌ Invalid release version: $version" >&2
-            exit 1
-        fi
-
-        if [ -n "$version" ]; then
-            skill_ref="v$version"
-            echo "Version: v$version" >&2
-        else
-            echo "Version: latest release" >&2
-        fi
-        echo "" >&2
-        echo "Installation method:" >&2
-        echo "  [1] Download prebuilt binary (RECOMMENDED - fast)" >&2
-        echo "  [2] Build from source (requires Rust 1.97.0 toolchain)" >&2
-        echo "" >&2
-        method=$(prompt_choice "Choose [1-2] (default: 1): " "1")
-
-        case "$method" in
-            2)
-                binary_path=$(build_from_source)
-                ;;
-            1|"")
-                binary_path=$(download_binary "$version" "$target") || {
-                    echo "⚠️  Download failed, falling back to source build" >&2
-                    binary_path=$(build_from_source)
-                }
-                binary_dir="$(dirname "$binary_path")"
-                case "$(basename "$binary_dir")" in
-                    datadog-cli-install.*) BINARY_TMP_DIR="$binary_dir" ;;
-                esac
-                ;;
-            *)
-                echo "❌ Invalid choice" >&2
-                exit 1
-                ;;
-        esac
-    else
-        [ -z "$version" ] && echo "⚠️  Cannot fetch latest version, building from source" >&2
-        binary_path=$(build_from_source)
+    case "${1:-}" in
+        --source) method=2 ;;
+        --help)
+            echo "Usage: install.sh [--source]" >&2
+            echo "DATADOG_CLI_VERSION selects a prebuilt release; INSTALL_DIR selects the destination." >&2
+            return 0
+            ;;
+        "")
+            echo "Installation method:" >&2
+            echo "  [1] Download prebuilt binary" >&2
+            echo "  [2] Build this checkout with rust-toolchain.toml" >&2
+            method=$(prompt_choice "Choose [1-2] (default: 1): " "1")
+            ;;
+        *) echo "Unknown option: $1" >&2; return 1 ;;
+    esac
+    if [ "$#" -gt 1 ]; then
+        echo "Usage: install.sh [--source]" >&2
+        return 1
     fi
+
+    case "$method" in
+        2)
+            if [ -n "$version" ]; then
+                echo "❌ --source builds the current checkout; DATADOG_CLI_VERSION only selects prebuilt binaries." >&2
+                return 1
+            fi
+            binary_path=$(build_from_source)
+            ;;
+        1|"")
+            if ! command -v curl >/dev/null; then
+                echo "❌ curl is required for binary installation. Use --source from a checkout to build locally." >&2
+                return 1
+            fi
+            if [ -z "$version" ]; then
+                if ! version=$(get_latest_version); then
+                    echo "❌ Cannot determine the latest release. Set DATADOG_CLI_VERSION explicitly." >&2
+                    return 1
+                fi
+                version="${version#v}"
+            fi
+            if ! is_valid_release_version "$version"; then
+                echo "❌ Invalid release version: $version" >&2
+                return 1
+            fi
+            skill_ref="v$version"
+            echo "Version: $skill_ref" >&2
+            binary_path=$(download_binary "$version" "$target") || return 1
+            binary_dir="$(dirname "$binary_path")"
+            case "$(basename "$binary_dir")" in
+                datadog-cli-install.*) BINARY_TMP_DIR="$binary_dir" ;;
+            esac
+            ;;
+        *) echo "❌ Invalid installation method" >&2; return 1 ;;
+    esac
 
     install_binary "$binary_path"
 
@@ -511,4 +418,4 @@ main() {
     echo "" >&2
 }
 
-main
+main "$@"

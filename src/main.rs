@@ -7,9 +7,20 @@ use std::process;
 async fn main() {
     let cli = datadog_cli::cli::Cli::parse();
 
-    init_logging(cli.verbose);
-
-    if let Err(e) = datadog_cli::cli::run(cli).await {
+    let result = async {
+        init_logging(cli.verbose)?;
+        tokio::select! {
+            result = datadog_cli::cli::run(cli) => result,
+            signal = tokio::signal::ctrl_c() => {
+                match signal {
+                    Ok(()) => process::exit(130),
+                    Err(error) => Err(DatadogError::IoError(error)),
+                }
+            }
+        }
+    }
+    .await;
+    if let Err(e) = result {
         // A closed stdout (e.g. piping into `head`) is normal pipeline
         // behavior, not an error.
         if let DatadogError::IoError(ref io) = e
@@ -23,18 +34,44 @@ async fn main() {
     }
 }
 
-fn init_logging(verbose: bool) {
-    use tracing_subscriber::{EnvFilter, fmt};
+fn logging_filter(
+    verbose: bool,
+    directives: &str,
+) -> Result<tracing_subscriber::EnvFilter, DatadogError> {
+    use tracing_subscriber::{EnvFilter, filter::LevelFilter};
+    EnvFilter::builder()
+        .with_default_directive(LevelFilter::WARN.into())
+        .parse(if verbose { "debug" } else { directives })
+        .map_err(|error| DatadogError::InvalidInput(format!("Invalid RUST_LOG filter: {error}")))
+}
 
-    let filter = if verbose {
-        EnvFilter::new("debug")
-    } else {
-        EnvFilter::from_default_env().add_directive("warn".parse().unwrap())
+fn init_logging(verbose: bool) -> Result<(), DatadogError> {
+    let directives = match std::env::var("RUST_LOG") {
+        Ok(value) => value,
+        Err(std::env::VarError::NotPresent) => String::new(),
+        Err(error) => {
+            return Err(DatadogError::InvalidInput(format!(
+                "Invalid RUST_LOG: {error}"
+            )));
+        }
     };
-
-    fmt()
-        .with_env_filter(filter)
+    tracing_subscriber::fmt()
+        .with_env_filter(logging_filter(verbose, &directives)?)
         .with_target(false)
         .with_writer(std::io::stderr)
-        .init();
+        .try_init()
+        .map_err(|error| DatadogError::InvalidInput(format!("Cannot initialize logging: {error}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn logging_respects_environment_and_explicit_verbosity() {
+        assert_eq!(logging_filter(false, "").unwrap().to_string(), "warn");
+        assert_eq!(logging_filter(false, "debug").unwrap().to_string(), "debug");
+        assert_eq!(logging_filter(true, "error").unwrap().to_string(), "debug");
+        assert!(logging_filter(false, "datadog_cli=invalid").is_err());
+    }
 }

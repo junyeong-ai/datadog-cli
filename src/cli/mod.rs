@@ -1,5 +1,5 @@
 mod commands;
-mod output;
+use crate::output;
 
 use clap::{Args, Parser, Subcommand};
 
@@ -19,25 +19,31 @@ pub struct Cli {
     #[arg(long, global = true, value_parser = ["json", "jsonl", "table"], help = "Output format (default from config)")]
     pub format: Option<String>,
 
-    #[arg(short = 'v', long, global = true)]
+    #[arg(short = 'v', long, global = true, help = "Enable debug logging")]
     pub verbose: bool,
 
-    #[arg(long, env = "DD_API_KEY", global = true, hide_env_values = true)]
+    #[arg(long, global = true, help = "API key (otherwise DD_API_KEY or config)")]
     pub api_key: Option<String>,
 
-    #[arg(long, env = "DD_APP_KEY", global = true, hide_env_values = true)]
+    #[arg(
+        long,
+        global = true,
+        help = "Application key (otherwise DD_APP_KEY or config)"
+    )]
     pub app_key: Option<String>,
 
     #[arg(
         long,
-        env = "DD_TOKEN",
         global = true,
-        hide_env_values = true,
         help = "Personal access token (alternative to api/app keys)"
     )]
     pub token: Option<String>,
 
-    #[arg(long, env = "DD_SITE", global = true)]
+    #[arg(
+        long,
+        global = true,
+        help = "Datadog site (otherwise DD_SITE or config)"
+    )]
     pub site: Option<String>,
 
     #[command(subcommand)]
@@ -311,7 +317,7 @@ pub struct TimeseriesArgs {
     #[arg(long, default_value = "now", help = TIME_HELP)]
     pub to: String,
 
-    #[arg(long, value_parser = clap::value_parser!(i64).range(1..), help = "Rollup interval in seconds")]
+    #[arg(long, value_parser = clap::value_parser!(i64).range(1..=i64::MAX / 1000), help = "Rollup interval in seconds")]
     pub interval: Option<i64>,
 }
 
@@ -608,7 +614,7 @@ pub enum ConfigAction {
 
 pub async fn run(cli: Cli) -> Result<()> {
     if let Command::Config { ref action } = cli.command {
-        return commands::handle_config(action);
+        return commands::handle_config(action, &cli);
     }
 
     let config = Config::load(cli.api_key, cli.app_key, cli.token, cli.site)?;

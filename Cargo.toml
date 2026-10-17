@@ -1,6 +1,6 @@
 [package]
 name = "datadog-cli"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.97"
 authors = ["Datadog CLI Contributors"]
@@ -13,26 +13,27 @@ categories = ["command-line-utilities", "api-bindings", "development-tools::prof
 readme = "README.md"
 
 [dependencies]
-tokio = { version = "1.48", features = ["rt-multi-thread", "macros", "time"] }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.145"
-reqwest = { version = "0.13.4", features = ["json", "query", "rustls"], default-features = false }
-thiserror = "2.0.17"
-chrono = { version = "0.4.42", features = ["serde"] }
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "time", "signal"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+reqwest = { version = "0.13.5", features = ["json", "query", "rustls", "system-proxy"], default-features = false }
+thiserror = "2.0.21"
+chrono = { version = "0.4.45", features = ["serde"] }
 interim = { version = "0.2.1", features = ["chrono_0_4"] }
-toml = "1.1"
-dirs = "6.0"
-tracing = "0.1.43"
-tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
-clap = { version = "4.5.53", features = ["derive", "env"] }
-comfy-table = "7.2.1"
+toml = { version = "1.1.8", default-features = false, features = ["parse", "serde", "std"] }
+dirs = "7.0.0"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+clap = { version = "4.6.7", features = ["derive"] }
+comfy-table = "8.0.1"
+fastrand = "2.5.0"
+httpdate = "1.0.3"
 
 [dev-dependencies]
+tokio = { version = "1.53.3", features = ["net", "io-util"] }
 wiremock = "0.6.5"
-criterion = { version = "0.8", features = ["async_tokio", "html_reports"] }
-tokio-test = "0.4.4"
-assert_matches = "1.5"
-serial_test = "3.2"
+criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support", "html_reports"] }
+tempfile = "3.27.0"
 
 [lib]
 name = "datadog_cli"

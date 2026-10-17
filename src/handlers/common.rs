@@ -1,5 +1,5 @@
 use crate::error::{DatadogError, Result};
-use crate::utils::parse_time;
+use crate::utils::parse_time_at;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -90,7 +90,15 @@ impl PaginationInfo {
 
 pub trait TimeHandler {
     fn parse_time_range(&self, from: &str, to: &str) -> Result<(i64, i64)> {
-        Ok((parse_time(from)?, parse_time(to)?))
+        let now = chrono::Utc::now();
+        let from = parse_time_at(from, now)?;
+        let to = parse_time_at(to, now)?;
+        if from > to {
+            return Err(DatadogError::InvalidInput(
+                "Start time must not be after end time".into(),
+            ));
+        }
+        Ok((from, to))
     }
 
     fn timestamp_to_iso8601(&self, timestamp: i64) -> Result<String> {
@@ -124,7 +132,11 @@ pub trait TagFilter {
             "*" => tags.to_vec(),
             "" => Vec::new(),
             filter => {
-                let prefixes: Vec<&str> = filter.split(',').map(str::trim).collect();
+                let prefixes: Vec<&str> = filter
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|prefix| !prefix.is_empty())
+                    .collect();
                 tags.iter()
                     .filter(|tag| prefixes.iter().any(|p| tag.starts_with(p)))
                     .cloned()
@@ -142,7 +154,11 @@ pub trait TagFilter {
             "*" => tags_map.cloned(),
             "" => None,
             filter => tags_map.map(|map| {
-                let prefixes: Vec<&str> = filter.split(',').map(str::trim).collect();
+                let prefixes: Vec<&str> = filter
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|prefix| !prefix.is_empty())
+                    .collect();
                 let mut filtered_map = HashMap::new();
 
                 for (source, tags) in map.iter() {
@@ -217,6 +233,7 @@ mod tests {
     struct TestHandler;
     impl TimeHandler for TestHandler {}
     impl ResponseFormatter for TestHandler {}
+    impl TagFilter for TestHandler {}
 
     #[test]
     fn test_time_handler_parse_time_range() {
@@ -313,5 +330,18 @@ mod tests {
 
         let response = handler.format_detail(data.clone());
         assert_eq!(response["data"], data);
+    }
+    #[test]
+    fn time_ranges_reject_reversed_boundaries() {
+        assert!(TestHandler.parse_time_range("2", "1").is_err());
+        let (from, to) = TestHandler.parse_time_range("now", "now").unwrap();
+        assert_eq!(from, to);
+    }
+
+    #[test]
+    fn empty_tag_prefixes_do_not_match_every_tag() {
+        let tags = vec!["env:prod".into(), "service:api".into()];
+        assert_eq!(TestHandler.filter_tags(&tags, "env:,"), vec!["env:prod"]);
+        assert!(TestHandler.filter_tags(&tags, ", ,").is_empty());
     }
 }

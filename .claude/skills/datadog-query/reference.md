@@ -1,524 +1,637 @@
-# Datadog CLI Command Reference
+# Datadog CLI command reference
 
-Complete syntax for all commands. **Remember**: `--format` is a global option and must be placed BEFORE the command.
+Generated from Clap with `cargo run --locked --example command_reference`.
+Global options work before or after subcommands. JSON retains pagination metadata; JSONL emits data records only.
 
----
+## `datadog-cli`
 
-## Logs
+```text
+High-performance Datadog CLI
 
-### logs search
-```bash
-datadog-cli [--format <format>] logs search [query] [OPTIONS]
+Usage: datadog-cli [OPTIONS] <COMMAND>
+
+Commands:
+  metrics         Query time series metrics
+  timeseries      Query timeseries with formulas across multiple metric queries
+  scalar          Query scalar values (single aggregate per query) with formulas
+  logs            Log operations
+  monitors        Monitor operations
+  events          Query events
+  hosts           List infrastructure hosts
+  dashboards      Dashboard operations
+  spans           Search APM spans
+  services        List services from catalog
+  rum             Search RUM events
+  slo             Service Level Objective operations
+  incidents       Incident operations (requires Incident Management)
+  error-tracking  Error Tracking operations
+  downtimes       List downtimes
+  audit           Search audit trail events
+  teams           List teams
+  llm-obs         Search LLM Observability spans (preview API, subject to change)
+  config          Config management
+  help            Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>    Output format (default from config) [possible values: json, jsonl, table]
+  -v, --verbose            Enable debug logging
+      --api-key <API_KEY>  API key (otherwise DD_API_KEY or config)
+      --app-key <APP_KEY>  Application key (otherwise DD_APP_KEY or config)
+      --token <TOKEN>      Personal access token (alternative to api/app keys)
+      --site <SITE>        Datadog site (otherwise DD_SITE or config)
+  -h, --help               Print help
+  -V, --version            Print version
 ```
 
-**Arguments:**
-- `[query]` - Log search query (default: "*")
+## `datadog-cli metrics`
 
-**Options:**
-- `--from <time>` - Start time (default: "1 hour ago")
-- `--to <time>` - End time (default: "now")
-- `--limit <n>` - Max results (default: 10)
-- `--cursor <token>` - Pagination cursor from previous response
-- `--sort <field>` - Sort order (use `--sort="-timestamp"` for descending)
-- `--storage-tier <tier>` - indexes, online-archives, or flex (default: indexes)
-- `--tag-filter "<prefixes>"` - Tag filter (e.g., "env:,service:")
+```text
+Query time series metrics
 
-**Query syntax:**
-- `status:error` - Filter by status
-- `service:api` - Filter by service
-- `status:error AND service:api` - Combine filters
-- `*` - Match all
+Usage: datadog-cli metrics [OPTIONS] <QUERY>
 
-**Example:**
-```bash
-datadog-cli --format json logs search "status:error service:api" --from "1 hour ago" --limit 20
+Arguments:
+  <QUERY>
+
+Options:
+      --from <FROM>              Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
+      --to <TO>                  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --max-points <MAX_POINTS>  Limit data points by auto-rollup
+  -h, --help                     Print help
 ```
 
----
+## `datadog-cli timeseries`
 
-### logs aggregate
-```bash
-datadog-cli [--format <format>] logs aggregate "<query>" --from "<time>" --to "<time>"
+```text
+Query timeseries with formulas across multiple metric queries
+
+Usage: datadog-cli timeseries [OPTIONS] <QUERIES>...
+
+Arguments:
+  <QUERIES>...  Metric queries, auto-named a, b, c… for formulas
+
+Options:
+      --formula <FORMULA>    Formula over query names (e.g. "a / b * 100"); repeatable
+      --from <FROM>          Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
+      --to <TO>              Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --interval <INTERVAL>  Rollup interval in seconds
+  -h, --help                 Print help
 ```
 
-**Arguments:**
-- `<query>` - Log search query (default: "*")
+## `datadog-cli scalar`
 
-**Options:**
-- `--from <time>` - Start time (required)
-- `--to <time>` - End time (required)
+```text
+Query scalar values (single aggregate per query) with formulas
 
-**Note:** Returns basic count only, no grouping/sorting.
+Usage: datadog-cli scalar [OPTIONS] <QUERIES>...
 
-**Example:**
-```bash
-datadog-cli --format json logs aggregate "status:error" --from "1 hour ago" --to "now"
+Arguments:
+  <QUERIES>...  Metric queries, auto-named a, b, c… for formulas
+
+Options:
+      --formula <FORMULA>        Formula over query names (e.g. "a / b * 100"); repeatable
+      --aggregator <AGGREGATOR>  Aggregator applied over the time window [default: avg] [possible values: avg, min, max, sum, last, percentile, mean, l2norm, area]
+      --from <FROM>              Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
+      --to <TO>                  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+  -h, --help                     Print help
 ```
 
----
+## `datadog-cli logs`
 
-### logs timeseries
-```bash
-datadog-cli [--format <format>] logs timeseries "<query>" --from "<time>" --to "<time>" [OPTIONS]
+```text
+Log operations
+
+Usage: datadog-cli logs <COMMAND>
+
+Commands:
+  search      Search logs
+  aggregate   Aggregate logs into buckets
+  timeseries  Generate log timeseries
+  help        Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help
 ```
 
-**Arguments:**
-- `<query>` - Log search query (default: "*")
+## `datadog-cli logs search`
 
-**Options:**
-- `--from <time>` - Start time (required)
-- `--to <time>` - End time (required)
-- `--interval "<duration>"` - Time bucket (default: "1h")
-- `--aggregation "<type>"` - Aggregation type (default: "count")
-- `--metric "<field>"` - Field to aggregate (required for avg/sum/min/max/pc95)
+```text
+Search logs
 
-**Example:**
-```bash
-datadog-cli --format json logs timeseries "service:api" \
-  --from "6 hours ago" --to "now" \
-  --interval "1h" --aggregation "count"
+Usage: datadog-cli logs search [OPTIONS] [QUERY]
+
+Arguments:
+  [QUERY]  [default: *]
+
+Options:
+      --from <FROM>                  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
+      --to <TO>                      Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --limit <LIMIT>                [default: 10]
+      --cursor <CURSOR>              Pagination cursor from previous response
+      --sort <SORT>                  Sort order (use --sort="-timestamp" for descending)
+      --storage-tier <STORAGE_TIER>  Storage tier to search (default: indexes) [possible values: indexes, online-archives, flex]
+      --tag-filter <TAG_FILTER>      Tag prefixes to include (default from config)
+  -h, --help                         Print help
 ```
 
----
+## `datadog-cli logs aggregate`
 
-## Metrics
+```text
+Aggregate logs into buckets
 
-```bash
-datadog-cli [--format <format>] metrics "<query>" [OPTIONS]
+Usage: datadog-cli logs aggregate [OPTIONS] [QUERY]
+
+Arguments:
+  [QUERY]  [default: *]
+
+Options:
+      --from <FROM>  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
+      --to <TO>      Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+  -h, --help         Print help
 ```
 
-**Arguments:**
-- `<query>` - Metrics query (required)
+## `datadog-cli logs timeseries`
 
-**Query format:** `<aggregator>:<metric>{<scope>}[ by {<tag>}]`
+```text
+Generate log timeseries
 
-**Examples:**
-- `avg:system.cpu.user{*}` - Average across all hosts
-- `avg:system.cpu.user{service:web}` - Filtered by service
-- `avg:system.cpu.user{*} by {service}` - Grouped by service
-- `sum:system.mem.used{env:prod}` - Sum of memory usage
+Usage: datadog-cli logs timeseries [OPTIONS] [QUERY]
 
-**Options:**
-- `--from <time>` - Start time (default: "1 hour ago")
-- `--to <time>` - End time (default: "now")
-- `--max-points <n>` - Downsample for large time ranges
+Arguments:
+  [QUERY]  [default: *]
 
-**Example:**
-```bash
-datadog-cli --format json metrics "avg:system.cpu.user{*}" --from "1 hour ago"
+Options:
+      --from <FROM>                Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
+      --to <TO>                    Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --interval <INTERVAL>        Rollup interval (e.g., 5m, 1h, 1d) [default: 1h]
+      --aggregation <AGGREGATION>  Aggregation type (count, avg, sum, min, max) [default: count]
+      --metric <METRIC>            Metric field for aggregation
+  -h, --help                       Print help
 ```
 
----
+## `datadog-cli monitors`
 
-## Monitoring
+```text
+Monitor operations
 
-### monitors list
-```bash
-datadog-cli [--format <format>] monitors list [OPTIONS]
+Usage: datadog-cli monitors <COMMAND>
+
+Commands:
+  list  List monitors
+  get   Get monitor details
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help
 ```
 
-**Options:**
-- `--tags "<tags>"` - Filter by tags
-- `--monitor-tags "<tags>"` - Filter by monitor tags
-- `--page <n>` - Page number (default: 0)
-- `--page-size <n>` - Results per page (default: 100)
+## `datadog-cli monitors list`
 
-**Example:**
-```bash
-datadog-cli --format json monitors list --tags "env:prod" --page-size 50
+```text
+List monitors
+
+Usage: datadog-cli monitors list [OPTIONS]
+
+Options:
+      --tags <TAGS>                  Filter by resource tags
+      --monitor-tags <MONITOR_TAGS>  Filter by monitor tags
+      --page <PAGE>                  Page number [default: 0]
+      --page-size <PAGE_SIZE>        Results per page [default: 100]
+  -h, --help                         Print help
 ```
 
----
+## `datadog-cli monitors get`
 
-### monitors get
-```bash
-datadog-cli [--format <format>] monitors get <id>
+```text
+Get monitor details
+
+Usage: datadog-cli monitors get <MONITOR_ID>
+
+Arguments:
+  <MONITOR_ID>
+
+Options:
+  -h, --help  Print help
 ```
 
-**Arguments:**
-- `<id>` - Monitor ID (required)
+## `datadog-cli events`
 
-**Example:**
-```bash
-datadog-cli --format json monitors get 12345678
+```text
+Query events
+
+Usage: datadog-cli events [OPTIONS] [QUERY]
+
+Arguments:
+  [QUERY]  Event search query (e.g. "source:alert status:error") [default: *]
+
+Options:
+      --from <FROM>      Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
+      --to <TO>          Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --limit <LIMIT>    [default: 10]
+      --cursor <CURSOR>  Pagination cursor from previous response
+      --sort <SORT>      Sort order (use --sort="-timestamp" for descending)
+  -h, --help             Print help
 ```
 
----
+## `datadog-cli hosts`
 
-### events
-```bash
-datadog-cli [--format <format>] events "<query>" [OPTIONS]
+```text
+List infrastructure hosts
+
+Usage: datadog-cli hosts [OPTIONS]
+
+Options:
+      --filter <FILTER>          Filter hosts by name, alias, or tag
+      --from <FROM>              Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
+      --sort-field <SORT_FIELD>  Sort field (e.g., cpu, iowait, load)
+      --sort-dir <SORT_DIR>      Sort direction (asc, desc)
+      --start <START>            Pagination offset [default: 0]
+      --count <COUNT>            Results per page (max 1000) [default: 100]
+      --tag-filter <TAG_FILTER>  Tag prefixes to include (default from config)
+  -h, --help                     Print help
 ```
 
-**Arguments:**
-- `<query>` - Event search query, v2 syntax (default: "*"; e.g. "source:alert status:error")
+## `datadog-cli dashboards`
 
-**Options:**
-- `--from <time>` - Start time (default: "1 hour ago")
-- `--to <time>` - End time (default: "now")
-- `--limit <n>` - Max results (default: 10)
-- `--cursor "<token>"` - Pagination cursor (from `.pagination.next_cursor`)
-- `--sort "<field>"` - `timestamp` or `-timestamp`
+```text
+Dashboard operations
 
-**Example:**
-```bash
-datadog-cli --format json events "source:alert" --from "1 hour ago"
+Usage: datadog-cli dashboards <COMMAND>
+
+Commands:
+  list  List dashboards
+  get   Get dashboard details
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help
 ```
 
----
+## `datadog-cli dashboards list`
 
-## Infrastructure
+```text
+List dashboards
 
-### hosts
-```bash
-datadog-cli [--format <format>] hosts [OPTIONS]
+Usage: datadog-cli dashboards list [OPTIONS]
+
+Options:
+      --count <COUNT>   Results per page [default: 100]
+      --start <START>   Pagination offset [default: 0]
+      --filter-shared   Include shared dashboards only
+      --filter-deleted  Include deleted dashboards only
+  -h, --help            Print help
 ```
 
-**Options:**
-- `--filter "<query>"` - Host filter query
-- `--from <time>` - Start time (default: "1 hour ago")
-- `--start <n>` - Pagination offset (default: 0)
-- `--count <n>` - Results per page (default: 100)
-- `--tag-filter "<prefixes>"` - Tag filter
-- `--sort-field "<field>"` - Sort field
-- `--sort-dir "<dir>"` - Sort direction (asc, desc)
+## `datadog-cli dashboards get`
 
-**Example:**
-```bash
-datadog-cli --format json hosts --filter "env:prod" --count 50 --tag-filter "env:,service:"
+```text
+Get dashboard details
+
+Usage: datadog-cli dashboards get <DASHBOARD_ID>
+
+Arguments:
+  <DASHBOARD_ID>
+
+Options:
+  -h, --help  Print help
 ```
 
----
+## `datadog-cli spans`
 
-## APM
+```text
+Search APM spans
 
-### spans
-```bash
-datadog-cli [--format <format>] spans "<query>" --from "<time>" --to "<time>" [OPTIONS]
+Usage: datadog-cli spans [OPTIONS] [QUERY]
+
+Arguments:
+  [QUERY]  [default: *]
+
+Options:
+      --from <FROM>              Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
+      --to <TO>                  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --limit <LIMIT>            [default: 10]
+      --cursor <CURSOR>          Pagination cursor from previous response
+      --sort <SORT>              Sort order (use --sort="-timestamp" for descending)
+      --tag-filter <TAG_FILTER>  Tag prefixes to include (default from config)
+      --full-stack-trace         Show full stack traces
+  -h, --help                     Print help
 ```
 
-**Arguments:**
-- `<query>` - Span search query (default: "*")
+## `datadog-cli services`
 
-**Query examples:**
-- `service:checkout` - Filter by service
-- `error:true` - Errors only
-- `http.status_code:>=500` - Server errors
-- `service:api AND error:true` - Combined filters
-- `trace_id:<id>` - Specific trace
+```text
+List services from catalog
 
-**Options:**
-- `--from <time>` - Start time (default: "1 hour ago")
-- `--to <time>` - End time (default: "now")
-- `--limit <n>` - Max results (default: 10)
-- `--cursor "<token>"` - Pagination cursor
-- `--sort "<field>"` - Sort order (use `--sort="-timestamp"` for descending)
-- `--tag-filter "<prefixes>"` - Tag filter
-- `--full-stack-trace` - Include full stack traces
+Usage: datadog-cli services [OPTIONS]
 
-**Example:**
-```bash
-datadog-cli --format jsonl spans "error:true service:api" \
-  --from "10 minutes ago" --to "now" \
-  --limit 20 --sort="-timestamp" --tag-filter "env:,service:"
+Options:
+      --kind <KIND>        Entity kind (service, system, datastore, queue, api) [default: service]
+      --name <NAME>        Filter by entity name
+      --owner <OWNER>      Filter by owner
+      --include <INCLUDE>  Include related data [possible values: schema, raw_schema, oncall, incident, relation]
+      --start <START>      Pagination offset [default: 0]
+      --count <COUNT>      Results per page [default: 100]
+  -h, --help               Print help
 ```
 
----
+## `datadog-cli rum`
 
-### services (Software Catalog)
-```bash
-datadog-cli [--format <format>] services [OPTIONS]
+```text
+Search RUM events
+
+Usage: datadog-cli rum [OPTIONS] [QUERY]
+
+Arguments:
+  [QUERY]  [default: *]
+
+Options:
+      --from <FROM>              Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
+      --to <TO>                  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --limit <LIMIT>            [default: 10]
+      --cursor <CURSOR>          Pagination cursor from previous response
+      --sort <SORT>              Sort order (use --sort="-timestamp" for descending)
+      --tag-filter <TAG_FILTER>  Tag prefixes to include (default from config)
+      --full-stack-trace         Show full stack traces
+  -h, --help                     Print help
 ```
 
-**Options:**
-- `--kind "<kind>"` - Entity kind: service, system, datastore, queue, api (default: service)
-- `--name "<name>"` - Filter by entity name
-- `--owner "<owner>"` - Filter by owner
-- `--include <what>` - schema, raw_schema, oncall, incident, relation
-- `--start <n>` / `--count <n>` - Offset pagination
+## `datadog-cli slo`
 
-**Example:**
-```bash
-datadog-cli --format json services --kind service --owner platform-team
+```text
+Service Level Objective operations
+
+Usage: datadog-cli slo <COMMAND>
+
+Commands:
+  list  List SLOs
+  get   Get SLO details
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help
 ```
 
----
+## `datadog-cli slo list`
 
-## RUM
+```text
+List SLOs
 
-```bash
-datadog-cli [--format <format>] rum "<query>" [OPTIONS]
+Usage: datadog-cli slo list [OPTIONS]
+
+Options:
+      --query <QUERY>            Filter by SLO name or description text
+      --tags-query <TAGS_QUERY>  Filter by tags (e.g. "team:web")
+      --limit <LIMIT>            Results per page [default: 100]
+      --offset <OFFSET>          Pagination offset [default: 0]
+  -h, --help                     Print help
 ```
 
-**Arguments:**
-- `<query>` - RUM search query (default: "*")
+## `datadog-cli slo get`
 
-**Query examples:**
-- `@type:error` - User-facing errors
-- `@type:session AND @session.type:user` - User sessions
-- `@view.url_path:/checkout` - Specific page views
-- `@user.plan:premium` - Filter by user attributes
+```text
+Get SLO details
 
-**Options:**
-- `--from <time>` - Start time (default: "1 hour ago")
-- `--to <time>` - End time (default: "now")
-- `--limit <n>` - Max results (default: 10)
-- `--cursor "<token>"` - Pagination cursor
-- `--sort "<field>"` - Sort field
-- `--tag-filter "<prefixes>"` - Tag filter
-- `--full-stack-trace` - Include full stack traces
+Usage: datadog-cli slo get <SLO_ID>
 
-**Example:**
-```bash
-datadog-cli --format jsonl rum "@type:error @user.plan:premium" \
-  --from "1 hour ago" --limit 50 --tag-filter "user_id:,session_id:"
+Arguments:
+  <SLO_ID>
+
+Options:
+  -h, --help  Print help
 ```
 
----
+## `datadog-cli incidents`
 
-## Dashboards
+```text
+Incident operations (requires Incident Management)
 
-### dashboards list
-```bash
-datadog-cli [--format <format>] dashboards list [OPTIONS]
+Usage: datadog-cli incidents <COMMAND>
+
+Commands:
+  list  List incidents
+  get   Get incident details
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help
 ```
 
-**Options:**
-- `--count <n>` - Results per page (default: 100)
-- `--start <n>` - Pagination offset (default: 0)
-- `--filter-shared` - Include shared dashboards only
-- `--filter-deleted` - Include deleted dashboards only
+## `datadog-cli incidents list`
 
-**Example:**
-```bash
-datadog-cli --format json dashboards list --count 50
+```text
+List incidents
+
+Usage: datadog-cli incidents list [OPTIONS]
+
+Options:
+      --count <COUNT>      Results per page (max 100) [default: 25]
+      --start <START>      Pagination offset [default: 0]
+      --include <INCLUDE>  Include related data [possible values: users, attachments]
+  -h, --help               Print help
 ```
 
----
+## `datadog-cli incidents get`
 
-### dashboards get
-```bash
-datadog-cli [--format <format>] dashboards get <id>
+```text
+Get incident details
+
+Usage: datadog-cli incidents get [OPTIONS] <INCIDENT_ID>
+
+Arguments:
+  <INCIDENT_ID>
+
+Options:
+      --include <INCLUDE>  Include related data [possible values: users, attachments]
+  -h, --help               Print help
 ```
 
-**Arguments:**
-- `<id>` - Dashboard ID (required)
+## `datadog-cli error-tracking`
 
-**Example:**
-```bash
-datadog-cli --format json dashboards get "abc-123-def"
+```text
+Error Tracking operations
+
+Usage: datadog-cli error-tracking <COMMAND>
+
+Commands:
+  search  Search error issues
+  get     Get error issue details
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help
 ```
 
----
+## `datadog-cli error-tracking search`
 
-## Configuration
+```text
+Search error issues
 
-### config init
-```bash
-datadog-cli config init
+Usage: datadog-cli error-tracking search [OPTIONS] [QUERY]
+
+Arguments:
+  [QUERY]  Issue search query (event search syntax) [default: *]
+
+Options:
+      --track <TRACK>      Error track to search [default: trace] [possible values: trace, logs, rum]
+      --from <FROM>        Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
+      --to <TO>            Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --include <INCLUDE>  Include related data [possible values: issue, issue.assignee, issue.case, issue.team_owners]
+  -h, --help               Print help
 ```
 
-Creates config file at `~/.config/datadog-cli/config.toml`.
+## `datadog-cli error-tracking get`
 
----
+```text
+Get error issue details
 
-### config show
-```bash
-datadog-cli config show
+Usage: datadog-cli error-tracking get <ISSUE_ID>
+
+Arguments:
+  <ISSUE_ID>
+
+Options:
+  -h, --help  Print help
 ```
 
-Displays current config with masked secrets.
+## `datadog-cli downtimes`
 
----
+```text
+List downtimes
 
-### config path
-```bash
-datadog-cli config path
+Usage: datadog-cli downtimes [OPTIONS]
+
+Options:
+      --current-only   Only downtimes active right now
+      --start <START>  Pagination offset [default: 0]
+      --count <COUNT>  Results per page [default: 100]
+  -h, --help           Print help
 ```
 
-Shows path to active config file.
+## `datadog-cli audit`
 
----
+```text
+Search audit trail events
 
-### config edit
-```bash
-datadog-cli config edit
+Usage: datadog-cli audit [OPTIONS] [QUERY]
+
+Arguments:
+  [QUERY]  Audit event search query [default: *]
+
+Options:
+      --from <FROM>      Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
+      --to <TO>          Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --limit <LIMIT>    [default: 10]
+      --cursor <CURSOR>  Pagination cursor from previous response
+      --sort <SORT>      Sort order (use --sort="-timestamp" for descending)
+  -h, --help             Print help
 ```
 
-Opens config in `$EDITOR` (default: vim).
+## `datadog-cli teams`
 
----
+```text
+List teams
 
-## Time Formats
+Usage: datadog-cli teams [OPTIONS]
 
-**Relative intervals:**
-- "1 hour ago", "30 minutes ago", "2 days ago", "3 weeks ago"
-- Short forms: "3h ago", "2d ago", "5m ago"
-
-**Absolute formats:**
-- ISO8601/RFC3339: "2025-01-15T10:30:00Z"
-- Unix timestamp: "1704067200"
-- Special: "now"
-
----
-
-## Tag Filtering
-
-Reduce response size by including only specific tag prefixes:
-
-```bash
---tag-filter "env:,service:,version:"  # Include these prefixes
---tag-filter ""                        # Exclude all tags
---tag-filter "*"                       # Include all (default)
+Options:
+      --keyword <KEYWORD>      Search teams by keyword
+      --me                     Only teams the caller belongs to
+      --page <PAGE>            Page number [default: 0]
+      --page-size <PAGE_SIZE>  Results per page (max 100) [default: 100]
+  -h, --help                   Print help
 ```
 
-**Commands supporting tag filtering:**
-- `logs search`
-- `spans`
-- `rum`
-- `hosts`
+## `datadog-cli llm-obs`
 
-**Environment variable:**
-```bash
-export DD_TAG_FILTER="env:,service:"
+```text
+Search LLM Observability spans (preview API, subject to change)
+
+Usage: datadog-cli llm-obs [OPTIONS] [QUERY]
+
+Arguments:
+  [QUERY]  LLM Observability span query [default: *]
+
+Options:
+      --from <FROM>            Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
+      --to <TO>                Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --limit <LIMIT>          Results per page (max 5000) [default: 10]
+      --cursor <CURSOR>        Pagination cursor from previous response
+      --sort <SORT>            Sort order (use --sort="-timestamp" for descending)
+      --ml-app <ML_APP>        Filter by ML application name
+      --span-kind <SPAN_KIND>  Filter by span kind [possible values: agent, workflow, llm, tool, task, embedding, retrieval]
+  -h, --help                   Print help
 ```
 
----
+## `datadog-cli config`
 
-## Pagination Patterns
+```text
+Config management
 
-### Logs (Simple Limit)
-```bash
-datadog-cli --format json logs search "query" --limit 100
+Usage: datadog-cli config <COMMAND>
+
+Commands:
+  init  Initialize config file
+  show  Show current config
+  path  Show config file path
+  edit  Edit config file
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help
 ```
 
-### Spans/RUM (Cursor-based)
-```bash
-# First page
-datadog-cli --format json spans "query" --from "1h ago" --to "now" --limit 100 > page1.json
+## `datadog-cli config init`
 
-# Get cursor from response
-CURSOR=$(jq -r '.pagination.next_cursor' page1.json)
+```text
+Initialize config file
 
-# Next page
-datadog-cli --format json spans "query" --from "1h ago" --to "now" --limit 100 --cursor "$CURSOR"
+Usage: datadog-cli config init
+
+Options:
+  -h, --help  Print help
 ```
 
-### Hosts (Offset-based)
-```bash
-# First 100
-datadog-cli --format json hosts --start 0 --count 100
+## `datadog-cli config show`
 
-# Next 100
-datadog-cli --format json hosts --start 100 --count 100
+```text
+Show current config
+
+Usage: datadog-cli config show
+
+Options:
+  -h, --help  Print help
 ```
 
----
+## `datadog-cli config path`
 
-## Output Formats
+```text
+Show config file path
 
-```bash
-# Pretty JSON (default) - human-readable
-datadog-cli --format json <command>
+Usage: datadog-cli config path
 
-# JSON Lines - one object per line for Unix pipelines
-datadog-cli --format jsonl <command> | jq -r '.service'
-
-# Table - human-readable tables
-datadog-cli --format table <command>
+Options:
+  -h, --help  Print help
 ```
 
----
+## `datadog-cli config edit`
 
-## Global Options
+```text
+Edit config file
 
-These apply to ALL commands:
+Usage: datadog-cli config edit
 
-```bash
---format <format>     # Output format: json|jsonl|table
---api-key <KEY>       # Override DD_API_KEY env var
---app-key <KEY>       # Override DD_APP_KEY env var
---site <SITE>         # Override DD_SITE env var
--v, --verbose         # Enable debug logging
--h, --help            # Show help
--V, --version         # Show version
+Options:
+  -h, --help  Print help
 ```
 
-**Multi-region sites:**
-- `datadoghq.com` - US1 (default)
-- `datadoghq.eu` - EU
-- `us3.datadoghq.com` - US3
-- `us5.datadoghq.com` - US5
-- `ddog-gov.com` - US1-FED
+## Supported sites
 
----
-
-## v2 Metric Queries
-
-### timeseries
-```bash
-datadog-cli timeseries "<query>" ["<query>"...] [--formula "<expr>"] [OPTIONS]
-```
-Queries are auto-named a, b, c… for formulas. Options: `--from`, `--to`, `--interval <secs>`, repeatable `--formula`.
-
-```bash
-datadog-cli timeseries "sum:errors{*}" "sum:hits{*}" --formula "a / b * 100" --from "1 hour ago"
-```
-
-### scalar
-```bash
-datadog-cli scalar "<query>" ["<query>"...] --aggregator <agg> [--formula "<expr>"]
-```
-Aggregators: avg, min, max, sum, last, percentile, mean, l2norm, area. Output: one record per group.
-
----
-
-## SLOs, Incidents, Error Tracking
-
-### slo
-```bash
-datadog-cli slo list [--query "<text>"] [--tags-query "<tags>"] [--limit <n>] [--offset <n>]
-datadog-cli slo get <slo_id>
-```
-
-### incidents (requires Incident Management product)
-```bash
-datadog-cli incidents list [--count <n>] [--start <n>] [--include users|attachments]
-datadog-cli incidents get <incident_uuid> [--include users|attachments]
-```
-
-### error-tracking
-```bash
-datadog-cli error-tracking search "<query>" --track trace|logs|rum [--from] [--to] [--include ...]
-datadog-cli error-tracking get <issue_id>
-```
-No pagination — the search is single-shot.
-
----
-
-## Downtimes, Audit, Teams
-
-### downtimes
-```bash
-datadog-cli downtimes [--current-only] [--start <n>] [--count <n>]
-```
-
-### audit
-```bash
-datadog-cli audit "<query>" [--from] [--to] [--limit <n, max 1000>] [--cursor] [--sort]
-```
-Cursor pagination like logs.
-
-### teams
-```bash
-datadog-cli teams [--keyword "<text>"] [--me] [--page <n>] [--page-size <n, max 100>]
-```
-
----
-
-## LLM Observability (preview API)
-
-```bash
-datadog-cli llm-obs "<query>" [--ml-app "<app>"] [--span-kind <kind>] [--from] [--to] [--limit <n, max 5000>] [--cursor] [--sort]
-```
-Span kinds: agent, workflow, llm, tool, task, embedding, retrieval. The underlying Datadog endpoint is in preview and may change.
+- `datadoghq.com`
+- `us3.datadoghq.com`
+- `us5.datadoghq.com`
+- `datadoghq.eu`
+- `ap1.datadoghq.com`
+- `ap2.datadoghq.com`
+- `uk1.datadoghq.com`
+- `ddog-gov.com`
+- `us2.ddog-gov.com`

@@ -6,7 +6,7 @@ use super::{
 };
 use crate::config::Config;
 use crate::datadog::DatadogClient;
-use crate::error::{DatadogError, Result};
+use crate::error::Result;
 use crate::handlers;
 
 pub async fn execute(command: &Command, client: &DatadogClient) -> Result<Value> {
@@ -94,20 +94,27 @@ pub async fn execute(command: &Command, client: &DatadogClient) -> Result<Value>
     }
 }
 
-pub fn handle_config(action: &ConfigAction) -> Result<()> {
+pub fn handle_config(action: &ConfigAction, cli: &super::Cli) -> Result<()> {
+    use std::io::Write;
+    let stdout = std::io::stdout();
+    let mut stdout = stdout.lock();
     match action {
         ConfigAction::Init => {
             let path = Config::init()?;
-            println!("Created: {}", path.display());
+            writeln!(stdout, "Created: {}", path.display())?;
         }
         ConfigAction::Show => {
-            let output = Config::show()?;
-            println!("{}", output);
+            let output = Config::show_with_overrides(
+                cli.api_key.clone(),
+                cli.app_key.clone(),
+                cli.token.clone(),
+                cli.site.clone(),
+            )?;
+            writeln!(stdout, "{}", output)?;
         }
         ConfigAction::Path => {
-            let path = Config::global_config_path()
-                .ok_or_else(|| DatadogError::InvalidInput("Cannot determine config path".into()))?;
-            println!("{}", path.display());
+            let path = Config::active_config_path()?;
+            writeln!(stdout, "{}", path.display())?;
         }
         ConfigAction::Edit => {
             Config::edit()?;

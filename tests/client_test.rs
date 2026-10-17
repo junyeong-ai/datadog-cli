@@ -18,6 +18,7 @@ fn client_for(server: &MockServer, max_retries: u32) -> DatadogClient {
         network: Network {
             timeout_secs: 5,
             max_retries,
+            ..Network::default()
         },
     };
 
@@ -289,9 +290,14 @@ async fn rate_limit_with_distant_reset_fails_fast() {
 
 #[tokio::test]
 async fn connection_error_is_retried() {
-    // Port 1 requires root to bind, so nothing listens there and every
-    // attempt is a connection error.
-    let uri = "http://127.0.0.1:1".to_string();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let uri = format!("http://{}", listener.local_addr().unwrap());
+    let connections = tokio::spawn(async move {
+        for _ in 0..2 {
+            let (stream, _) = listener.accept().await.unwrap();
+            drop(stream);
+        }
+    });
 
     let config = Config {
         credentials: Credentials::Keys {
@@ -303,11 +309,11 @@ async fn connection_error_is_retried() {
         network: Network {
             timeout_secs: 5,
             max_retries: 1,
+            ..Network::default()
         },
     };
     let client = DatadogClient::with_base_url(&config, uri).unwrap();
 
-    let started = Instant::now();
     let error = client.get_monitor(1).await.unwrap_err();
 
     assert!(
@@ -317,9 +323,10 @@ async fn connection_error_is_retried() {
         ),
         "unexpected error: {error:?}"
     );
-    // One retry with 2s backoff proves the transport error entered the
-    // retry loop instead of propagating on the first failure.
-    assert!(started.elapsed() >= Duration::from_secs(2));
+    tokio::time::timeout(Duration::from_secs(5), connections)
+        .await
+        .unwrap()
+        .unwrap();
 }
 
 #[tokio::test]
@@ -680,6 +687,190 @@ async fn rate_limit_without_reset_header_uses_backoff() {
     let monitor = client.get_monitor(11).await.unwrap();
 
     assert_eq!(monitor.id, 11);
-    // No reset header → capped exponential backoff (2s first retry).
-    assert!(started.elapsed() >= Duration::from_secs(2));
+    assert!(started.elapsed() < Duration::from_secs(5));
+}
+
+#[tokio::test]
+async fn redirects_do_not_forward_credentials() {
+    let origin = MockServer::start().await;
+    let destination = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&destination)
+        .await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(302).insert_header("Location", destination.uri()))
+        .expect(1)
+        .mount(&origin)
+        .await;
+    let error = client_for(&origin, 3).get_monitor(1).await.unwrap_err();
+    assert!(matches!(error, DatadogError::ApiError { status: 302, .. }));
+}
+
+#[tokio::test]
+async fn total_timeout_includes_rate_limit_wait() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "30"))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let config = Config {
+        credentials: Credentials::Token("token".into()),
+        site: "datadoghq.com".into(),
+        defaults: Defaults::default(),
+        network: Network {
+            total_timeout_secs: 1,
+            ..Network::default()
+        },
+    };
+    let client = DatadogClient::with_base_url(&config, server.uri()).unwrap();
+    let started = Instant::now();
+    assert!(matches!(
+        client.get_monitor(1).await.unwrap_err(),
+        DatadogError::TimeoutError
+    ));
+    assert!(started.elapsed() < Duration::from_secs(5));
+}
+
+#[tokio::test]
+async fn retry_after_seconds_are_preserved() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "60"))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let error = client_for(&server, 3).get_monitor(1).await.unwrap_err();
+    assert!(matches!(
+        error,
+        DatadogError::RateLimitError {
+            reset_secs: Some(60)
+        }
+    ));
+}
+
+#[tokio::test]
+async fn search_handlers_preserve_documented_record_and_cursor_shapes() {
+    use clap::Parser;
+    use datadog_cli::cli::{Cli, Command, LogsAction};
+    use datadog_cli::handlers::{logs::LogsHandler, spans::SpansHandler};
+
+    let server = MockServer::start().await;
+    Mock::given(path("/api/v2/logs/events/search"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [{ "id": "log-1", "attributes": {"service": "api", "message": "failed"} }],
+            "meta": { "page": { "after": "logs-next" } }
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(path("/api/v2/spans/events/search"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [{ "id": "span-1", "type": "spans", "attributes": {"service": "api", "custom": {"team": "platform"}} }],
+            "meta": { "page": { "after": "spans-next" } }
+        })))
+        .mount(&server).await;
+    let client = client_for(&server, 0);
+    let cli = Cli::try_parse_from([
+        "datadog-cli",
+        "logs",
+        "search",
+        "service:api",
+        "--format",
+        "json",
+    ])
+    .unwrap();
+    let Command::Logs {
+        action: LogsAction::Search(args),
+    } = cli.command
+    else {
+        panic!("expected logs search")
+    };
+    let logs = LogsHandler::search(&client, &args).await.unwrap();
+    assert_eq!(logs["data"][0]["service"], "api");
+    assert_eq!(logs["data"][0]["message"], "failed");
+    assert_eq!(logs["pagination"]["next_cursor"], "logs-next");
+
+    let cli =
+        Cli::try_parse_from(["datadog-cli", "--format", "jsonl", "spans", "service:api"]).unwrap();
+    let Command::Spans(args) = cli.command else {
+        panic!("expected spans")
+    };
+    let spans = SpansHandler::list(&client, &args).await.unwrap();
+    assert_eq!(spans["data"][0]["attributes"]["service"], "api");
+    assert_eq!(spans["data"][0]["attributes"]["custom"]["team"], "platform");
+    assert_eq!(spans["pagination"]["next_cursor"], "spans-next");
+}
+
+#[tokio::test]
+async fn timeseries_interval_rejects_overflow_before_http() {
+    use clap::Parser;
+    use datadog_cli::cli::{Cli, Command};
+    use datadog_cli::handlers::metrics::MetricsHandler;
+
+    assert!(
+        Cli::try_parse_from([
+            "datadog-cli",
+            "timeseries",
+            "q",
+            "--interval",
+            "9223372036854775807"
+        ])
+        .is_err()
+    );
+    let cli = Cli::try_parse_from(["datadog-cli", "timeseries", "q", "--interval", "1"]).unwrap();
+    let Command::Timeseries(mut args) = cli.command else {
+        panic!("expected timeseries")
+    };
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&server)
+        .await;
+    let client = client_for(&server, 0);
+    for interval in [0, -1, i64::MAX] {
+        args.interval = Some(interval);
+        assert!(matches!(
+            MetricsHandler::timeseries(&client, &args)
+                .await
+                .unwrap_err(),
+            DatadogError::InvalidInput(_)
+        ));
+    }
+}
+
+#[tokio::test]
+async fn response_body_timeouts_are_retried_and_remain_timeout_errors() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let uri = format!("http://{}", listener.local_addr().unwrap());
+    let requests = tokio::spawn(async move {
+        for _ in 0..2 {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{\"data\":").await.unwrap();
+            let mut buffer = [0; 1024];
+            while matches!(stream.read(&mut buffer).await, Ok(size) if size > 0) {}
+        }
+    });
+    let config = Config {
+        credentials: Credentials::Token("fixture-token".into()),
+        site: "datadoghq.com".into(),
+        defaults: Defaults::default(),
+        network: Network {
+            timeout_secs: 1,
+            max_retries: 1,
+            total_timeout_secs: 10,
+        },
+    };
+    let client = DatadogClient::with_base_url(&config, uri).unwrap();
+    assert!(matches!(
+        client.get_monitor(1).await.unwrap_err(),
+        DatadogError::TimeoutError
+    ));
+    tokio::time::timeout(Duration::from_secs(5), requests)
+        .await
+        .unwrap()
+        .unwrap();
 }

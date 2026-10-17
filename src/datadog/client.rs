@@ -1,23 +1,8 @@
-use reqwest::{Client, Response, StatusCode};
-use serde::Serialize;
-use serde::de::DeserializeOwned;
-use std::time::Duration;
-
 use super::models::*;
-use super::retry;
-use crate::config::{Config, Credentials};
-use crate::error::{DatadogError, Result};
+pub use super::transport::DatadogClient;
+use crate::error::Result;
 
-pub struct DatadogClient {
-    client: Client,
-    credentials: Credentials,
-    base_url: String,
-    max_retries: u32,
-    tag_filter: Option<String>,
-}
-
-/// Common parameters for the v2 cursor-paginated search endpoints
-/// (logs, events, spans, RUM).
+/// Common parameters for cursor-paginated search endpoints.
 pub struct SearchParams<'a> {
     pub query: &'a str,
     pub from: &'a str,
@@ -28,101 +13,6 @@ pub struct SearchParams<'a> {
 }
 
 impl DatadogClient {
-    pub fn new(config: &Config) -> Result<Self> {
-        Self::with_base_url(config, format!("https://api.{}", config.site))
-    }
-
-    /// Points the client at an arbitrary base URL instead of the site's
-    /// API host — for integration tests against a local mock server.
-    pub fn with_base_url(config: &Config, base_url: String) -> Result<Self> {
-        let client = Client::builder()
-            .timeout(Duration::from_secs(config.network.timeout_secs))
-            .build()
-            .map_err(DatadogError::NetworkError)?;
-
-        Ok(Self {
-            client,
-            credentials: config.credentials.clone(),
-            base_url,
-            max_retries: config.network.max_retries,
-            tag_filter: config.defaults.tag_filter.clone(),
-        })
-    }
-
-    pub fn get_tag_filter(&self) -> Option<&str> {
-        self.tag_filter.as_deref()
-    }
-
-    async fn request<T: DeserializeOwned>(
-        &self,
-        method: reqwest::Method,
-        endpoint: &str,
-        query: Option<Vec<(&str, String)>>,
-        body: Option<impl Serialize>,
-    ) -> Result<T> {
-        self.request_with_content_type(method, endpoint, query, body, "application/json")
-            .await
-    }
-
-    async fn request_with_content_type<T: DeserializeOwned>(
-        &self,
-        method: reqwest::Method,
-        endpoint: &str,
-        query: Option<Vec<(&str, String)>>,
-        body: Option<impl Serialize>,
-        content_type: &str,
-    ) -> Result<T> {
-        let url = format!("{}{}", self.base_url, endpoint);
-
-        let mut attempt = 0;
-        loop {
-            let mut request = self
-                .client
-                .request(method.clone(), &url)
-                .header("Content-Type", content_type);
-
-            request = match &self.credentials {
-                Credentials::Keys { api_key, app_key } => request
-                    .header("DD-API-KEY", api_key)
-                    .header("DD-APPLICATION-KEY", app_key),
-                Credentials::Token(token) => {
-                    request.header("Authorization", format!("Bearer {token}"))
-                }
-            };
-
-            if let Some(ref params) = query {
-                request = request.query(params);
-            }
-
-            if let Some(ref data) = body {
-                request = request.json(data);
-            }
-
-            let result = match request.send().await {
-                Ok(response) => self.handle_response(response).await,
-                Err(e) if e.is_timeout() => Err(DatadogError::TimeoutError),
-                Err(e) => Err(DatadogError::NetworkError(e)),
-            };
-
-            match result {
-                Ok(data) => return Ok(data),
-                Err(error) => match retry::next_delay(&error, attempt, self.max_retries) {
-                    Some(delay) => {
-                        attempt += 1;
-                        tracing::warn!(
-                            attempt,
-                            delay_secs = delay.as_secs(),
-                            %error,
-                            "retrying request"
-                        );
-                        tokio::time::sleep(delay).await;
-                    }
-                    None => return Err(error),
-                },
-            }
-        }
-    }
-
     /// Builds the common request body for the v2 cursor-paginated search
     /// endpoints: `filter.{query,from,to}` + `page.{limit,cursor}` + `sort`.
     fn search_body(params: &SearchParams<'_>) -> serde_json::Value {
@@ -147,43 +37,6 @@ impl DatadogClient {
 
         body
     }
-
-    async fn handle_response<T: DeserializeOwned>(&self, response: Response) -> Result<T> {
-        let status = response.status();
-
-        if status.is_success() {
-            return response
-                .json::<T>()
-                .await
-                .map_err(|e| DatadogError::DecodeError(e.to_string()));
-        }
-
-        if status == StatusCode::TOO_MANY_REQUESTS {
-            let reset_secs = response
-                .headers()
-                .get("x-ratelimit-reset")
-                .and_then(|v| v.to_str().ok())
-                .and_then(|v| v.parse().ok());
-            return Err(DatadogError::RateLimitError { reset_secs });
-        }
-
-        let message = response
-            .text()
-            .await
-            .unwrap_or_else(|_| "Unknown error".to_string());
-
-        match status {
-            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
-                Err(DatadogError::AuthError(message))
-            }
-            _ => Err(DatadogError::ApiError {
-                status: status.as_u16(),
-                message,
-            }),
-        }
-    }
-
-    // ============= Metrics API =============
 
     pub async fn query_metrics(&self, query: &str, from: i64, to: i64) -> Result<MetricsResponse> {
         let params = vec![
@@ -793,67 +646,5 @@ impl DatadogClient {
             "application/vnd.api+json",
         )
         .await
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::{Defaults, Network};
-
-    fn test_config(site: &str) -> Config {
-        Config {
-            credentials: Credentials::Keys {
-                api_key: "test_api_key".to_string(),
-                app_key: "test_app_key".to_string(),
-            },
-            site: site.to_string(),
-            defaults: Defaults::default(),
-            network: Network::default(),
-        }
-    }
-
-    #[test]
-    fn test_client_regional_urls() {
-        let regions = vec![
-            ("datadoghq.com", "https://api.datadoghq.com"),
-            ("datadoghq.eu", "https://api.datadoghq.eu"),
-            ("us3.datadoghq.com", "https://api.us3.datadoghq.com"),
-            ("us5.datadoghq.com", "https://api.us5.datadoghq.com"),
-        ];
-
-        for (region, expected_url) in regions {
-            let client = DatadogClient::new(&test_config(region)).unwrap();
-            assert_eq!(client.base_url, expected_url);
-        }
-    }
-
-    #[test]
-    fn test_client_with_base_url_override() {
-        let client = DatadogClient::with_base_url(
-            &test_config("datadoghq.com"),
-            "http://127.0.0.1:8080".to_string(),
-        )
-        .unwrap();
-
-        assert_eq!(client.base_url, "http://127.0.0.1:8080");
-    }
-
-    #[test]
-    fn test_tag_filter() {
-        let mut config = test_config("datadoghq.com");
-        config.defaults.tag_filter = Some("env:,service:".to_string());
-
-        let client = DatadogClient::new(&config).unwrap();
-        assert_eq!(client.get_tag_filter(), Some("env:,service:"));
-    }
-
-    #[test]
-    fn test_network_settings_applied() {
-        let mut config = test_config("datadoghq.com");
-        config.network.max_retries = 5;
-
-        let client = DatadogClient::new(&config).unwrap();
-        assert_eq!(client.max_retries, 5);
     }
 }

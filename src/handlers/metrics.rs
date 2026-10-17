@@ -183,13 +183,27 @@ impl MetricsHandler {
 
         let (from_ts, to_ts) = handler.parse_time_range(&args.from, &args.to)?;
 
+        let interval = args
+            .interval
+            .map(|seconds| {
+                seconds
+                    .checked_mul(1000)
+                    .filter(|&milliseconds| milliseconds > 0)
+                    .ok_or_else(|| {
+                        crate::error::DatadogError::InvalidInput(
+                            "Interval must be positive and fit in milliseconds".into(),
+                        )
+                    })
+            })
+            .transpose()?;
+
         let response = client
             .query_timeseries(
                 &args.queries,
                 &args.formula,
                 from_ts * 1000,
                 to_ts * 1000,
-                args.interval.map(|secs| secs * 1000),
+                interval,
             )
             .await?;
 

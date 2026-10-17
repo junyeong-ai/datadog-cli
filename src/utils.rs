@@ -8,12 +8,17 @@ use interim::{Dialect, parse_date_string};
 const MAX_UNIX_TIMESTAMP: i64 = 253_402_300_799;
 
 pub fn parse_time(input: &str) -> Result<i64> {
+    parse_time_at(input, Utc::now())
+}
+
+pub(crate) fn parse_time_at(input: &str, now: DateTime<Utc>) -> Result<i64> {
+    let input = input.trim();
     if input.trim().to_lowercase() == "now" {
-        return Ok(Utc::now().timestamp());
+        return Ok(now.timestamp());
     }
 
     if let Ok(timestamp) = input.parse::<i64>() {
-        if timestamp.abs() > MAX_UNIX_TIMESTAMP {
+        if !(-MAX_UNIX_TIMESTAMP..=MAX_UNIX_TIMESTAMP).contains(&timestamp) {
             return Err(DatadogError::DateParseError(format!(
                 "Timestamp out of range: '{}' (expected Unix seconds; is this milliseconds?)",
                 input
@@ -22,7 +27,7 @@ pub fn parse_time(input: &str) -> Result<i64> {
         return Ok(timestamp);
     }
 
-    if let Ok(dt) = parse_date_string(input, Utc::now(), Dialect::Us) {
+    if let Ok(dt) = parse_date_string(input, now, Dialect::Us) {
         return Ok(dt.timestamp());
     }
 
@@ -138,5 +143,12 @@ mod tests {
         assert!(result.contains("Line 3"));
         assert!(result.contains("... (3 more lines)"));
         assert!(!result.contains("Line 4"));
+    }
+    #[test]
+    fn timestamps_reject_integer_extremes_without_panicking() {
+        for input in [i64::MIN.to_string(), i64::MAX.to_string()] {
+            assert!(parse_time(&input).is_err());
+        }
+        assert_eq!(parse_time(" 1704067200 ").unwrap(), 1704067200);
     }
 }

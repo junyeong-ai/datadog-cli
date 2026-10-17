@@ -1,123 +1,67 @@
-# Datadog CLI - Advanced Workflows
+# Investigation examples
 
-Complex multi-step investigation patterns. For basic usage, see [SKILL.md](SKILL.md).
+## Service errors
 
----
-
-## Cross-Service Error Correlation
-
-Find errors in one service that caused errors in downstream services:
+Use one window for log counts, samples, and spans. Counts and samples answer different questions.
 
 ```bash
-# Get trace IDs from service A errors
-datadog-cli --format jsonl logs search "status:error service:auth-service" \
-  --from "10 minutes ago" --limit 100 | \
-  jq -r '.trace_id // empty' | \
-  sort -u > trace_ids.txt
+set -eo pipefail
+FROM="2026-10-17T00:00:00Z"
+TO="2026-10-17T01:00:00Z"
 
-# Find correlated errors in service B for each trace
-while read trace_id; do
-  datadog-cli --format jsonl spans "trace_id:$trace_id service:user-service error:true" \
-    --from "10 minutes ago" --to "now" --limit 10 | \
-    jq -r '[.trace_id, .service, .resource, .error.message // ""] | @tsv'
-done < trace_ids.txt
+datadog-cli logs aggregate "service:api status:error" --from "$FROM" --to "$TO"
+datadog-cli logs search "service:api status:error" --from "$FROM" --to "$TO" --limit 20 --format jsonl |
+  jq -r '[.timestamp, .service, .message] | @tsv'
+datadog-cli spans "service:api error:true" --from "$FROM" --to "$TO" --limit 20 --format jsonl |
+  jq -r '[.id, .attributes.service] | @tsv'
 ```
 
----
+The log sample is not the total count. Span results keep API attributes nested; custom fields depend on instrumentation. Inspect those attributes before correlating by trace ID or extracting resource/error fields.
 
-## Complete Error Investigation Workflow
+## Bounded cursor pagination
 
-Multi-step investigation for a service incident:
-
-```bash
-QUERY="status:error service:api"
-TIME_RANGE="1 hour ago"
-
-echo "=== Error Investigation for service:api ==="
-
-# 1. Total error count
-echo -e "\n1. Total Errors:"
-datadog-cli --format json logs aggregate "$QUERY" \
-  --from "$TIME_RANGE" --to "now" | \
-  jq -r '.data.buckets[0].computes.c0 // 0'
-
-# 2. Hourly trend
-echo -e "\n2. Error Trend (hourly):"
-datadog-cli --format json logs timeseries "$QUERY" \
-  --from "6 hours ago" --to "now" \
-  --interval "1h" --aggregation "count" | \
-  jq -r '.data.buckets[] | "\(.timestamp | strftime("%H:%M")): \(.computes.c0)"'
-
-# 3. Sample error messages
-echo -e "\n3. Sample Errors:"
-datadog-cli --format jsonl logs search "$QUERY" \
-  --from "$TIME_RANGE" --limit 5 | \
-  jq -r '[.timestamp, .message] | @tsv'
-
-# 4. Related APM traces
-echo -e "\n4. Related Traces:"
-datadog-cli --format jsonl spans "service:api error:true" \
-  --from "$TIME_RANGE" --to "now" --limit 3 | \
-  jq -r '[.resource, .error.message // ""] | @tsv'
-```
-
----
-
-## Batch Processing with Pagination
-
-Process large datasets using cursor-based pagination:
+This Bash example reads at most ten pages with a fixed time window. It emits records to stdout, reports incomplete collection on stderr, and fails on API errors or repeated cursors.
 
 ```bash
-QUERY="service:checkout error:true"
-FROM="1 hour ago"
-TO="now"
+set -eo pipefail
+FROM="2026-10-17T00:00:00Z"
+TO="2026-10-17T01:00:00Z"
 CURSOR=""
-PAGE=1
+SEEN_CURSORS=()
+MAX_PAGES=10
 
-while true; do
-  echo "Processing page $PAGE..."
-
-  if [[ -z "$CURSOR" ]]; then
-    RESULT=$(datadog-cli --format json spans "$QUERY" \
-      --from "$FROM" --to "$TO" --limit 100)
-  else
-    RESULT=$(datadog-cli --format json spans "$QUERY" \
-      --from "$FROM" --to "$TO" --limit 100 --cursor "$CURSOR")
+for ((PAGE=1; PAGE<=MAX_PAGES; PAGE++)); do
+  ARGS=(spans "service:checkout error:true" --from "$FROM" --to "$TO" --limit 100 --format json)
+  if [[ -n "$CURSOR" ]]; then
+    ARGS+=(--cursor "$CURSOR")
   fi
-
-  # Process data
-  echo "$RESULT" | jq -r '.data[] | [.trace_id, .resource] | @tsv'
-
-  # Get next cursor
-  CURSOR=$(echo "$RESULT" | jq -r '.meta.page.after // empty')
-
-  # Exit if no more pages
-  [[ -z "$CURSOR" ]] && break
-
-  PAGE=$((PAGE + 1))
+  RESULT=$(datadog-cli "${ARGS[@]}")
+  jq -c '.data[]' <<<"$RESULT"
+  CURSOR=$(jq -r '.pagination.next_cursor // empty' <<<"$RESULT")
+  if [[ -z "$CURSOR" ]]; then
+    break
+  fi
+  for SEEN in "${SEEN_CURSORS[@]}"; do
+    if [[ "$SEEN" == "$CURSOR" ]]; then
+      echo "Repeated pagination cursor; collection is incomplete" >&2
+      exit 1
+    fi
+  done
+  SEEN_CURSORS+=("$CURSOR")
 done
+
+if [[ -n "$CURSOR" ]]; then
+  echo "Page budget reached; collection is incomplete" >&2
+  exit 1
+fi
 ```
 
----
-
-## Service Dependency Discovery
-
-Analyze service relationships from span data:
+## Metric formulas
 
 ```bash
-SERVICE="api-gateway"
-
-# Find downstream services (called by this service)
-echo "Services called by $SERVICE:"
-datadog-cli --format jsonl spans "service:$SERVICE" \
-  --from "1 hour ago" --to "now" --limit 1000 | \
-  jq -r '.meta."peer.service" // empty' | \
-  sort -u
-
-# Find upstream services (calling this service)
-echo "Services calling $SERVICE:"
-datadog-cli --format jsonl spans "@peer.service:$SERVICE" \
-  --from "1 hour ago" --to "now" --limit 1000 | \
-  jq -r '.service' | \
-  sort -u
+datadog-cli timeseries "sum:trace.http.request.errors{service:api}" \
+  "sum:trace.http.request.hits{service:api}" --formula "a / b * 100" --from "1 hour ago"
+datadog-cli scalar "avg:system.cpu.user{env:prod} by {host}" --aggregator avg
 ```
+
+Metric names and tags depend on your instrumentation. Check the selected metric's units and aggregation before interpreting a formula as a rate or percentage.

@@ -1,8 +1,7 @@
 use crate::error::{DatadogError, Result};
 use serde::Deserialize;
-#[cfg(unix)]
-use std::path::Path;
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::{env, fs};
 
 /// All Datadog regional sites (https://docs.datadoghq.com/getting_started/site/).
@@ -58,6 +57,7 @@ pub struct Defaults {
 pub struct Network {
     pub timeout_secs: u64,
     pub max_retries: u32,
+    pub total_timeout_secs: u64,
 }
 
 impl Default for Defaults {
@@ -74,6 +74,7 @@ impl Default for Network {
         Self {
             timeout_secs: 30,
             max_retries: 3,
+            total_timeout_secs: 120,
         }
     }
 }
@@ -84,6 +85,7 @@ pub const DEFAULT_SITE: &str = "datadoghq.com";
 /// across tiers (global file, project file, env, CLI) is presence-based:
 /// a tier overrides only the fields it actually sets.
 #[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ConfigFile {
     api_key: Option<String>,
     app_key: Option<String>,
@@ -96,15 +98,18 @@ struct ConfigFile {
 }
 
 #[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct DefaultsFile {
     format: Option<String>,
     tag_filter: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct NetworkFile {
     timeout_secs: Option<u64>,
     max_retries: Option<u32>,
+    total_timeout_secs: Option<u64>,
 }
 
 impl ConfigFile {
@@ -115,60 +120,74 @@ impl ConfigFile {
         cli_token: Option<String>,
         cli_site: Option<String>,
     ) -> Result<Self> {
-        let mut config = Self::load_from_file()?.unwrap_or_default();
-
-        if let Ok(key) = env::var("DD_API_KEY") {
-            config.api_key = Some(key);
-        }
-        if let Ok(key) = env::var("DD_APP_KEY") {
-            config.app_key = Some(key);
-        }
-        if let Ok(token) = env::var("DD_TOKEN") {
-            config.token = Some(token);
-        }
-        if let Ok(site) = env::var("DD_SITE") {
-            config.site = Some(site);
-        }
-        if let Ok(filter) = env::var("DD_TAG_FILTER") {
-            config.defaults.tag_filter = Some(filter);
-        }
-
-        if cli_api_key.is_some() {
-            config.api_key = cli_api_key;
-        }
-        if cli_app_key.is_some() {
-            config.app_key = cli_app_key;
-        }
-        if cli_token.is_some() {
-            config.token = cli_token;
-        }
-        if cli_site.is_some() {
-            config.site = cli_site;
-        }
+        let mut config = Self::load_paths(
+            Config::global_config_path().as_deref(),
+            Config::find_project_config()?.as_deref(),
+        )?;
+        config.overlay(Self {
+            api_key: env_value("DD_API_KEY")?,
+            app_key: env_value("DD_APP_KEY")?,
+            token: env_value("DD_TOKEN")?,
+            site: env_value("DD_SITE")?,
+            defaults: DefaultsFile {
+                tag_filter: env_value("DD_TAG_FILTER")?,
+                ..DefaultsFile::default()
+            },
+            ..Self::default()
+        });
+        config.overlay(Self {
+            api_key: cli_api_key,
+            app_key: cli_app_key,
+            token: cli_token,
+            site: cli_site,
+            ..Self::default()
+        });
 
         Ok(config)
     }
 
-    /// Reads the nearest config file. A missing file is fine (`None`);
-    /// an unreadable or malformed file is an error, never silently ignored.
-    fn load_from_file() -> Result<Option<Self>> {
-        let path = Config::find_project_config()
-            .or_else(Config::global_config_path)
-            .ok_or_else(|| DatadogError::InvalidInput("Cannot determine config path".into()))?;
-
-        if !path.exists() {
-            return Ok(None);
+    fn overlay(&mut self, higher: Self) {
+        if higher.token.is_none() && (higher.api_key.is_some() || higher.app_key.is_some()) {
+            self.token = None;
         }
+        self.api_key = higher.api_key.or(self.api_key.take());
+        self.app_key = higher.app_key.or(self.app_key.take());
+        self.token = higher.token.or(self.token.take());
+        self.site = higher.site.or(self.site.take());
+        self.defaults.format = higher.defaults.format.or(self.defaults.format.take());
+        self.defaults.tag_filter = higher
+            .defaults
+            .tag_filter
+            .or(self.defaults.tag_filter.take());
+        self.network.timeout_secs = higher.network.timeout_secs.or(self.network.timeout_secs);
+        self.network.max_retries = higher.network.max_retries.or(self.network.max_retries);
+        self.network.total_timeout_secs = higher
+            .network
+            .total_timeout_secs
+            .or(self.network.total_timeout_secs);
+    }
 
-        #[cfg(unix)]
-        Config::check_permissions(&path)?;
-
-        let content = fs::read_to_string(&path)?;
-        let config: ConfigFile = toml::from_str(&content).map_err(|e| {
-            DatadogError::InvalidInput(format!("Invalid TOML in {}: {}", path.display(), e))
-        })?;
-
-        Ok(Some(config))
+    fn load_paths(global: Option<&Path>, project: Option<&Path>) -> Result<Self> {
+        let mut config = Self::default();
+        for path in [global, project].into_iter().flatten() {
+            let content = match fs::read_to_string(path) {
+                Ok(content) => content,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(error.into()),
+            };
+            #[cfg(unix)]
+            Config::check_permissions(path)?;
+            let layer = toml::from_str(&content).map_err(|error: toml::de::Error| {
+                let prefix = &content.as_bytes()[..error.span().map_or(0, |span| span.start)];
+                let line = prefix.iter().filter(|&&byte| byte == b'\n').count() + 1;
+                DatadogError::InvalidInput(format!(
+                    "Invalid config in {} at line {line}: check TOML syntax and field names",
+                    path.display()
+                ))
+            })?;
+            config.overlay(layer);
+        }
+        Ok(config)
     }
 }
 
@@ -222,7 +241,22 @@ impl Config {
         let network = Network {
             timeout_secs: file.network.timeout_secs.unwrap_or(base.timeout_secs),
             max_retries: file.network.max_retries.unwrap_or(base.max_retries),
+            total_timeout_secs: file
+                .network
+                .total_timeout_secs
+                .unwrap_or(base.total_timeout_secs),
         };
+
+        if crate::output::Format::from_str(&defaults.format).is_err() {
+            return Err(DatadogError::InvalidInput(
+                "defaults.format must be json, jsonl (or jsonlines), or table".into(),
+            ));
+        }
+        if network.timeout_secs == 0 || network.total_timeout_secs == 0 {
+            return Err(DatadogError::InvalidInput(
+                "network timeouts must be greater than zero".into(),
+            ));
+        }
 
         Ok(Self {
             credentials,
@@ -232,15 +266,26 @@ impl Config {
         })
     }
 
-    fn find_project_config() -> Option<PathBuf> {
-        let mut current = env::current_dir().ok()?;
+    fn find_project_config() -> Result<Option<PathBuf>> {
+        let mut current = env::current_dir()?;
         loop {
             let candidate = current.join(".datadog.toml");
-            if candidate.exists() {
-                return Some(candidate);
+            match candidate.try_exists() {
+                Ok(true) => return Ok(Some(candidate)),
+                Ok(false) => {}
+                Err(error) => return Err(error.into()),
             }
-            current = current.parent()?.to_path_buf();
+            match current.parent() {
+                Some(parent) => current = parent.to_path_buf(),
+                None => return Ok(None),
+            }
         }
+    }
+
+    pub fn active_config_path() -> Result<PathBuf> {
+        Self::find_project_config()?
+            .or_else(Self::global_config_path)
+            .ok_or_else(|| DatadogError::InvalidInput("Cannot determine config path".into()))
     }
 
     pub fn global_config_path() -> Option<PathBuf> {
@@ -269,6 +314,10 @@ impl Config {
         let path = Self::global_config_path()
             .ok_or_else(|| DatadogError::InvalidInput("Cannot determine config path".into()))?;
 
+        Self::init_at(path)
+    }
+
+    fn init_at(path: PathBuf) -> Result<PathBuf> {
         if path.exists() {
             return Err(DatadogError::InvalidInput(format!(
                 "Config already exists: {}",
@@ -293,17 +342,17 @@ format = "json"
 [network]
 timeout_secs = 30
 max_retries = 3
+total_timeout_secs = 120
 "#;
 
-        fs::write(&path, template)?;
-
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&path)?.permissions();
-            perms.set_mode(0o600);
-            fs::set_permissions(&path, perms)?;
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
         }
+        options.open(&path)?.write_all(template.as_bytes())?;
 
         Ok(path)
     }
@@ -311,16 +360,24 @@ max_retries = 3
     /// Displays the merged configuration without requiring valid credentials,
     /// so it stays usable for debugging an incomplete setup.
     pub fn show() -> Result<String> {
-        let file = ConfigFile::merged(None, None, None, None)?;
-        let path = Self::global_config_path()
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "unknown".to_string());
+        Self::show_with_overrides(None, None, None, None)
+    }
+
+    pub fn show_with_overrides(
+        api_key: Option<String>,
+        app_key: Option<String>,
+        token: Option<String>,
+        site: Option<String>,
+    ) -> Result<String> {
+        let file = ConfigFile::merged(api_key, app_key, token, site)?;
+        let path = Self::active_config_path()?.display().to_string();
 
         let defaults = Defaults::default();
         let network = Network::default();
 
         Ok(format!(
             "Config: {}\n\
+             Global config: {}\n\
              API Key: {}\n\
              App Key: {}\n\
              Token: {}\n\
@@ -330,8 +387,12 @@ max_retries = 3
              tag_filter: {}\n\n\
              [network]\n\
              timeout_secs: {}\n\
-             max_retries: {}",
+             max_retries: {}\n\
+             total_timeout_secs: {}",
             path,
+            Self::global_config_path()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "(unavailable)".into()),
             file.api_key
                 .as_deref()
                 .map_or("(not set)".to_string(), mask_token),
@@ -346,12 +407,14 @@ max_retries = 3
             file.defaults.tag_filter.as_deref().unwrap_or("(none)"),
             file.network.timeout_secs.unwrap_or(network.timeout_secs),
             file.network.max_retries.unwrap_or(network.max_retries),
+            file.network
+                .total_timeout_secs
+                .unwrap_or(network.total_timeout_secs),
         ))
     }
 
     pub fn edit() -> Result<()> {
-        let path = Self::global_config_path()
-            .ok_or_else(|| DatadogError::InvalidInput("Cannot determine config path".into()))?;
+        let path = Self::active_config_path()?;
 
         if !path.exists() {
             return Err(DatadogError::InvalidInput(format!(
@@ -377,15 +440,18 @@ max_retries = 3
     }
 }
 
-fn mask_token(token: &str) -> String {
-    let chars: Vec<char> = token.chars().collect();
-    if chars.len() > 8 {
-        let head: String = chars[..4].iter().collect();
-        let tail: String = chars[chars.len() - 4..].iter().collect();
-        format!("{}...{}", head, tail)
-    } else {
-        "***".to_string()
+fn env_value(name: &str) -> Result<Option<String>> {
+    match env::var(name) {
+        Ok(value) => Ok(Some(value)),
+        Err(env::VarError::NotPresent) => Ok(None),
+        Err(env::VarError::NotUnicode(_)) => Err(DatadogError::InvalidInput(format!(
+            "{name} must contain valid Unicode"
+        ))),
     }
+}
+
+fn mask_token(token: &str) -> String {
+    if token.is_empty() { "(empty)" } else { "***" }.to_string()
 }
 
 #[cfg(test)]
@@ -539,14 +605,14 @@ mod tests {
 
     #[test]
     fn test_mask_token() {
-        assert_eq!(mask_token("abcdefghijklmnop"), "abcd...mnop");
+        assert_eq!(mask_token("abcdefghijklmnop"), "***");
         assert_eq!(mask_token("short"), "***");
     }
 
     #[test]
     fn test_mask_token_multibyte() {
-        assert_eq!(mask_token("aaa\u{3042}aaaaaaaaaaaaa"), "aaaあ...aaaa");
-        assert_eq!(mask_token("あいうえおかきくけこ"), "あいうえ...きくけこ");
+        assert_eq!(mask_token("aaa\u{3042}aaaaaaaaaaaaa"), "***");
+        assert_eq!(mask_token("あいうえおかきくけこ"), "***");
         assert_eq!(mask_token("あいう"), "***");
     }
 
@@ -560,5 +626,109 @@ mod tests {
 
         assert!(!format!("{:?}", keys).contains("secret"));
         assert!(!format!("{:?}", token).contains("secret"));
+    }
+    #[test]
+    fn config_layers_merge_individual_fields_and_auth_methods() {
+        let mut lower = ConfigFile {
+            token: Some("lower-token".into()),
+            defaults: DefaultsFile {
+                format: Some("jsonl".into()),
+                tag_filter: Some("env:".into()),
+            },
+            ..file_with_keys()
+        };
+        lower.overlay(ConfigFile {
+            api_key: Some("project-api".into()),
+            network: NetworkFile {
+                timeout_secs: Some(15),
+                ..NetworkFile::default()
+            },
+            ..ConfigFile::default()
+        });
+        let config = Config::resolve(lower).unwrap();
+        assert!(
+            matches!(config.credentials, Credentials::Keys { api_key, app_key } if api_key == "project-api" && app_key == "app456")
+        );
+        assert_eq!(config.defaults.format, "jsonl");
+        assert_eq!(config.defaults.tag_filter.as_deref(), Some("env:"));
+        assert_eq!(config.network.timeout_secs, 15);
+    }
+
+    #[test]
+    fn higher_token_wins_and_empty_token_explicitly_clears_it() {
+        let mut config = file_with_keys();
+        config.overlay(ConfigFile {
+            token: Some("token".into()),
+            ..ConfigFile::default()
+        });
+        assert_eq!(config.token.as_deref(), Some("token"));
+        config.overlay(ConfigFile {
+            token: Some(String::new()),
+            ..ConfigFile::default()
+        });
+        assert_keys(&Config::resolve(config).unwrap());
+    }
+
+    #[test]
+    fn config_files_merge_and_malformed_layers_fail_without_exposing_secrets() {
+        let directory = tempfile::tempdir().unwrap();
+        let global = directory.path().join("global.toml");
+        let project = directory.path().join("project.toml");
+        fs::write(
+            &global,
+            "api_key = 'global'\napp_key = 'app'\n[defaults]\nformat = 'jsonl'\n",
+        )
+        .unwrap();
+        fs::write(&project, "site = 'datadoghq.eu'\n").unwrap();
+        let merged =
+            Config::resolve(ConfigFile::load_paths(Some(&global), Some(&project)).unwrap())
+                .unwrap();
+        assert_eq!(merged.site, "datadoghq.eu");
+        assert_eq!(merged.defaults.format, "jsonl");
+        fs::write(&global, "api_key = 'secret-value' broken").unwrap();
+        let error = ConfigFile::load_paths(Some(&global), Some(&project))
+            .unwrap_err()
+            .to_string();
+        assert!(!error.contains("secret-value"));
+        assert!(error.contains("global.toml"));
+    }
+
+    #[test]
+    fn config_rejects_unknown_fields_invalid_formats_and_zero_timeouts() {
+        assert!(toml::from_str::<ConfigFile>("[network]\ntimeout_sec = 30").is_err());
+        for source in [
+            "[defaults]\nformat = 'yaml'",
+            "[network]\ntimeout_secs = 0",
+            "[network]\ntotal_timeout_secs = 0",
+        ] {
+            let mut file = file_with_keys();
+            file.overlay(toml::from_str(source).unwrap());
+            assert!(Config::resolve(file).is_err());
+        }
+    }
+    #[test]
+    fn initialization_is_private_and_never_overwrites_an_existing_config() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.toml");
+        Config::init_at(path.clone()).unwrap();
+        let original = fs::read_to_string(&path).unwrap();
+        assert!(Config::init_at(path.clone()).is_err());
+        assert_eq!(fs::read_to_string(&path).unwrap(), original);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
+    }
+    #[test]
+    fn existing_config_format_aliases_remain_valid() {
+        for format in ["jsonlines", "JSONL", "JSON", "Table"] {
+            let mut file = file_with_keys();
+            file.defaults.format = Some(format.into());
+            assert_eq!(Config::resolve(file).unwrap().defaults.format, format);
+        }
     }
 }

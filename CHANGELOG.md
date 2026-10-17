@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-10-17
+
+### Changed
+
+- Development toolchain pinned to Rust 1.99.1; Rust 1.97 remains the minimum supported version.
+- Runtime and development dependencies updated against the October 17, 2026 registry; unused test dependencies and benchmark features removed.
+- Global and project config fields now merge before environment and CLI overrides. Explicit credentials in a higher source select the authentication method; unknown config fields and zero timeouts fail validation.
+- HTTP transport separated from endpoint definitions, with sensitive authentication headers, disabled redirects, one retry policy, full-jitter backoff, `Retry-After` handling, and a configurable total timeout.
+- JSONL consistently emits data without envelopes for detail and aggregate results; use JSON to retain metadata. Configuration display fully redacts credentials.
+- Tables support detail objects and propagate output errors. Configuration output/edit/path consistently use the nearest project file when present.
+- Query skill narrowed to supported read operations; command reference generated from Clap and checked in CI. English/Korean documentation and environment examples aligned with behavior.
+- CI actions and installed tools updated and pinned; tests include Windows and release builds include Intel macOS. Duplicate Codecov configuration removed.
+- Installer fails on binary download/checksum errors, keeps release-matched skill files, and compares skills by content rather than a duplicated version field.
+
+### Fixed
+
+- Reversed time ranges, integer timestamp overflow, empty tag-filter prefixes matching every tag, and `RUST_LOG` directives being overridden by the default level.
+- Broken-pipe errors in table/config output and stale jq/cursor paths in skill examples.
+- Overflow from extreme timeseries intervals, existing config format aliases, and latest-alias checksums.
+- Binary installs stage replacements before overwriting an existing executable. Source installs honor the repository toolchain and lockfile. Configuration initialization creates files exclusively with private Unix permissions.
+
 ## [0.2.0] - 2026-07-10
 
 ### Added
