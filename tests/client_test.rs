@@ -496,7 +496,7 @@ async fn query_timeseries_sends_envelope_with_millis_and_formulas() {
         .await
         .unwrap();
 
-    assert_eq!(response["data"]["attributes"]["values"][0][0], 42.0);
+    assert_eq!(response.values[0][0].as_ref().unwrap().as_f64(), Some(42.0));
 }
 
 #[tokio::test]
@@ -986,13 +986,14 @@ async fn metric_query_methods_validate_counts_before_http() {
     let client = client_for(&server, 0);
     for count in [0, 27, 160, 256] {
         let queries = vec!["avg:system.cpu.user{*}".to_string(); count];
-        let results = [
+        assert!(matches!(
             client.query_timeseries(&queries, &[], 0, 1, None).await,
+            Err(DatadogError::InvalidInput(_))
+        ));
+        assert!(matches!(
             client.query_scalar(&queries, &[], "avg", 0, 1).await,
-        ];
-        for result in results {
-            assert!(matches!(result, Err(DatadogError::InvalidInput(_))));
-        }
+            Err(DatadogError::InvalidInput(_))
+        ));
     }
 }
 
@@ -1000,7 +1001,7 @@ async fn metric_query_methods_validate_counts_before_http() {
 async fn metric_query_methods_accept_both_count_boundaries_with_unique_names() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {}})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {"attributes": {"columns": [], "times": [], "series": [], "values": []}}})))
         .expect(4)
         .mount(&server)
         .await;
@@ -1032,4 +1033,145 @@ async fn metric_query_methods_accept_both_count_boundaries_with_unique_names() {
             count
         );
     }
+}
+
+#[tokio::test]
+async fn formula_processing_errors_are_not_successful_empty_results() {
+    for shape in 0..4 {
+        let server = MockServer::start().await;
+        let mut scalar = json!({"errors": "unknown formula"});
+        let mut timeseries = scalar.clone();
+        if shape == 1 {
+            scalar["data"] = json!({"attributes": {"columns": []}});
+            timeseries["data"] = json!({"attributes": {"times": [], "series": [], "values": []}});
+        }
+        if shape >= 2 {
+            let data = if shape == 2 {
+                json!({})
+            } else {
+                json!({"attributes": {}})
+            };
+            scalar["data"] = data.clone();
+            timeseries["data"] = data;
+        }
+        for (endpoint, body) in [("scalar", scalar), ("timeseries", timeseries)] {
+            Mock::given(path(format!("/api/v2/query/{endpoint}")))
+                .respond_with(ResponseTemplate::new(200).set_body_json(body))
+                .expect(1)
+                .mount(&server)
+                .await;
+        }
+        let client = client_for(&server, 3);
+        let queries = vec!["q".into()];
+        let scalar_error = client
+            .query_scalar(&queries, &[], "avg", 0, 1)
+            .await
+            .unwrap_err();
+        let timeseries_error = client
+            .query_timeseries(&queries, &[], 0, 1, None)
+            .await
+            .unwrap_err();
+        for error in [scalar_error, timeseries_error] {
+            assert_eq!(error.exit_code(), 4);
+            assert!(matches!(error, DatadogError::QueryError(_)));
+        }
+    }
+}
+
+#[tokio::test]
+async fn formula_payloads_reject_malformed_and_misaligned_data() {
+    let scalar_payloads = [
+        json!({}),
+        json!({"data": []}),
+        json!({"errors": []}),
+        json!({"data":{"attributes":{"columns":[{"type":"number","values":[1]},{"type":"group","values":[]}]}}}),
+        json!({"data":{"attributes":{"columns":[{"type":"number","values":["bad"]}]}}}),
+        json!({"data":{"attributes":{"columns":[{"type":"group","values":[[1]]}]}}}),
+    ];
+    let timeseries_payloads = [
+        json!({}),
+        json!({"data":{"attributes":{}}}),
+        json!({"data":{"attributes":{"times":[1],"series":[{}],"values":[]}}}),
+        json!({"data":{"attributes":{"times":[1],"series":[{}],"values":[[]]}}}),
+        json!({"data":{"attributes":{"times":[1],"series":[{}],"values":[["bad"]]}}}),
+    ];
+    for (endpoint, payloads) in [
+        ("scalar", scalar_payloads.as_slice()),
+        ("timeseries", timeseries_payloads.as_slice()),
+    ] {
+        for payload in payloads {
+            let server = MockServer::start().await;
+            Mock::given(path(format!("/api/v2/query/{endpoint}")))
+                .respond_with(ResponseTemplate::new(200).set_body_json(payload))
+                .expect(1)
+                .mount(&server)
+                .await;
+            let client = client_for(&server, 3);
+            let queries = vec!["q".into()];
+            let error = if endpoint == "scalar" {
+                client
+                    .query_scalar(&queries, &[], "avg", 0, 1)
+                    .await
+                    .unwrap_err()
+            } else {
+                client
+                    .query_timeseries(&queries, &[], 0, 1, None)
+                    .await
+                    .unwrap_err()
+            };
+            assert_eq!(error.exit_code(), 7);
+        }
+    }
+}
+
+#[tokio::test]
+async fn scalar_preserves_column_identity_metadata_and_empty_results() {
+    use clap::Parser;
+    use datadog_cli::cli::{Cli, Command};
+    use datadog_cli::handlers::metrics::MetricsHandler;
+    for columns in [
+        json!([]),
+        json!([
+            {"name":"a","type":"group","values":[["prod","canary"]]},
+            {"name":"a","type":"number","values":[1.25],"meta":{"unit":[{"name":"second","scale_factor":1}]},"extension":"retained"},
+            {"type":"number","values":[null]},
+            {"type":"number","values":[9007199254740993u64]}
+        ]),
+    ] {
+        let server = MockServer::start().await;
+        Mock::given(path("/api/v2/query/scalar"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "errors":"", "data":{"attributes":{"columns":columns,"extension":true}}
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let cli = Cli::try_parse_from(["datadog-cli", "scalar", "q"]).unwrap();
+        let Command::Scalar(args) = cli.command else {
+            panic!("expected scalar")
+        };
+        let result = MetricsHandler::scalar(&client_for(&server, 0), &args)
+            .await
+            .unwrap();
+        assert_eq!(result["data"]["columns"], columns);
+        assert_eq!(result["data"]["extension"], true);
+    }
+}
+
+#[tokio::test]
+async fn v1_metric_processing_errors_preserve_api_failure_exit_code() {
+    let server = MockServer::start().await;
+    Mock::given(path("/api/v1/query"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "status":"error", "error":"query failed"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let error = client_for(&server, 3)
+        .query_metrics("q", 0, 1)
+        .await
+        .unwrap_err();
+    assert_eq!(error.exit_code(), 4);
+    assert!(matches!(error, DatadogError::QueryError(_)));
 }

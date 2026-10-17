@@ -16,7 +16,7 @@ use std::io::Write;
 fn main() {
     let mut output = std::fs::File::create(std::env::var_os("TEST_EDITOR_OUTPUT").unwrap()).unwrap();
     for arg in std::env::args().skip(1) { writeln!(output, "{arg}").unwrap(); }
-    if std::env::var_os("TEST_EDITOR_FAIL").is_some() { std::process::exit(7); }
+    if let Ok(code) = std::env::var("TEST_EDITOR_EXIT") { std::process::exit(code.parse().unwrap()); }
 }
 "#).unwrap();
     assert!(
@@ -62,10 +62,14 @@ fn main() {
         fs::canonicalize(&config).unwrap()
     );
 
-    command.env("TEST_EDITOR_FAIL", "1");
+    command.env("TEST_EDITOR_EXIT", "7");
     let result = command.output().unwrap();
     assert_eq!(result.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&result.stderr).contains("Editor exited with error"));
+    command.env("TEST_EDITOR_EXIT", "130");
+    let result = command.output().unwrap();
+    assert_eq!(result.status.code(), Some(130));
+    assert!(result.stderr.is_empty());
     for invalid in ["", "  ", "\"\""] {
         fs::remove_file(&output).unwrap();
         let result = command.env("EDITOR", invalid).output().unwrap();

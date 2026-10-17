@@ -88,13 +88,6 @@ impl MetricsHandler {
             json!(crate::utils::format_timestamp(to_ts)),
         );
 
-        // Only include error if present
-        if let Some(ref error) = response.error
-            && !error.is_empty()
-        {
-            meta.insert("error".to_string(), json!(error));
-        }
-
         // Only include message if present and non-empty
         if let Some(ref message) = response.message
             && !message.is_empty()
@@ -141,41 +134,28 @@ impl MetricsHandler {
             )
             .await?;
 
-        let attrs = &response["data"]["attributes"];
-        let times = attrs["times"].as_array().cloned().unwrap_or_default();
-        let empty = Vec::new();
-        let series_meta = attrs["series"].as_array().unwrap_or(&empty);
-        let values = attrs["values"].as_array().unwrap_or(&empty);
-
-        let series: Vec<Value> = series_meta
+        let series: Vec<Value> = response
+            .series
             .iter()
-            .zip(values.iter())
-            .map(|(s, series_values)| {
-                let points: Vec<Value> = times
+            .zip(&response.values)
+            .map(|(metadata, values)| {
+                let points: Vec<Value> = response
+                    .times
                     .iter()
-                    .zip(series_values.as_array().unwrap_or(&empty).iter())
-                    .map(|(t, v)| {
+                    .zip(values)
+                    .map(|(time, value)| {
                         json!({
-                            "timestamp": t.as_i64()
-                                .map(|ms| crate::utils::format_timestamp(ms / 1000)),
-                            "value": v
+                            "timestamp": crate::utils::format_timestamp(time / 1000),
+                            "value": value
                         })
                     })
                     .collect();
-
-                let mut obj = serde_json::Map::new();
-                for key in ["group_tags", "query_index", "unit"] {
-                    if let Some(value) = s.get(key)
-                        && !value.is_null()
-                    {
-                        obj.insert(key.to_string(), value.clone());
-                    }
-                }
-                obj.insert(
-                    "points".to_string(),
-                    json!({ "count": points.len(), "data": points }),
+                let mut series = metadata.clone();
+                series.insert(
+                    "points".into(),
+                    json!({"count": points.len(), "data": points}),
                 );
-                json!(obj)
+                Value::Object(series)
             })
             .collect();
 
@@ -204,33 +184,6 @@ impl MetricsHandler {
             )
             .await?;
 
-        // Columns are index-aligned; pivot them into one record per row so
-        // the output works with jsonl and table formats.
-        let empty = Vec::new();
-        let columns = response["data"]["attributes"]["columns"]
-            .as_array()
-            .unwrap_or(&empty);
-
-        let row_count = columns
-            .iter()
-            .filter_map(|c| c["values"].as_array().map(|v| v.len()))
-            .max()
-            .unwrap_or(0);
-
-        let rows: Vec<Value> = (0..row_count)
-            .map(|i| {
-                let mut row = serde_json::Map::new();
-                for column in columns {
-                    let name = column["name"].as_str().unwrap_or("value");
-                    row.insert(
-                        name.to_string(),
-                        column["values"].get(i).cloned().unwrap_or(Value::Null),
-                    );
-                }
-                json!(row)
-            })
-            .collect();
-
         let meta = json!({
             "queries": args.queries,
             "formulas": args.formula,
@@ -239,6 +192,6 @@ impl MetricsHandler {
             "to": crate::utils::format_timestamp(to_ts),
         });
 
-        Ok(handler.format_list(json!(rows), None, Some(meta)))
+        Ok(handler.format_list(serde_json::to_value(response)?, None, Some(meta)))
     }
 }

@@ -19,7 +19,7 @@ The accompanying skill comes from the same release tag. Non-interactive installa
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
-DATADOG_CLI_VERSION=0.4.1 bash install.sh
+DATADOG_CLI_VERSION=0.5.0 bash install.sh
 ```
 
 Source builds require Rustup and C build tools. Development uses Rust 1.99.1 from `rust-toolchain.toml`; the minimum supported Rust version is 1.97.
@@ -92,10 +92,18 @@ datadog-cli config path   # Nearest project file, otherwise global path
 datadog-cli config edit   # Open that path in $EDITOR; defaults to vim
 ```
 
-`EDITOR` can include arguments, such as `code --wait`. Double-quote executable paths containing spaces. Linux/macOS use POSIX quoting rules; Windows uses Windows command-line quoting rules. Variables, pipelines, and command substitution are not expanded.
+`EDITOR` can include arguments, such as `code --wait`. Double-quote executable paths containing spaces. Linux/macOS use POSIX quoting rules; Windows uses Windows command-line quoting rules. Variables, pipelines, and command substitution are not expanded. During editing, the editor handles Ctrl+C while the parent waits for it to exit. An interrupted editor makes the CLI exit with code 130.
 
 `config init` creates the global file. `DD_TAG_FILTER` sets the default tag filter; `RUST_LOG` sets the log level.
 See the [command reference](.claude/skills/datadog-query/reference.md) for supported sites and options.
+
+## Upgrading to 0.5
+
+`scalar` preserves the ordered API column array at `data.columns`, including `type`, optional `name`, `values`, and unit metadata. Identical column names no longer overwrite one another.
+JSONL emits one response body containing `columns`. Table headers use `[index] name (type)` to distinguish columns.
+Extract numbers with `jq '.data.columns[] | select(.type == "number") | .values[]'`; omit the `.data` prefix for JSONL.
+Reported metric-processing errors exit with code 4; malformed response structures exit with code 7.
+The Rust client's `query_scalar` and `query_timeseries` now return validated `ScalarAttributes` and `TimeseriesAttributes` directly.
 
 ## Upgrading to 0.4
 

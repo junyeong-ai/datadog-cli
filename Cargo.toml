@@ -1,6 +1,6 @@
 [package]
 name = "datadog-cli"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2024"
 rust-version = "1.97"
 authors = ["Datadog CLI Contributors"]
@@ -40,6 +40,9 @@ tokio = { version = "1.53.3", features = ["net", "io-util"] }
 wiremock = "0.6.5"
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support", "html_reports"] }
 tempfile = "3.27.0"
+
+[target.'cfg(unix)'.dev-dependencies]
+libc = "0.2.191"
 
 [lib]
 name = "datadog_cli"

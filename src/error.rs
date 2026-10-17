@@ -5,6 +5,12 @@ pub enum DatadogError {
     #[error("API request failed (HTTP {status}): {message}")]
     ApiError { status: u16, message: String },
 
+    #[error("Metric query failed: {0}")]
+    QueryError(String),
+
+    #[error("Interrupted")]
+    Interrupted,
+
     #[error("Authentication failed: {0}")]
     AuthError(String),
 
@@ -39,7 +45,8 @@ impl DatadogError {
     pub fn exit_code(&self) -> i32 {
         match self {
             DatadogError::AuthError(_) => 3,
-            DatadogError::ApiError { .. } => 4,
+            DatadogError::ApiError { .. } | DatadogError::QueryError(_) => 4,
+            DatadogError::Interrupted => 130,
             DatadogError::RateLimitError { .. } => 5,
             DatadogError::NetworkError(_) | DatadogError::TimeoutError => 6,
             DatadogError::DecodeError(_) => 7,

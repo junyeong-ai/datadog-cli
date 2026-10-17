@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-10-17
+
+### Changed
+
+- Scalar JSON preserves ordered API columns at `data.columns`, including duplicate or absent names, types, values, unit metadata, and extension fields. JSONL emits one columnar response body; table output projects columns into rows with indexed headers.
+- Rust timeseries and scalar client methods return validated typed attributes instead of raw response envelopes.
+
+### Fixed
+
+- Metric processing errors, including HTTP 200 formula errors, return exit code 4 rather than successful empty data. Invalid response shapes and misaligned arrays return decode errors; explicit empty arrays remain valid.
+- Foreground editor interrupts are registered before launch and handled outside API cancellation. The parent waits for the editor, preserves editors that continue after Ctrl+C, and returns 130 when the editor exits interrupted.
+
 ## [0.4.1] - 2026-10-17
 
 ### Fixed

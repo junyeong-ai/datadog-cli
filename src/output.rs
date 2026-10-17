@@ -26,6 +26,52 @@ pub fn print(data: &Value, format: &Format) -> io::Result<()> {
     writer.flush()
 }
 
+pub fn print_scalar(data: &Value, format: &Format) -> io::Result<()> {
+    if !matches!(format, Format::Table) {
+        return print(data, format);
+    }
+    let stdout = io::stdout();
+    let mut writer = io::BufWriter::new(stdout.lock());
+    write_scalar_table(data, &mut writer)?;
+    writer.flush()
+}
+
+fn write_scalar_table(data: &Value, writer: &mut impl Write) -> io::Result<()> {
+    let columns = data["data"]["columns"].as_array().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Scalar output requires columns",
+        )
+    })?;
+    let rows = columns
+        .first()
+        .and_then(|column| column["values"].as_array())
+        .map_or(0, Vec::len);
+    if rows == 0 {
+        return writeln!(writer, "No data");
+    }
+    let mut table = Table::new();
+    table.load_style(UTF8_FULL);
+    table.set_header(columns.iter().enumerate().map(|(index, column)| {
+        format!(
+            "[{index}] {} ({})",
+            column["name"].as_str().unwrap_or("unnamed"),
+            column["type"].as_str().unwrap_or("unknown")
+        )
+    }));
+    for row in 0..rows {
+        table.add_row(columns.iter().map(|column| {
+            let value = &column["values"][row];
+            if value.is_null() {
+                "-".into()
+            } else {
+                value.to_string()
+            }
+        }));
+    }
+    writeln!(writer, "{table}")
+}
+
 pub fn write(
     data: &Value,
     format: &Format,
@@ -168,6 +214,35 @@ mod tests {
             assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
         }
     }
+
+    #[test]
+    fn scalar_formats_preserve_duplicate_columns_and_values() {
+        let data = json!({"data": {"columns": [
+            {"name": "a", "type": "group", "values": [["prod"]]},
+            {"name": "a", "type": "number", "values": [1.25]},
+            {"type": "number", "values": [null]}
+        ]}});
+        let mut table = Vec::new();
+        write_scalar_table(&data, &mut table).unwrap();
+        let table = String::from_utf8(table).unwrap();
+        for text in [
+            "[0] a (group)",
+            "[1] a (number)",
+            "[2] unnamed (number)",
+            "prod",
+            "1.25",
+        ] {
+            assert!(table.contains(text));
+        }
+        let mut jsonl = Vec::new();
+        write(&data, &Format::JsonLines, &mut jsonl, false).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<Value>(&jsonl).unwrap(),
+            data["data"]
+        );
+        assert_eq!(jsonl.iter().filter(|&&byte| byte == b'\n').count(), 1);
+    }
+
     #[test]
     fn jsonlines_details_omit_the_envelope() {
         let mut output = Vec::new();

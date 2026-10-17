@@ -64,4 +64,6 @@ datadog-cli timeseries "sum:trace.http.request.errors{service:api}" \
 datadog-cli scalar "avg:system.cpu.user{env:prod} by {host}" --aggregator avg
 ```
 
+Scalar JSON keeps the ordered API columns at `.data.columns`; use `.columns` for JSONL. Names can repeat, so use column type and position when selecting values. For example: `jq '.data.columns[] | select(.type == "number") | .values[]'`.
+
 Metric names and tags depend on your instrumentation. Check the selected metric's units and aggregation before interpreting a formula as a rate or percentage.

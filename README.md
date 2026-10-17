@@ -19,7 +19,7 @@ curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/script
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
-DATADOG_CLI_VERSION=0.4.1 bash install.sh
+DATADOG_CLI_VERSION=0.5.0 bash install.sh
 ```
 
 소스 빌드는 Rustup과 C 빌드 도구가 필요합니다. 개발 도구체인은 `rust-toolchain.toml`의 Rust 1.99.1이며, 최소 지원 버전은 Rust 1.97입니다.
@@ -92,10 +92,18 @@ datadog-cli config path   # 프로젝트 파일이 있으면 해당 경로, 아�
 datadog-cli config edit   # 위 경로를 $EDITOR로 열기; 기본값 vim
 ```
 
-`EDITOR`는 `code --wait`처럼 인자를 포함할 수 있습니다. 공백이 있는 실행 경로는 큰따옴표로 감싸세요. Linux·macOS는 POSIX 인용 규칙, Windows는 Windows 명령줄 인용 규칙을 사용하며, 변수 확장·파이프·명령 치환은 수행하지 않습니다.
+`EDITOR`는 `code --wait`처럼 인자를 포함할 수 있습니다. 공백이 있는 실행 경로는 큰따옴표로 감싸세요. Linux·macOS는 POSIX 인용 규칙, Windows는 Windows 명령줄 인용 규칙을 사용하며, 변수 확장·파이프·명령 치환은 수행하지 않습니다. 편집 중에는 편집기가 Ctrl+C를 처리하며 부모는 편집기 종료를 기다립니다. 편집기가 중단 종료하면 CLI도 130을 반환합니다.
 
 `config init`은 전역 파일을 만듭니다. `DD_TAG_FILTER`는 기본 태그 필터, `RUST_LOG`는 로그 수준을 설정합니다.
 지원 사이트와 전체 옵션은 [명령 참조](.claude/skills/datadog-query/reference.md)를 확인하세요.
+
+## 0.5 업그레이드
+
+`scalar`는 `data.columns`에 API 열 배열을 순서대로 보존합니다. 각 열의 `type`, 선택적 `name`, `values`, 단위 메타데이터가 유지되며 같은 이름도 덮어쓰지 않습니다.
+JSONL은 `columns`를 포함한 응답 본문 하나를 한 줄에 출력합니다. 표 헤더는 `[순번] 이름 (유형)`으로 열을 구분합니다.
+숫자 값 추출은 `jq '.data.columns[] | select(.type == "number") | .values[]'`를 사용하세요. JSONL에서는 `.data` 접두어를 제외합니다.
+API가 보고한 메트릭 처리 오류는 종료 코드 4, 잘못된 응답 구조는 7을 반환합니다.
+Rust 클라이언트의 `query_scalar`·`query_timeseries`는 검증된 `ScalarAttributes`·`TimeseriesAttributes`를 직접 반환합니다.
 
 ## 0.4 업그레이드
 

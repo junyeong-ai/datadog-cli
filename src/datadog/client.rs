@@ -47,13 +47,15 @@ impl DatadogClient {
             ("to", to.to_string()),
         ];
 
-        self.request(
-            reqwest::Method::GET,
-            "/api/v1/query",
-            Some(params),
-            None::<()>,
-        )
-        .await
+        let response: serde_json::Value = self
+            .request(
+                reqwest::Method::GET,
+                "/api/v1/query",
+                Some(params),
+                None::<()>,
+            )
+            .await?;
+        MetricsResponse::from_api_response(response)
     }
 
     fn validate_metric_queries(queries: &[String]) -> Result<()> {
@@ -74,7 +76,7 @@ impl DatadogClient {
         from_ms: i64,
         to_ms: i64,
         interval_ms: Option<i64>,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<TimeseriesAttributes> {
         Self::validate_metric_queries(queries)?;
         let mut attributes = serde_json::json!({
             "from": from_ms,
@@ -108,13 +110,17 @@ impl DatadogClient {
             }
         });
 
-        self.request(
-            reqwest::Method::POST,
-            "/api/v2/query/timeseries",
-            None,
-            Some(body),
-        )
-        .await
+        let response: FormulaResponse = self
+            .request(
+                reqwest::Method::POST,
+                "/api/v2/query/timeseries",
+                None,
+                Some(body),
+            )
+            .await?;
+        let attributes: TimeseriesAttributes = response.into_attributes()?;
+        attributes.validate()?;
+        Ok(attributes)
     }
 
     /// v2 scalar query: each metric query is reduced to a single value
@@ -126,7 +132,7 @@ impl DatadogClient {
         aggregator: &str,
         from_ms: i64,
         to_ms: i64,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<ScalarAttributes> {
         Self::validate_metric_queries(queries)?;
         let mut attributes = serde_json::json!({
             "from": from_ms,
@@ -157,13 +163,17 @@ impl DatadogClient {
             }
         });
 
-        self.request(
-            reqwest::Method::POST,
-            "/api/v2/query/scalar",
-            None,
-            Some(body),
-        )
-        .await
+        let response: FormulaResponse = self
+            .request(
+                reqwest::Method::POST,
+                "/api/v2/query/scalar",
+                None,
+                Some(body),
+            )
+            .await?;
+        let attributes: ScalarAttributes = response.into_attributes()?;
+        attributes.validate()?;
+        Ok(attributes)
     }
 
     // ============= Logs API =============

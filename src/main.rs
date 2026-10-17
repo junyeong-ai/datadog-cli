@@ -9,12 +9,24 @@ async fn main() {
 
     let result = async {
         init_logging(cli.verbose)?;
-        tokio::select! {
-            result = datadog_cli::cli::run(cli) => result,
-            signal = tokio::signal::ctrl_c() => {
-                match signal {
-                    Ok(()) => process::exit(130),
-                    Err(error) => Err(DatadogError::IoError(error)),
+        if matches!(
+            &cli.command,
+            datadog_cli::cli::Command::Config {
+                action: datadog_cli::cli::ConfigAction::Edit
+            }
+        ) {
+            #[cfg(unix)]
+            let _interrupts =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
+            #[cfg(windows)]
+            let _interrupts = tokio::signal::windows::ctrl_c()?;
+            datadog_cli::cli::run(cli).await
+        } else {
+            tokio::select! {
+                result = datadog_cli::cli::run(cli) => result,
+                signal = tokio::signal::ctrl_c() => {
+                    signal.map_err(DatadogError::IoError)?;
+                    Err(DatadogError::Interrupted)
                 }
             }
         }
@@ -29,7 +41,9 @@ async fn main() {
             process::exit(0);
         }
 
-        eprintln!("Error: {}", e);
+        if !matches!(e, DatadogError::Interrupted) {
+            eprintln!("Error: {}", e);
+        }
         process::exit(e.exit_code());
     }
 }

@@ -428,6 +428,19 @@ total_timeout_secs = 120
             .status()
             .map_err(|e| DatadogError::InvalidInput(format!("Failed to launch editor: {}", e)))?;
 
+        let mut interrupted = status.code() == Some(130);
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::ExitStatusExt;
+            interrupted |= status.signal() == Some(2);
+        }
+        #[cfg(windows)]
+        {
+            interrupted |= status.code() == Some(0xC000013Au32 as i32);
+        }
+        if interrupted {
+            return Err(DatadogError::Interrupted);
+        }
         if !status.success() {
             return Err(DatadogError::InvalidInput(
                 "Editor exited with error".into(),

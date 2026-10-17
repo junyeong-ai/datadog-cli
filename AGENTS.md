@@ -8,9 +8,11 @@ Rust 2024 CLI. `rust-toolchain.toml` pins development Rust; `Cargo.toml` declare
 - `src/config.rs`: global → nearest project → environment → CLI field merging and resolved configuration. A higher source with keys clears an inherited token; a nonempty token wins within a source. Config files reject unknown fields. Never include secret values or raw config snippets in errors.
 - `src/datadog/transport.rs`: pooled HTTP client, sensitive authentication headers, request deadlines, error mapping, and retries. Redirects and reqwest's automatic retries are disabled so one policy controls attempts.
 - `src/datadog/client.rs`: endpoint paths, request bodies, and shared search parameters.
-- `src/datadog/models.rs`: verified response fields. Preserve extensible API fields where callers depend on passthrough data.
+- `src/datadog/models.rs`: verified response fields and metric array alignment. Metric client methods reject processing errors before handlers transform results. Preserve extensible API fields where callers depend on passthrough data.
 - `src/handlers/`: endpoint-specific transformation and pagination. `common.rs` owns shared time, tag, pagination, and output-envelope behavior.
 - `src/output.rs`: JSON/JSONL/table writers. Stdout contains results; tracing writes to stderr. Propagate I/O errors so closed pipelines exit quietly.
+
+Keep scalar column arrays ordered; column names are optional attributes, not unique identifiers. Scalar table projection is explicit in `src/output.rs`.
 
 Pass metric query expressions unchanged. Use the structured timeseries interval for server-side rollup; do not infer query syntax or aggregation from string patterns.
 

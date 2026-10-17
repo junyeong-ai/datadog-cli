@@ -14,6 +14,29 @@ pub struct MetricsResponse {
     pub group_by: Option<Vec<String>>,
 }
 
+impl MetricsResponse {
+    pub(super) fn from_api_response(value: serde_json::Value) -> crate::error::Result<Self> {
+        #[derive(Deserialize)]
+        struct QueryStatus<'a> {
+            status: Option<&'a str>,
+            error: Option<&'a str>,
+        }
+
+        let status = QueryStatus::deserialize(&value)
+            .map_err(|error| crate::error::DatadogError::DecodeError(error.to_string()))?;
+        if let Some(error) = status.error.filter(|error| !error.is_empty()) {
+            return Err(crate::error::DatadogError::QueryError(error.into()));
+        }
+        if let Some(status) = status.status.filter(|status| *status != "ok") {
+            return Err(crate::error::DatadogError::QueryError(format!(
+                "Query status: {status}"
+            )));
+        }
+        serde_json::from_value(value)
+            .map_err(|error| crate::error::DatadogError::DecodeError(error.to_string()))
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MetricSeries {
     pub metric: String,
@@ -345,4 +368,107 @@ pub struct RumError {
     pub error_type: Option<String>,
     pub stack: Option<String>,
     pub is_crash: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(super) struct FormulaResponse {
+    data: Option<serde_json::Value>,
+    errors: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FormulaData<T> {
+    attributes: T,
+}
+
+impl FormulaResponse {
+    pub(super) fn into_attributes<T: serde::de::DeserializeOwned>(self) -> crate::error::Result<T> {
+        if let Some(message) = self.errors.filter(|message| !message.is_empty()) {
+            return Err(crate::error::DatadogError::QueryError(message));
+        }
+        let data = self.data.ok_or_else(|| {
+            crate::error::DatadogError::DecodeError("Metric response is missing data".into())
+        })?;
+        serde_json::from_value::<FormulaData<T>>(data)
+            .map(|data| data.attributes)
+            .map_err(|error| crate::error::DatadogError::DecodeError(error.to_string()))
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TimeseriesAttributes {
+    pub times: Vec<i64>,
+    pub series: Vec<serde_json::Map<String, serde_json::Value>>,
+    pub values: Vec<Vec<Option<serde_json::Number>>>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+impl TimeseriesAttributes {
+    pub(super) fn validate(&self) -> crate::error::Result<()> {
+        if self.series.len() != self.values.len()
+            || self
+                .values
+                .iter()
+                .any(|values| values.len() != self.times.len())
+        {
+            return Err(crate::error::DatadogError::DecodeError(
+                "Timeseries response arrays have inconsistent lengths".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ScalarAttributes {
+    pub columns: Vec<ScalarColumn>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ScalarColumn {
+    #[serde(rename = "group")]
+    Group {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+        values: Vec<Vec<String>>,
+        #[serde(flatten)]
+        extra: serde_json::Map<String, serde_json::Value>,
+    },
+    #[serde(rename = "number")]
+    Number {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+        values: Vec<Option<serde_json::Number>>,
+        #[serde(flatten)]
+        extra: serde_json::Map<String, serde_json::Value>,
+    },
+}
+
+impl ScalarColumn {
+    fn row_count(&self) -> usize {
+        match self {
+            Self::Group { values, .. } => values.len(),
+            Self::Number { values, .. } => values.len(),
+        }
+    }
+}
+
+impl ScalarAttributes {
+    pub(super) fn validate(&self) -> crate::error::Result<()> {
+        if let Some(first) = self.columns.first()
+            && self
+                .columns
+                .iter()
+                .any(|column| column.row_count() != first.row_count())
+        {
+            return Err(crate::error::DatadogError::DecodeError(
+                "Scalar response columns have inconsistent row counts".into(),
+            ));
+        }
+        Ok(())
+    }
 }
