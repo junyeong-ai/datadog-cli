@@ -15,7 +15,7 @@ curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/script
 ```
 
 Select a release with `DATADOG_CLI_VERSION`. Installation stops on checksum failure.
-The accompanying skill comes from the same release tag. Non-interactive installation defaults to installing the binary and user skill.
+The accompanying skill comes from the same release tag. Non-interactive installation defaults to installing the binary and user skill. Existing skills are replaced without a backup.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
@@ -30,7 +30,7 @@ cd datadog-cli
 ./scripts/install.sh --source
 ```
 
-The script installs the binary to `~/.local/bin`. Use `./scripts/uninstall.sh` to remove it. Configuration and skill removal are separate choices; skill removal creates a backup.
+The script installs the binary to `~/.local/bin`. Use `./scripts/uninstall.sh` to remove it. Configuration and skill removal are separate choices; selecting skill removal deletes it without a backup.
 To manage only the binary with Cargo, install with `cargo install --path . --locked --target host-tuple` and remove it with `cargo uninstall datadog-cli`. Cargo defaults to `~/.cargo/bin`. Choose one installation method to avoid competing binaries on PATH.
 
 ## Getting started

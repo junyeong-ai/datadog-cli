@@ -15,7 +15,7 @@ curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/script
 ```
 
 특정 릴리스는 `DATADOG_CLI_VERSION`으로 선택합니다. 스크립트는 체크섬 검증에 실패하면 설치를 중단합니다.
-바이너리와 함께 설치하는 스킬은 같은 릴리스 태그에서 가져옵니다. 비대화형 실행에서는 바이너리와 사용자 스킬을 기본 설치합니다.
+바이너리와 함께 설치하는 스킬은 같은 릴리스 태그에서 가져옵니다. 비대화형 실행에서는 바이너리와 사용자 스킬을 기본 설치합니다. 기존 스킬은 백업 없이 교체합니다.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
@@ -30,7 +30,7 @@ cd datadog-cli
 ./scripts/install.sh --source
 ```
 
-스크립트 설치는 `~/.local/bin`에 바이너리를 설치합니다. 제거는 `./scripts/uninstall.sh`를 사용합니다. 설정과 스킬 삭제는 별도로 선택하며, 스킬 삭제 전 백업을 만듭니다.
+스크립트 설치는 `~/.local/bin`에 바이너리를 설치합니다. 제거는 `./scripts/uninstall.sh`를 사용합니다. 설정과 스킬 삭제는 별도로 선택하며, 스킬 삭제를 선택하면 백업 없이 제거합니다.
 Cargo로 바이너리만 관리하려면 `cargo install --path . --locked --target host-tuple`로 설치하고 `cargo uninstall datadog-cli`로 제거하세요. Cargo의 기본 설치 경로는 `~/.cargo/bin`입니다. 두 설치 방식을 함께 사용하지 마세요.
 
 ## 시작하기

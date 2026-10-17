@@ -17,6 +17,7 @@ fi
 PROJECT_ROOT="$ORIGINAL_DIR"
 SKILL_SOURCE_DIR=""
 SKILL_TMP_DIR=""
+SKILL_STAGE_DIR=""
 BINARY_TMP_DIR=""
 
 if [ -f "$SCRIPT_DIR/../Cargo.toml" ]; then
@@ -28,6 +29,9 @@ PROJECT_SKILL_DIR="$PROJECT_ROOT/.claude/skills/$SKILL_NAME"
 cleanup() {
     if [ -n "$SKILL_TMP_DIR" ]; then
         rm -rf "$SKILL_TMP_DIR"
+    fi
+    if [ -n "$SKILL_STAGE_DIR" ]; then
+        rm -rf "$SKILL_STAGE_DIR"
     fi
     if [ -n "$BINARY_TMP_DIR" ]; then
         rm -rf "$BINARY_TMP_DIR"
@@ -203,35 +207,16 @@ check_skill_exists() {
     [ -f "$USER_SKILL_DIR/SKILL.md" ]
 }
 
-skills_match() {
-    local file
-    for file in "${SKILL_FILES[@]}"; do
-        cmp -s "$SKILL_SOURCE_DIR/$file" "$USER_SKILL_DIR/$file" || return 1
-    done
-}
-
-backup_skill() {
-    local timestamp
-    local backup_dir
-    timestamp=$(date +%Y%m%d_%H%M%S)
-    backup_dir="$USER_SKILL_DIR.backup_$timestamp"
-
-    echo "📦 Creating backup: $backup_dir" >&2
-    cp -r "$USER_SKILL_DIR" "$backup_dir"
-    echo "   ✅ Backup created" >&2
-}
-
 install_skill() {
     echo "📋 Installing skill to $USER_SKILL_DIR" >&2
-    local staged_skill
     mkdir -p "$(dirname "$USER_SKILL_DIR")"
-    staged_skill=$(mktemp -d "$(dirname "$USER_SKILL_DIR")/.datadog-query.XXXXXX")
-    if ! cp -R "$SKILL_SOURCE_DIR/." "$staged_skill/"; then
-        rm -rf "$staged_skill"
+    SKILL_STAGE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/datadog-cli-skill-stage.XXXXXX")
+    if ! cp -R "$SKILL_SOURCE_DIR/." "$SKILL_STAGE_DIR/"; then
         return 1
     fi
     rm -rf "$USER_SKILL_DIR"
-    mv "$staged_skill" "$USER_SKILL_DIR"
+    mv "$SKILL_STAGE_DIR" "$USER_SKILL_DIR"
+    SKILL_STAGE_DIR=""
     echo "   ✅ Skill installed" >&2
 }
 
@@ -284,16 +269,11 @@ prompt_skill_installation() {
     echo "" >&2
     echo "🤖 Datadog query skill ($ref)" >&2
     if check_skill_exists; then
-        if skills_match; then
-            echo "✅ Matching skill already installed" >&2
-            return 0
-        fi
-        choice=$(prompt_choice "Replace installed skill with $ref? [Y/n]: " "")
+        choice=$(prompt_choice "Replace installed skill with $ref without a backup? [Y/n]: " "")
         if [[ "$choice" =~ ^[nN]$ ]]; then
             echo "⏭️  Keeping installed skill" >&2
             return 0
         fi
-        backup_skill
         install_skill
     else
         choice=$(prompt_choice "Install query skill to $USER_SKILL_DIR? [Y/n]: " "")

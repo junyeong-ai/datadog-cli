@@ -53,6 +53,6 @@ Generate command syntax from Clap, not a second manual option list:
 cargo run --locked --example command_reference > .claude/skills/datadog-query/reference.md
 ```
 
-Update both READMEs, `.env.example`, and the query skill when observable behavior changes. Keep `CLAUDE.md` as the entry point to this guide instead of duplicating rules. Skills are installed from the binary's release tag and compared by content.
+Update both READMEs, `.env.example`, and the query skill when observable behavior changes. Keep `CLAUDE.md` as the entry point to this guide instead of duplicating rules. Skills are installed from the binary's release tag. Replace the complete skill directory without backups and stage it outside discovery directories so copies cannot be discovered as additional skills.
 
 Commit `Cargo.lock`. Keep runtime features scoped to actual use; separate major upgrades from unrelated behavior changes when preparing commits. Verify licenses, advisories, MSRV, and release-target builds. CI actions use verified commit SHAs; the SLSA reusable workflow uses a version tag required by its provenance verification model. CI-installed tools have explicit versions.

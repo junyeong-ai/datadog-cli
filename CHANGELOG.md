@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Skill installation and removal no longer create discoverable backup copies. Installation stages replacement files in temporary storage outside the skill directory.
+
 ## [0.7.0] - 2026-10-17
 
 ### Added

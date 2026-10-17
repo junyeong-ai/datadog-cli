@@ -24,7 +24,7 @@ export CARGO_NET_OFFLINE=true
 export CARGO_BUILD_TARGET=wasm32-unknown-unknown
 export TMPDIR="$work_dir/tmp"
 export INSTALL_DIR="$work_dir/bin"
-export DATADOG_CLI_SKILL_DIR="$work_dir/skill"
+export DATADOG_CLI_SKILL_DIR="$work_dir/skills/datadog-query"
 unset DATADOG_CLI_VERSION CARGO_TARGET_DIR
 cargo generate-lockfile --manifest-path "$fixture/Cargo.toml"
 mkdir -p "$fixture/target/release"
@@ -32,6 +32,9 @@ printf '#!/usr/bin/env bash\nprintf "stale binary\\n"\n' > "$fixture/target/rele
 chmod +x "$fixture/target/release/datadog-cli"
 
 for scenario in default environment configuration; do
+    if [ -f "$DATADOG_CLI_SKILL_DIR/SKILL.md" ]; then
+        printf 'Obsolete resource\n' > "$DATADOG_CLI_SKILL_DIR/obsolete.md"
+    fi
     case "$scenario" in
         environment) export CARGO_TARGET_DIR="$work_dir/shared target" ;;
         configuration)
@@ -48,11 +51,47 @@ for scenario in default environment configuration; do
     for name in SKILL.md reference.md examples.md; do
         cmp "$fixture/.claude/skills/datadog-query/$name" "$DATADOG_CLI_SKILL_DIR/$name"
     done
-    for path in "$TMPDIR"/datadog-cli-install.*; do
+    test ! -e "$DATADOG_CLI_SKILL_DIR/obsolete.md"
+    for path in "$TMPDIR"/datadog-cli-install.* "$TMPDIR"/datadog-cli-skill-stage.*; do
         test ! -e "$path"
     done
     echo "Source install ($scenario target directory): passed"
 done
+
+printf 'Previous skill\n' > "$DATADOG_CLI_SKILL_DIR/SKILL.md"
+printf 'Obsolete resource\n' > "$DATADOG_CLI_SKILL_DIR/obsolete.md"
+bash "$fixture/scripts/install.sh" --source </dev/null > "$work_dir/install.log" 2>&1
+for name in SKILL.md reference.md examples.md; do
+    cmp "$fixture/.claude/skills/datadog-query/$name" "$DATADOG_CLI_SKILL_DIR/$name"
+done
+test ! -e "$DATADOG_CLI_SKILL_DIR/obsolete.md"
+test "$(find "$work_dir/skills" -name SKILL.md | wc -l | tr -d ' ')" = 1
+for path in "$TMPDIR"/datadog-cli-install.* "$TMPDIR"/datadog-cli-skill-stage.*; do
+    test ! -e "$path"
+done
+echo "Skill upgrade replaces old files without discoverable copies: passed"
+
+mkdir -p "$work_dir/failing-copy"
+cat > "$work_dir/failing-copy/cp" <<'SH'
+#!/usr/bin/env bash
+case "${!#}" in
+    "$TMPDIR"/datadog-cli-skill-stage.*/) exit 1 ;;
+esac
+exec "$TEST_REAL_CP" "$@"
+SH
+chmod +x "$work_dir/failing-copy/cp"
+if TEST_REAL_CP="$(command -v cp)" PATH="$work_dir/failing-copy:$PATH" \
+    bash "$fixture/scripts/install.sh" --source </dev/null > "$work_dir/install.log" 2>&1; then
+    echo "A failed skill copy must fail installation" >&2
+    exit 1
+fi
+for name in SKILL.md reference.md examples.md; do
+    cmp "$fixture/.claude/skills/datadog-query/$name" "$DATADOG_CLI_SKILL_DIR/$name"
+done
+for path in "$TMPDIR"/datadog-cli-install.* "$TMPDIR"/datadog-cli-skill-stage.*; do
+    test ! -e "$path"
+done
+echo "Failed skill staging preserves the installed skill and cleans temporary files: passed"
 
 printf 'invalid Rust\n' > "$fixture/src/main.rs"
 if bash "$fixture/scripts/install.sh" --source </dev/null > "$work_dir/install.log" 2>&1; then
