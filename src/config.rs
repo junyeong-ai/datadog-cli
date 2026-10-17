@@ -333,11 +333,14 @@ impl Config {
         let mode = metadata.permissions().mode();
 
         if mode & 0o077 != 0 {
-            crate::diagnostics::print(format_args!(
-                "Warning: Config has insecure permissions: {:o}. Run: chmod 600 {}",
-                mode,
-                path.display()
-            ))?;
+            crate::diagnostics::write(
+                &mut std::io::stderr().lock(),
+                format_args!(
+                    "Warning: Config has insecure permissions: {:o}. Run: chmod 600 {}",
+                    mode,
+                    path.display()
+                ),
+            )?;
         }
 
         Ok(())

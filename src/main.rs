@@ -44,7 +44,7 @@ async fn main() {
         }
 
         if !matches!(e, DatadogError::Interrupted) {
-            let _ = diagnostics::print(format_args!("Error: {e}"));
+            let _ = diagnostics::write(&mut std::io::stderr().lock(), format_args!("Error: {e}"));
         }
         process::exit(e.exit_code());
     }
