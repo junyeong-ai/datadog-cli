@@ -3,6 +3,8 @@ use datadog_cli::error::DatadogError;
 use std::io::ErrorKind;
 use std::process;
 
+mod diagnostics;
+
 #[tokio::main]
 async fn main() {
     let cli = datadog_cli::cli::Cli::parse();
@@ -42,7 +44,7 @@ async fn main() {
         }
 
         if !matches!(e, DatadogError::Interrupted) {
-            eprintln!("Error: {}", e);
+            let _ = diagnostics::print(format_args!("Error: {e}"));
         }
         process::exit(e.exit_code());
     }

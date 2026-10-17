@@ -5,11 +5,13 @@ Rust 2024 CLI. `rust-toolchain.toml` pins development Rust; `Cargo.toml` declare
 ## Architecture
 
 - `src/cli/mod.rs`: Clap arguments, defaults, and ranges. Handlers consume typed arguments directly.
+- `src/auth.rs`: fixed Pup token provider, bounded asynchronous process lifetime and output. Provider selection is CLI-only; do not allow project config to execute credential commands. Pin the selected site/session and never fall back to another identity on provider failure.
 - `src/config.rs`: global → nearest project → environment → CLI field merging and resolved configuration. A higher source with keys clears an inherited token; a nonempty token wins within a source. Config files reject unknown fields. Never include secret values or raw config snippets in errors.
 - `src/datadog/transport.rs`: pooled HTTP client, sensitive authentication headers, request deadlines, error mapping, and retries. Redirects and reqwest's automatic retries are disabled so one policy controls attempts.
 - `src/datadog/client.rs`: endpoint paths, request bodies, and shared search parameters.
 - `src/datadog/models.rs`: verified response fields and metric array alignment. Metric client methods reject processing errors before handlers transform results. Preserve extensible API fields where callers depend on passthrough data.
 - `src/handlers/`: endpoint-specific transformation and pagination. `common.rs` owns shared time, tag, pagination, and output-envelope behavior.
+- `src/diagnostics.rs`: shared fallible stderr writes. Ignore diagnostic BrokenPipe, propagate other warning I/O errors, and preserve the original exit code when a final error cannot be printed.
 - `src/output.rs`: JSON/JSONL/table writers. Stdout contains results; tracing writes to stderr. Propagate I/O errors so closed pipelines exit quietly.
 
 Preserve query API metadata under `meta.api`; server timeout and warning diagnostics must remain visible on stderr in every format, independently of logging filters. Keep pagination separate from query completeness. RUM event details live in the record's `attributes` map; only the explicit stack option changes `attributes.error.stack`.

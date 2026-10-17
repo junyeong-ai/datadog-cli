@@ -19,7 +19,7 @@ The accompanying skill comes from the same release tag. Non-interactive installa
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
-DATADOG_CLI_VERSION=0.6.0 bash install.sh
+DATADOG_CLI_VERSION=0.7.0 bash install.sh
 ```
 
 Source builds require Rustup and C build tools. Development uses Rust 1.99.1 from `rust-toolchain.toml`; the minimum supported Rust version is 1.97.
@@ -54,6 +54,20 @@ export DD_SITE="datadoghq.com"
 ```
 
 Set `INSTALL_DIR` for the binary destination and `DATADOG_CLI_SKILL_DIR` for the skill destination. Use the same paths when uninstalling.
+
+## OAuth authentication
+
+Use [Pup 2.0+](https://github.com/DataDog/pup) for OAuth login and refresh. Install Pup on PATH, then create a named session with the read scopes you need. This example covers logs and metrics:
+
+```bash
+pup auth login --site datadoghq.com --org cli-read --scopes timeseries_query,logs_read_data
+datadog-cli --auth-provider pup --pup-org cli-read --site datadoghq.com logs search "service:api"
+```
+
+`--pup-org` is a saved Pup session name; select the actual Datadog organization during browser consent. `--site` must match that session's site. Other commands require their API scopes and user permissions.
+Each CLI command invokes `pup auth token --org=<session>` once. Pup owns storage and refresh; this CLI does not persist the token. Provider execution is limited to 60 seconds. Failure, empty output, or invalid output returns authentication error 3 without falling back to keys or another token.
+Provider selection is CLI-only; config files cannot enable external command execution. It conflicts with `--api-key`, `--app-key`, and `--token`, and does not apply to `config` commands. Ambient static credentials are ignored when the provider is selected.
+Personal PATs and service account SATs can be supplied directly through `DD_TOKEN`. Use SATs or service account keys for unattended execution. Manage OAuth consent and sessions through `pup auth`.
 
 ## Configuration
 
@@ -96,6 +110,12 @@ datadog-cli config edit   # Open that path in $EDITOR; defaults to vim
 
 `config init` creates the global file. `DD_TAG_FILTER` sets the default tag filter; `RUST_LOG` sets the log level.
 See the [command reference](.claude/skills/datadog-query/reference.md) for supported sites and options.
+
+## Upgrading to 0.7
+
+Dashboard list and detail output preserves optional API settings and extension fields. Detail authors are available through the original `author_handle` and `author_name` fields and the existing `author` alias; `created` and `modified` aliases remain available. Template variable `defaults` and `type`, widget `is_column_break`, and unknown settings are retained.
+Rust Dashboard models keep fields outside the required core in `extra` maps. `DashboardSummary` is a JSON Map alias; `AuthorInfo`, `TemplateVariable`, and `WidgetLayout` were removed.
+Configuration warnings and final error messages no longer abort on closed stderr pipes. The original exit code is preserved even if the final error message cannot be written.
 
 ## Upgrading to 0.6
 

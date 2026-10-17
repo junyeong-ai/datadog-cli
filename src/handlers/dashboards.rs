@@ -24,17 +24,10 @@ impl DashboardsHandler {
 
         let data: Vec<Value> = response
             .dashboards
-            .iter()
-            .map(|d| {
-                json!({
-                    "id": d.id,
-                    "title": d.title,
-                    "description": d.description,
-                    "layout_type": d.layout_type,
-                    "url": d.url,
-                    "created": d.created_at,
-                    "modified": d.modified_at,
-                })
+            .into_iter()
+            .map(|mut dashboard| {
+                add_timestamp_aliases(&mut dashboard);
+                Value::Object(dashboard)
             })
             .collect();
 
@@ -50,21 +43,29 @@ impl DashboardsHandler {
     pub async fn get(client: &DatadogClient, dashboard_id: &str) -> Result<Value> {
         let handler = DashboardsHandler;
 
-        let d = client.get_dashboard(dashboard_id).await?;
-
-        let data = json!({
-            "id": d.id,
-            "title": d.title,
-            "description": d.description,
-            "layout_type": d.layout_type,
-            "widgets": d.widgets,
-            "template_variables": d.template_variables,
-            "author": d.author_info,
-            "created": d.created_at,
-            "modified": d.modified_at,
-            "url": d.url,
-        });
+        let dashboard = client.get_dashboard(dashboard_id).await?;
+        let mut data = serde_json::to_value(dashboard)?;
+        if let Value::Object(fields) = &mut data {
+            add_timestamp_aliases(fields);
+            let author =
+                if fields.contains_key("author_handle") || fields.contains_key("author_name") {
+                    json!({
+                        "name": fields.get("author_name"),
+                        "handle": fields.get("author_handle"),
+                    })
+                } else {
+                    Value::Null
+                };
+            fields.entry("author").or_insert(author);
+        }
 
         Ok(handler.format_detail(data))
+    }
+}
+
+fn add_timestamp_aliases(fields: &mut serde_json::Map<String, Value>) {
+    for (alias, source) in [("created", "created_at"), ("modified", "modified_at")] {
+        let value = fields.get(source).cloned().unwrap_or(Value::Null);
+        fields.entry(alias).or_insert(value);
     }
 }

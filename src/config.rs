@@ -28,7 +28,7 @@ pub struct Config {
 }
 
 /// Datadog authentication: classic API + application key pair, or a
-/// personal access token (`ddpat_…`) sent as a Bearer token. A configured
+/// PAT, SAT, or OAuth access token sent as a Bearer token. A configured
 /// token takes precedence over keys.
 #[derive(Clone)]
 pub enum Credentials {
@@ -119,15 +119,28 @@ impl ConfigFile {
         cli_app_key: Option<String>,
         cli_token: Option<String>,
         cli_site: Option<String>,
+        load_credentials: bool,
     ) -> Result<Self> {
         let mut config = Self::load_paths(
             Config::global_config_path().as_deref(),
             Config::find_project_config()?.as_deref(),
         )?;
         config.overlay(Self {
-            api_key: env_value("DD_API_KEY")?,
-            app_key: env_value("DD_APP_KEY")?,
-            token: env_value("DD_TOKEN")?,
+            api_key: if load_credentials {
+                env_value("DD_API_KEY")?
+            } else {
+                None
+            },
+            app_key: if load_credentials {
+                env_value("DD_APP_KEY")?
+            } else {
+                None
+            },
+            token: if load_credentials {
+                env_value("DD_TOKEN")?
+            } else {
+                None
+            },
             site: env_value("DD_SITE")?,
             defaults: DefaultsFile {
                 tag_filter: env_value("DD_TAG_FILTER")?,
@@ -198,11 +211,24 @@ impl Config {
         cli_token: Option<String>,
         cli_site: Option<String>,
     ) -> Result<Self> {
-        let file = ConfigFile::merged(cli_api_key, cli_app_key, cli_token, cli_site)?;
+        let file = ConfigFile::merged(cli_api_key, cli_app_key, cli_token, cli_site, true)?;
         Self::resolve(file)
     }
 
+    pub async fn load_pup(cli_site: Option<String>, org: &str) -> Result<Self> {
+        let file = ConfigFile::merged(None, None, None, cli_site, false)?;
+        let (site, defaults, network) = Self::resolve_settings(&file)?;
+        let token = crate::auth::pup_token(&site, org).await?;
+        Ok(Self {
+            credentials: Credentials::Token(token),
+            site,
+            defaults,
+            network,
+        })
+    }
+
     fn resolve(file: ConfigFile) -> Result<Self> {
+        let (site, defaults, network) = Self::resolve_settings(&file)?;
         let credentials = match file.token.filter(|t| !t.is_empty()) {
             Some(token) => Credentials::Token(token),
             None => {
@@ -212,7 +238,7 @@ impl Config {
                     (Some(api_key), Some(app_key)) => Credentials::Keys { api_key, app_key },
                     _ => {
                         return Err(DatadogError::AuthError(
-                            "credentials required: set a personal access token (--token, \
+                            "credentials required: set a bearer token (--token, \
                              DD_TOKEN env, or `token` in config) or both api_key and app_key \
                              (--api-key/--app-key, DD_API_KEY/DD_APP_KEY env, or config file)"
                                 .into(),
@@ -222,7 +248,19 @@ impl Config {
             }
         };
 
-        let site = file.site.unwrap_or_else(|| DEFAULT_SITE.to_string());
+        Ok(Self {
+            credentials,
+            site,
+            defaults,
+            network,
+        })
+    }
+
+    fn resolve_settings(file: &ConfigFile) -> Result<(String, Defaults, Network)> {
+        let site = file
+            .site
+            .clone()
+            .unwrap_or_else(|| DEFAULT_SITE.to_string());
         if !VALID_SITES.contains(&site.as_str()) {
             return Err(DatadogError::InvalidInput(format!(
                 "Invalid site: {}. Valid sites: {}",
@@ -233,8 +271,8 @@ impl Config {
 
         let base = Defaults::default();
         let defaults = Defaults {
-            format: file.defaults.format.unwrap_or(base.format),
-            tag_filter: file.defaults.tag_filter,
+            format: file.defaults.format.clone().unwrap_or(base.format),
+            tag_filter: file.defaults.tag_filter.clone(),
         };
 
         let base = Network::default();
@@ -258,12 +296,7 @@ impl Config {
             ));
         }
 
-        Ok(Self {
-            credentials,
-            site,
-            defaults,
-            network,
-        })
+        Ok((site, defaults, network))
     }
 
     fn find_project_config() -> Result<Option<PathBuf>> {
@@ -300,11 +333,11 @@ impl Config {
         let mode = metadata.permissions().mode();
 
         if mode & 0o077 != 0 {
-            eprintln!(
+            crate::diagnostics::print(format_args!(
                 "Warning: Config has insecure permissions: {:o}. Run: chmod 600 {}",
                 mode,
                 path.display()
-            );
+            ))?;
         }
 
         Ok(())
@@ -369,7 +402,7 @@ total_timeout_secs = 120
         token: Option<String>,
         site: Option<String>,
     ) -> Result<String> {
-        let file = ConfigFile::merged(api_key, app_key, token, site)?;
+        let file = ConfigFile::merged(api_key, app_key, token, site, true)?;
         let path = Self::active_config_path()?.display().to_string();
 
         let defaults = Defaults::default();

@@ -1,6 +1,6 @@
 [package]
 name = "datadog-cli"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 rust-version = "1.97"
 authors = ["Datadog CLI Contributors"]
@@ -13,7 +13,7 @@ categories = ["command-line-utilities", "api-bindings", "development-tools::prof
 readme = "README.md"
 
 [dependencies]
-tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "time", "signal"] }
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "time", "signal", "process", "io-util"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 reqwest = { version = "0.13.5", features = ["json", "query", "rustls", "system-proxy"], default-features = false }

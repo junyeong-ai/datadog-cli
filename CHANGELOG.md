@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-10-17
+
+### Added
+
+- Explicit Pup OAuth integration through `--auth-provider pup --pup-org <session>`. The selected site and named session are fixed, static credentials are ignored, provider execution is bounded, and failures never fall back to another identity. Pup owns login, storage, and refresh.
+
+### Changed
+
+- Dashboard models retain optional configuration in `extra` maps. `DashboardSummary` is a JSON Map alias; `AuthorInfo`, `TemplateVariable`, and `WidgetLayout` were removed.
+
+### Fixed
+
+- Dashboard output preserves author fields, multi-value template defaults, variable types, column breaks, and extension settings while retaining existing timestamp and author aliases.
+- Configuration warnings and final errors use fallible stderr writers. Closed diagnostic pipes preserve valid results and original failure exit codes.
+
 ## [0.6.0] - 2026-10-17
 
 ### Changed

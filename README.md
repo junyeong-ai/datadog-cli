@@ -19,7 +19,7 @@ curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/script
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
-DATADOG_CLI_VERSION=0.6.0 bash install.sh
+DATADOG_CLI_VERSION=0.7.0 bash install.sh
 ```
 
 소스 빌드는 Rustup과 C 빌드 도구가 필요합니다. 개발 도구체인은 `rust-toolchain.toml`의 Rust 1.99.1이며, 최소 지원 버전은 Rust 1.97입니다.
@@ -54,6 +54,20 @@ export DD_SITE="datadoghq.com"
 ```
 
 설치 경로는 `INSTALL_DIR`, 스킬 경로는 `DATADOG_CLI_SKILL_DIR`로 지정할 수 있습니다. 제거 시에도 같은 경로를 지정하세요.
+
+## OAuth 인증
+
+[Pup 2.0+](https://github.com/DataDog/pup)의 OAuth 로그인과 갱신을 사용할 수 있습니다. Pup을 PATH에 설치한 뒤 필요한 읽기 권한으로 이름 있는 세션을 만드세요. 다음은 로그·메트릭 조회 예시입니다.
+
+```bash
+pup auth login --site datadoghq.com --org cli-read --scopes timeseries_query,logs_read_data
+datadog-cli --auth-provider pup --pup-org cli-read --site datadoghq.com logs search "service:api"
+```
+
+`--pup-org`는 Pup에 저장한 세션 이름이며, 실제 Datadog 조직은 브라우저 승인 과정에서 선택합니다. `--site`는 해당 세션의 사이트와 같아야 합니다. 다른 명령에는 해당 API의 scope와 사용자 권한이 필요합니다.
+CLI는 명령마다 `pup auth token --org=<세션>`을 한 번 실행합니다. Pup이 저장·갱신을 담당하며 이 CLI는 토큰을 파일에 저장하지 않습니다. 제공자 실행은 60초로 제한하고 실패·빈 값·잘못된 응답은 인증 오류(3)로 처리합니다. 키·토큰으로 자동 전환하지 않습니다.
+제공자 선택은 CLI 인자로만 가능하며 설정 파일에서 외부 명령 실행을 활성화할 수 없습니다. `--api-key`·`--app-key`·`--token`과 함께 지정할 수 없고 `config` 명령에는 적용되지 않습니다. 환경의 정적 자격 증명은 제공자 선택 시 사용하지 않습니다.
+개인 PAT와 서비스 계정 SAT는 `DD_TOKEN`으로 직접 사용할 수 있습니다. 무인 실행에는 SAT나 서비스 계정 키를 사용하세요. OAuth 동의와 세션 관리는 `pup auth`에서 수행합니다.
 
 ## 설정
 
@@ -96,6 +110,12 @@ datadog-cli config edit   # 위 경로를 $EDITOR로 열기; 기본값 vim
 
 `config init`은 전역 파일을 만듭니다. `DD_TAG_FILTER`는 기본 태그 필터, `RUST_LOG`는 로그 수준을 설정합니다.
 지원 사이트와 전체 옵션은 [명령 참조](.claude/skills/datadog-query/reference.md)를 확인하세요.
+
+## 0.7 업그레이드
+
+Dashboard 목록·상세는 API의 선택 설정과 확장 필드를 보존합니다. 상세 작성자는 원본 `author_handle`·`author_name`과 기존 `author` 별칭으로 조회할 수 있고, `created`·`modified` 별칭도 유지합니다. 템플릿 변수의 `defaults`·`type`, 위젯의 `is_column_break`와 알 수 없는 설정을 누락하지 않습니다.
+Rust Dashboard 모델은 필수 core 외의 필드를 `extra` 맵에 보존합니다. `DashboardSummary`는 JSON Map 별칭이며, `AuthorInfo`·`TemplateVariable`·`WidgetLayout`은 제거됐습니다.
+설정 경고와 최종 오류 메시지도 닫힌 stderr 파이프에서 중단되지 않습니다. 최종 오류 메시지를 쓰지 못해도 원래 종료 코드를 유지합니다.
 
 ## 0.6 업그레이드
 

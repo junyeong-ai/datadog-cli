@@ -25,28 +25,22 @@ pub fn print_api_diagnostics(data: &Value) -> io::Result<()> {
 }
 
 fn write_api_diagnostics(data: &Value, writer: &mut impl Write) -> io::Result<()> {
-    let result = (|| -> io::Result<()> {
-        let meta = &data["meta"]["api"];
-        if meta["status"].as_str() == Some("timeout") {
-            writeln!(
+    let meta = &data["meta"]["api"];
+    if meta["status"].as_str() == Some("timeout") {
+        crate::diagnostics::write(
+            writer,
+            format_args!("Warning: Datadog response timed out; results may be incomplete"),
+        )?;
+    }
+    if let Some(warnings) = meta["warnings"].as_array() {
+        for warning in warnings {
+            crate::diagnostics::write(
                 writer,
-                "Warning: Datadog response timed out; results may be incomplete"
+                format_args!("Warning: Datadog returned a response warning: {warning}"),
             )?;
         }
-        if let Some(warnings) = meta["warnings"].as_array() {
-            for warning in warnings {
-                writeln!(
-                    writer,
-                    "Warning: Datadog returned a response warning: {warning}"
-                )?;
-            }
-        }
-        Ok(())
-    })();
-    match result {
-        Err(error) if error.kind() == io::ErrorKind::BrokenPipe => Ok(()),
-        result => result,
     }
+    Ok(())
 }
 
 pub fn print(data: &Value, format: &Format) -> io::Result<()> {

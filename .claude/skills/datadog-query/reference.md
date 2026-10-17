@@ -33,14 +33,16 @@ Commands:
   help            Print this message or the help of the given subcommand(s)
 
 Options:
-      --format <FORMAT>    Output format (default from config) [possible values: json, jsonl, table]
-  -v, --verbose            Enable debug logging
-      --api-key <API_KEY>  API key (otherwise DD_API_KEY or config)
-      --app-key <APP_KEY>  Application key (otherwise DD_APP_KEY or config)
-      --token <TOKEN>      Personal access token (alternative to api/app keys)
-      --site <SITE>        Datadog site (otherwise DD_SITE or config)
-  -h, --help               Print help
-  -V, --version            Print version
+      --format <FORMAT>                Output format (default from config) [possible values: json, jsonl, table]
+  -v, --verbose                        Enable debug logging
+      --api-key <API_KEY>              API key (otherwise DD_API_KEY or config)
+      --app-key <APP_KEY>              Application key (otherwise DD_APP_KEY or config)
+      --token <TOKEN>                  Bearer token: PAT, SAT, or OAuth access token
+      --site <SITE>                    Datadog site (otherwise DD_SITE or config)
+      --auth-provider <AUTH_PROVIDER>  Obtain a bearer token from an explicit authentication provider [possible values: pup]
+      --pup-org <PUP_ORG>              Named Pup OAuth session (--org used at pup auth login)
+  -h, --help                           Print help
+  -V, --version                        Print version
 ```
 
 ## `datadog-cli metrics`

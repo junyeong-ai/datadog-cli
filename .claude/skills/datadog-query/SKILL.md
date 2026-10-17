@@ -27,4 +27,6 @@ Use configured credentials without printing them. Configuration merges global fi
 
 A higher source with explicit keys replaces a lower token; a nonempty token wins within a source. Use environment or config credentials rather than placing secrets in command examples.
 
+For a user-selected Pup OAuth session, pass `--auth-provider pup --pup-org <session>` and its matching `--site`. Pup must already be installed and authorized. Provider failure returns authentication error 3; do not switch to other credentials or start a new OAuth consent flow without the user's request. PATs and SATs can use `DD_TOKEN` directly.
+
 The client retries transient failures within its request budget. Report exhausted rate limits/timeouts instead of adding an unbounded outer retry loop. Exit codes distinguish authentication (3), API (4), rate limits (5), network/timeouts (6), and decoding (7). Product permissions and preview API availability can restrict results.

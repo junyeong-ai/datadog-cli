@@ -199,79 +199,34 @@ pub struct Host {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DashboardsResponse {
     pub dashboards: Vec<DashboardSummary>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DashboardSummary {
-    pub id: String,
-    pub title: String,
-    pub url: String,
-    pub author_handle: Option<String>,
-    pub created_at: Option<String>,
-    pub modified_at: Option<String>,
-    pub is_read_only: Option<bool>,
-    pub layout_type: Option<String>,
-    pub description: Option<String>,
-    pub tags: Option<Vec<String>>,
-}
+pub type DashboardSummary = serde_json::Map<String, serde_json::Value>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Dashboard {
-    pub id: String,
     pub title: String,
-    pub description: Option<String>,
-    pub author_info: Option<AuthorInfo>,
     pub layout_type: String,
-    pub url: String,
-    pub is_read_only: Option<bool>,
-    pub template_variables: Option<Vec<TemplateVariable>>,
     pub widgets: Vec<Widget>,
-    pub created_at: Option<String>,
-    pub modified_at: Option<String>,
-    pub tags: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuthorInfo {
-    pub name: Option<String>,
-    pub handle: Option<String>,
-    pub email: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TemplateVariable {
-    pub name: String,
-    #[serde(rename = "default")]
-    pub default_value: Option<String>,
-    pub prefix: Option<String>,
-    pub available_values: Option<Vec<String>>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Widget {
-    pub id: Option<i64>,
     pub definition: WidgetDefinition,
-    pub layout: Option<WidgetLayout>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WidgetDefinition {
     #[serde(rename = "type")]
     pub widget_type: String,
-    pub title: Option<String>,
-    pub title_size: Option<String>,
-    pub title_align: Option<String>,
-    pub requests: Option<Vec<serde_json::Value>>,
     #[serde(flatten)]
-    pub extra: HashMap<String, serde_json::Value>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WidgetLayout {
-    pub x: i32,
-    pub y: i32,
-    pub width: i32,
-    pub height: i32,
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
