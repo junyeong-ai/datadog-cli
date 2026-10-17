@@ -874,3 +874,103 @@ async fn response_body_timeouts_are_retried_and_remain_timeout_errors() {
         .unwrap()
         .unwrap();
 }
+
+#[tokio::test]
+async fn metrics_preserves_complete_query_expressions() {
+    use clap::Parser;
+    use datadog_cli::cli::{Cli, Command};
+    use datadog_cli::handlers::metrics::MetricsHandler;
+
+    for query in [
+        "avg:system.cpu.user{env:prod,service:api},avg:system.cpu.system{*}.rollup(avg, 3600)",
+        "(max:system.cpu.user{*}.rollup(max, 60) + min:system.cpu.system{*}) * 2",
+    ] {
+        let server = MockServer::start().await;
+        Mock::given(path("/api/v1/query"))
+            .and(query_param("query", query))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "status": "ok", "series": [], "query": query
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let cli = Cli::try_parse_from(["datadog-cli", "metrics", query]).unwrap();
+        let Command::Metrics(args) = cli.command else {
+            panic!("expected metrics")
+        };
+        let result = MetricsHandler::query(&client_for(&server, 0), &args)
+            .await
+            .unwrap();
+        assert_eq!(result["meta"]["query"], query);
+        assert!(result["meta"].get("rollup_applied").is_none());
+    }
+    let error = Cli::try_parse_from(["datadog-cli", "metrics", "q", "--max-points", "2"])
+        .err()
+        .expect("removed option must fail");
+    assert_eq!(error.exit_code(), 2);
+}
+
+#[tokio::test]
+async fn service_unavailable_respects_retry_after_without_changing_error_class() {
+    for value in [
+        "60".to_string(),
+        httpdate::fmt_http_date(std::time::SystemTime::now() + Duration::from_secs(120)),
+    ] {
+        let server = MockServer::start().await;
+        Mock::given(path("/api/v1/monitor/7"))
+            .respond_with(
+                ResponseTemplate::new(503)
+                    .insert_header("Retry-After", value.as_str())
+                    .set_body_string("maintenance"),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        let error = client_for(&server, 3).get_monitor(7).await.unwrap_err();
+        assert_eq!(error.exit_code(), 4);
+        assert!(matches!(error, DatadogError::ApiError { status: 503, .. }));
+    }
+}
+
+#[tokio::test]
+async fn service_unavailable_with_zero_or_invalid_retry_after_can_recover() {
+    for value in ["0", "Sun, 06 Nov 1994 08:49:37 GMT", "invalid"] {
+        let server = MockServer::start().await;
+        Mock::given(path("/api/v1/monitor/7"))
+            .respond_with(ResponseTemplate::new(503).insert_header("Retry-After", value))
+            .up_to_n_times(1)
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(path("/api/v1/monitor/7"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": 7, "name": "ok", "type": "metric alert", "query": "q", "tags": []
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        assert_eq!(client_for(&server, 1).get_monitor(7).await.unwrap().id, 7);
+    }
+}
+
+#[tokio::test]
+async fn conflicting_rate_limit_headers_report_the_effective_wait() {
+    let server = MockServer::start().await;
+    Mock::given(path("/api/v1/monitor/7"))
+        .respond_with(
+            ResponseTemplate::new(429)
+                .insert_header("x-ratelimit-reset", "0")
+                .insert_header("Retry-After", "60"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let error = client_for(&server, 3).get_monitor(7).await.unwrap_err();
+    assert_eq!(error.exit_code(), 5);
+    assert!(matches!(
+        error,
+        DatadogError::RateLimitError {
+            reset_secs: Some(60)
+        }
+    ));
+}

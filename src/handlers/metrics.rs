@@ -11,71 +11,12 @@ impl TimeHandler for MetricsHandler {}
 impl ResponseFormatter for MetricsHandler {}
 
 impl MetricsHandler {
-    // Calculate rollup interval based on time range and desired max_points
-    fn calculate_rollup_interval(from_ts: i64, to_ts: i64, max_points: u64) -> i64 {
-        let time_range = to_ts - from_ts;
-        let interval = time_range / max_points as i64;
-
-        // Round up to reasonable intervals: 60s, 300s (5m), 600s (10m), 3600s (1h), etc.
-        if interval < 60 {
-            60
-        } else if interval < 300 {
-            300
-        } else if interval < 600 {
-            600
-        } else if interval < 1800 {
-            1800
-        } else if interval < 3600 {
-            3600
-        } else if interval < 7200 {
-            7200
-        } else if interval < 21600 {
-            21600
-        } else if interval < 43200 {
-            43200
-        } else {
-            86400 // 1 day max
-        }
-    }
-
-    // Add rollup to query if needed
-    fn add_rollup_to_query(query: &str, interval: i64) -> String {
-        // Check if query already has rollup
-        if query.contains(".rollup(") {
-            return query.to_string();
-        }
-
-        // Extract aggregation method from query (avg:, max:, min:, sum:)
-        let agg = if query.starts_with("avg:") {
-            "avg"
-        } else if query.starts_with("max:") {
-            "max"
-        } else if query.starts_with("min:") {
-            "min"
-        } else if query.starts_with("sum:") {
-            "sum"
-        } else {
-            "avg" // default
-        };
-
-        format!("{}.rollup({}, {})", query, agg, interval)
-    }
-
     pub async fn query(client: &DatadogClient, args: &MetricsArgs) -> Result<Value> {
         let handler = MetricsHandler;
 
         let (from_ts, to_ts) = handler.parse_time_range(&args.from, &args.to)?;
 
-        let mut query = args.query.clone();
-        let mut applied_rollup = false;
-
-        if let Some(max) = args.max_points {
-            let interval = Self::calculate_rollup_interval(from_ts, to_ts, max);
-            query = Self::add_rollup_to_query(&query, interval);
-            applied_rollup = true;
-        }
-
-        let response = client.query_metrics(&query, from_ts, to_ts).await?;
+        let response = client.query_metrics(&args.query, from_ts, to_ts).await?;
 
         let series = response.series.iter().map(|s| {
             let points_data = if let Some(ref pointlist) = s.pointlist {
@@ -166,13 +107,6 @@ impl MetricsHandler {
             && !group_by.is_empty()
         {
             meta.insert("group_by".to_string(), json!(group_by));
-        }
-
-        if applied_rollup {
-            meta.insert("rollup_applied".to_string(), json!(true));
-            if let Some(max) = args.max_points {
-                meta.insert("requested_max_points".to_string(), json!(max));
-            }
         }
 
         Ok(handler.format_list(json!(series), None, Some(json!(meta))))
@@ -306,57 +240,5 @@ impl MetricsHandler {
         });
 
         Ok(handler.format_list(json!(rows), None, Some(meta)))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_calculate_rollup_interval() {
-        // 30000s / 100 points = 300s, 300 >= 300 and < 600 so rounds to 600
-        assert_eq!(
-            MetricsHandler::calculate_rollup_interval(0, 30000, 100),
-            600
-        );
-
-        // 86400s / 100 points = 864s, 864 >= 600 and < 1800 so rounds to 1800
-        assert_eq!(
-            MetricsHandler::calculate_rollup_interval(0, 86400, 100),
-            1800
-        );
-
-        // Very short range: 100s / 100 = 1s, < 60 so gets 60s minimum
-        assert_eq!(MetricsHandler::calculate_rollup_interval(0, 100, 100), 60);
-
-        // 6000s / 100 = 60s, 60 >= 60 and < 300 so rounds to 300
-        assert_eq!(MetricsHandler::calculate_rollup_interval(0, 6000, 100), 300);
-    }
-
-    #[test]
-    fn test_calculate_rollup_interval_minimal_points() {
-        assert_eq!(
-            MetricsHandler::calculate_rollup_interval(0, 30000, 1),
-            43200
-        );
-    }
-
-    #[test]
-    fn test_add_rollup_to_query() {
-        // Test adding rollup to simple query
-        let query = "avg:system.cpu.user{*}";
-        let result = MetricsHandler::add_rollup_to_query(query, 300);
-        assert!(result.contains(".rollup(avg, 300)"));
-
-        // Test with max aggregation
-        let query = "max:system.cpu.user{*}";
-        let result = MetricsHandler::add_rollup_to_query(query, 60);
-        assert!(result.contains(".rollup(max, 60)"));
-
-        // Test when rollup already exists
-        let query = "avg:system.cpu.user{*}.rollup(sum, 600)";
-        let result = MetricsHandler::add_rollup_to_query(query, 300);
-        assert_eq!(result, query); // Should not modify
     }
 }

@@ -54,10 +54,9 @@ Arguments:
   <QUERY>
 
 Options:
-      --from <FROM>              Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
-      --to <TO>                  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
-      --max-points <MAX_POINTS>  Limit data points by auto-rollup
-  -h, --help                     Print help
+      --from <FROM>  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
+      --to <TO>      Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+  -h, --help         Print help
 ```
 
 ## `datadog-cli timeseries`

@@ -40,7 +40,9 @@ jobs:
 
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets --all-features --locked -- -D warnings
-      - run: shellcheck scripts/install.sh scripts/uninstall.sh
+      - run: shellcheck scripts/install.sh scripts/uninstall.sh tests/install_test.sh
+      - name: Test source installation and removal
+        run: bash tests/install_test.sh
       - name: Validate workflows
         uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
         with:

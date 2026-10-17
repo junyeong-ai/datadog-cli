@@ -101,8 +101,12 @@ impl DatadogClient {
                 request = request.json(data);
             }
 
+            let mut retry_after_secs = None;
             let result = match request.send().await {
-                Ok(response) => self.handle_response(response).await,
+                Ok(response) => {
+                    retry_after_secs = retry::retry_after(response.headers());
+                    self.handle_response(response).await
+                }
                 Err(e) if e.is_builder() => Err(DatadogError::InvalidInput(format!(
                     "Cannot build request: {}",
                     e.without_url()
@@ -113,19 +117,21 @@ impl DatadogClient {
 
             match result {
                 Ok(data) => return Ok(data),
-                Err(error) => match retry::next_delay(&error, attempt, self.max_retries) {
-                    Some(delay) => {
-                        attempt += 1;
-                        tracing::warn!(
-                            attempt,
-                            delay_ms = delay.as_millis() as u64,
-                            %error,
-                            "retrying request"
-                        );
-                        tokio::time::sleep(delay).await;
+                Err(error) => {
+                    match retry::next_delay(&error, attempt, self.max_retries, retry_after_secs) {
+                        Some(delay) => {
+                            attempt += 1;
+                            tracing::warn!(
+                                attempt,
+                                delay_ms = delay.as_millis() as u64,
+                                %error,
+                                "retrying request"
+                            );
+                            tokio::time::sleep(delay).await;
+                        }
+                        None => return Err(error),
                     }
-                    None => return Err(error),
-                },
+                }
             }
         }
     }
@@ -151,7 +157,9 @@ impl DatadogClient {
                 .get("x-ratelimit-reset")
                 .and_then(|v| v.to_str().ok())
                 .and_then(|v| v.parse().ok())
-                .or_else(|| retry::retry_after(response.headers()));
+                .into_iter()
+                .chain(retry::retry_after(response.headers()))
+                .max();
             return Err(DatadogError::RateLimitError { reset_secs });
         }
 

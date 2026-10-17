@@ -295,9 +295,6 @@ pub struct MetricsArgs {
 
     #[arg(long, default_value = "now", help = TIME_HELP)]
     pub to: String,
-
-    #[arg(long, value_parser = clap::value_parser!(u64).range(1..), help = "Limit data points by auto-rollup")]
-    pub max_points: Option<u64>,
 }
 
 #[derive(Args)]

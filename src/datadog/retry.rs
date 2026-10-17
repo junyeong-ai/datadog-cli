@@ -5,29 +5,29 @@ use crate::error::DatadogError;
 /// Upper bounds for full-jitter exponential backoff: 2s, 4s, 8s, ...
 const BASE_DELAY_SECS: u64 = 2;
 
-/// Upper bound on any single retry delay. Rate-limit resets further away
-/// than this are returned to the user instead of silently blocking the CLI.
+/// Server-directed waits beyond this bound return the original error.
 const MAX_DELAY: Duration = Duration::from_secs(30);
 
-/// Delay to wait before retrying `error`, or `None` when the error is not
-/// transient, the retry budget (`attempt >= max_retries`) is spent, or a
-/// rate-limit reset exceeds `MAX_DELAY`.
-///
-/// Rate-limited requests wait for the server-provided reset when available;
-/// everything else uses capped exponential backoff.
-pub fn next_delay(error: &DatadogError, attempt: u32, max_retries: u32) -> Option<Duration> {
+pub fn next_delay(
+    error: &DatadogError,
+    attempt: u32,
+    max_retries: u32,
+    retry_after_secs: Option<u64>,
+) -> Option<Duration> {
     if attempt >= max_retries || !is_transient(error) {
         return None;
     }
 
-    match error {
-        DatadogError::RateLimitError {
-            reset_secs: Some(secs),
-        } => {
-            let delay = Duration::from_secs(*secs);
+    let reset_secs = match error {
+        DatadogError::RateLimitError { reset_secs } => *reset_secs,
+        _ => None,
+    };
+    match retry_after_secs.into_iter().chain(reset_secs).max() {
+        Some(secs) => {
+            let delay = Duration::from_secs(secs);
             (delay <= MAX_DELAY).then_some(delay)
         }
-        _ => Some(backoff(attempt).mul_f64(fastrand::f64())),
+        None => Some(backoff(attempt).mul_f64(fastrand::f64())),
     }
 }
 
@@ -74,7 +74,7 @@ mod tests {
     fn test_backoff_progression() {
         let error = server_error(503);
         for attempt in 0..3 {
-            assert!(next_delay(&error, attempt, 3).unwrap() <= backoff(attempt));
+            assert!(next_delay(&error, attempt, 3, None).unwrap() <= backoff(attempt));
         }
         assert_eq!(backoff(0), Duration::from_secs(2));
         assert_eq!(backoff(1), Duration::from_secs(4));
@@ -90,40 +90,45 @@ mod tests {
     #[test]
     fn test_retry_budget_exhausted() {
         let error = server_error(503);
-        assert_eq!(next_delay(&error, 3, 3), None);
-        assert_eq!(next_delay(&error, 4, 3), None);
-        assert_eq!(next_delay(&error, 0, 0), None);
+        assert_eq!(next_delay(&error, 3, 3, None), None);
+        assert_eq!(next_delay(&error, 4, 3, None), None);
+        assert_eq!(next_delay(&error, 0, 0, None), None);
     }
 
     #[test]
     fn test_server_errors_are_transient() {
         for status in [500, 502, 503, 504, 408] {
-            assert!(next_delay(&server_error(status), 0, 3).is_some());
+            assert!(next_delay(&server_error(status), 0, 3, None).is_some());
         }
     }
 
     #[test]
     fn test_client_errors_fail_immediately() {
         for status in [400, 404, 422, 600] {
-            assert_eq!(next_delay(&server_error(status), 0, 3), None);
+            assert_eq!(next_delay(&server_error(status), 0, 3, None), None);
         }
         assert_eq!(
-            next_delay(&DatadogError::AuthError("denied".to_string()), 0, 3),
+            next_delay(&DatadogError::AuthError("denied".to_string()), 0, 3, None),
             None
         );
         assert_eq!(
-            next_delay(&DatadogError::DecodeError("bad json".to_string()), 0, 3),
+            next_delay(
+                &DatadogError::DecodeError("bad json".to_string()),
+                0,
+                3,
+                None
+            ),
             None
         );
         assert_eq!(
-            next_delay(&DatadogError::InvalidInput("bad".to_string()), 0, 3),
+            next_delay(&DatadogError::InvalidInput("bad".to_string()), 0, 3, None),
             None
         );
     }
 
     #[test]
     fn test_timeout_is_transient() {
-        assert!(next_delay(&DatadogError::TimeoutError, 0, 3).unwrap() <= backoff(0));
+        assert!(next_delay(&DatadogError::TimeoutError, 0, 3, None).unwrap() <= backoff(0));
     }
 
     #[test]
@@ -131,7 +136,10 @@ mod tests {
         let error = DatadogError::RateLimitError {
             reset_secs: Some(15),
         };
-        assert_eq!(next_delay(&error, 0, 3), Some(Duration::from_secs(15)));
+        assert_eq!(
+            next_delay(&error, 0, 3, None),
+            Some(Duration::from_secs(15))
+        );
     }
 
     #[test]
@@ -139,13 +147,43 @@ mod tests {
         let error = DatadogError::RateLimitError {
             reset_secs: Some(MAX_DELAY.as_secs() + 1),
         };
-        assert_eq!(next_delay(&error, 0, 3), None);
+        assert_eq!(next_delay(&error, 0, 3, None), None);
     }
 
     #[test]
     fn test_rate_limit_without_reset_uses_backoff() {
         let error = DatadogError::RateLimitError { reset_secs: None };
-        assert!(next_delay(&error, 0, 3).unwrap() <= backoff(0));
+        assert!(next_delay(&error, 0, 3, None).unwrap() <= backoff(0));
+    }
+
+    #[test]
+    fn server_directed_waits_apply_only_to_retryable_errors() {
+        let error = server_error(503);
+        for seconds in [0, 12, 30] {
+            assert_eq!(
+                next_delay(&error, 0, 3, Some(seconds)),
+                Some(Duration::from_secs(seconds))
+            );
+        }
+        assert_eq!(next_delay(&error, 0, 3, Some(31)), None);
+        assert_eq!(next_delay(&error, 3, 3, Some(12)), None);
+        assert_eq!(next_delay(&server_error(400), 0, 3, Some(12)), None);
+    }
+
+    #[test]
+    fn rate_limit_headers_never_shorten_each_others_wait() {
+        let error = DatadogError::RateLimitError {
+            reset_secs: Some(15),
+        };
+        assert_eq!(
+            next_delay(&error, 0, 3, Some(5)),
+            Some(Duration::from_secs(15))
+        );
+        assert_eq!(
+            next_delay(&error, 0, 3, Some(20)),
+            Some(Duration::from_secs(20))
+        );
+        assert_eq!(next_delay(&error, 0, 3, Some(60)), None);
     }
     #[test]
     fn retry_after_supports_http_dates_and_ignores_invalid_values() {

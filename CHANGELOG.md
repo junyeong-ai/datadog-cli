@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-10-17
+
+### Removed
+
+- `metrics --max-points` and automatic query rewriting. Metric expressions now pass through unchanged. Use explicit `.rollup(aggregation, seconds)` or `timeseries --interval seconds` instead; neither option promises an exact maximum point count.
+
+### Fixed
+
+- Source installation delegates artifact discovery to Cargo and stages the native executable, honoring custom target directories while overriding configured cross-compilation targets.
+- Retryable HTTP responses honor `Retry-After`, including 503. Conflicting rate-limit headers use the longer wait; waits beyond 30 seconds return the original error and exit code.
+- Installation documentation separates script-managed binaries from Cargo-managed binaries and pairs each method with its matching uninstall command.
+
 ## [0.3.0] - 2026-10-17
 
 ### Changed

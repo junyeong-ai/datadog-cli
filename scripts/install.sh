@@ -177,11 +177,12 @@ build_from_source() {
     fi
 
     echo "🔨 Building from source..." >&2
-    if ! (cd "$PROJECT_ROOT" && cargo build --release --locked) >&2; then
+    BINARY_TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/datadog-cli-install.XXXXXX")
+    if ! (cd "$PROJECT_ROOT" && cargo install --path . --locked --bin "$BINARY_NAME" \
+        --root "$BINARY_TMP_DIR" --no-track --target host-tuple) >&2; then
         echo "❌ Build failed" >&2
-        exit 1
+        return 1
     fi
-    echo "$PROJECT_ROOT/target/release/$BINARY_NAME"
 }
 
 install_binary() {
@@ -349,7 +350,8 @@ main() {
                 echo "❌ --source builds the current checkout; DATADOG_CLI_VERSION only selects prebuilt binaries." >&2
                 return 1
             fi
-            binary_path=$(build_from_source)
+            build_from_source
+            binary_path="$BINARY_TMP_DIR/bin/$BINARY_NAME"
             ;;
         1|"")
             if ! command -v curl >/dev/null; then

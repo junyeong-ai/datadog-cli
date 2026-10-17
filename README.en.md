@@ -19,7 +19,7 @@ The accompanying skill comes from the same release tag. Non-interactive installa
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
-DATADOG_CLI_VERSION=0.3.0 bash install.sh
+DATADOG_CLI_VERSION=0.4.0 bash install.sh
 ```
 
 Source builds require Rustup and C build tools. Development uses Rust 1.99.1 from `rust-toolchain.toml`; the minimum supported Rust version is 1.97.
@@ -27,12 +27,11 @@ Source builds require Rustup and C build tools. Development uses Rust 1.99.1 fro
 ```bash
 git clone https://github.com/junyeong-ai/datadog-cli
 cd datadog-cli
-cargo install --path . --locked
-# To install the local skill with the installer:
-# ./scripts/install.sh --source
+./scripts/install.sh --source
 ```
 
-Use `./scripts/uninstall.sh` to remove the binary. Configuration and skill removal are separate choices; skill removal creates a backup.
+The script installs the binary to `~/.local/bin`. Use `./scripts/uninstall.sh` to remove it. Configuration and skill removal are separate choices; skill removal creates a backup.
+To manage only the binary with Cargo, install with `cargo install --path . --locked --target host-tuple` and remove it with `cargo uninstall datadog-cli`. Cargo defaults to `~/.cargo/bin`. Choose one installation method to avoid competing binaries on PATH.
 
 ## Getting started
 
@@ -84,7 +83,7 @@ max_retries = 3
 
 `timeout_secs` limits each request; `total_timeout_secs` limits an API call including retries and waits.
 Only transient network failures, 408, 429, and 5xx responses retry. Exponential backoff uses jitter and a 30-second cap.
-For 429, `x-ratelimit-reset` or `Retry-After` supplies the wait; waits over 30 seconds return the error immediately.
+Retryable responses honor `Retry-After`; 429 also honors `x-ratelimit-reset`. When both are present, the longer wait applies. Waits over 30 seconds return the original error immediately.
 Redirects are not followed. HTTP(S) environment proxies and OS proxy settings are supported.
 
 ```bash
@@ -95,6 +94,12 @@ datadog-cli config edit   # Open that path in $EDITOR; defaults to vim
 
 `config init` creates the global file. `DD_TAG_FILTER` sets the default tag filter; `RUST_LOG` sets the log level.
 See the [command reference](.claude/skills/datadog-query/reference.md) for supported sites and options.
+
+## Upgrading to 0.4
+
+`metrics --max-points` and automatic rollup have been removed. `metrics` passes query expressions unchanged.
+Use `metrics "avg:system.cpu.user{*}.rollup(avg, 3600)"` to choose aggregation and interval explicitly.
+For multiple queries, use `timeseries "avg:system.cpu.user{*}" "avg:system.cpu.system{*}" --interval 3600`. Intervals are in seconds and do not guarantee a maximum number of returned points.
 
 ## Upgrading to 0.3
 

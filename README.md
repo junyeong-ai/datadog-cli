@@ -19,7 +19,7 @@ curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/script
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
-DATADOG_CLI_VERSION=0.3.0 bash install.sh
+DATADOG_CLI_VERSION=0.4.0 bash install.sh
 ```
 
 소스 빌드는 Rustup과 C 빌드 도구가 필요합니다. 개발 도구체인은 `rust-toolchain.toml`의 Rust 1.99.1이며, 최소 지원 버전은 Rust 1.97입니다.
@@ -27,12 +27,11 @@ DATADOG_CLI_VERSION=0.3.0 bash install.sh
 ```bash
 git clone https://github.com/junyeong-ai/datadog-cli
 cd datadog-cli
-cargo install --path . --locked
-# 설치 스크립트로 로컬 스킬도 함께 설치하려면:
-# ./scripts/install.sh --source
+./scripts/install.sh --source
 ```
 
-제거는 `./scripts/uninstall.sh`를 사용합니다. 설정과 스킬 삭제는 별도로 선택하며, 스킬 삭제 전 백업을 만듭니다.
+스크립트 설치는 `~/.local/bin`에 바이너리를 설치합니다. 제거는 `./scripts/uninstall.sh`를 사용합니다. 설정과 스킬 삭제는 별도로 선택하며, 스킬 삭제 전 백업을 만듭니다.
+Cargo로 바이너리만 관리하려면 `cargo install --path . --locked --target host-tuple`로 설치하고 `cargo uninstall datadog-cli`로 제거하세요. Cargo의 기본 설치 경로는 `~/.cargo/bin`입니다. 두 설치 방식을 함께 사용하지 마세요.
 
 ## 시작하기
 
@@ -84,7 +83,7 @@ max_retries = 3
 
 `timeout_secs`는 한 번의 요청, `total_timeout_secs`는 재시도와 대기를 포함한 API 호출 전체의 제한입니다.
 일시적 네트워크 실패·408·429·5xx만 재시도합니다. 지연은 최대 30초의 지수 백오프에 jitter를 적용합니다.
-429의 `x-ratelimit-reset` 또는 `Retry-After`는 서버 대기 시간을 따르며, 30초를 넘으면 즉시 오류를 반환합니다.
+재시도 가능한 응답의 `Retry-After`와 429의 `x-ratelimit-reset`은 서버 대기 시간을 지정합니다. 둘 다 있으면 더 긴 대기를 따르며, 30초를 넘으면 원래 오류를 즉시 반환합니다.
 리디렉션은 따르지 않습니다. HTTP(S) 환경 변수 및 OS 프록시 설정을 지원합니다.
 
 ```bash
@@ -95,6 +94,12 @@ datadog-cli config edit   # 위 경로를 $EDITOR로 열기; 기본값 vim
 
 `config init`은 전역 파일을 만듭니다. `DD_TAG_FILTER`는 기본 태그 필터, `RUST_LOG`는 로그 수준을 설정합니다.
 지원 사이트와 전체 옵션은 [명령 참조](.claude/skills/datadog-query/reference.md)를 확인하세요.
+
+## 0.4 업그레이드
+
+`metrics --max-points`와 자동 rollup을 제거했습니다. `metrics`는 쿼리를 수정 없이 전달합니다.
+집계 방식과 간격을 직접 지정하려면 `metrics "avg:system.cpu.user{*}.rollup(avg, 3600)"`을 사용하세요.
+다중 쿼리의 간격은 `timeseries "avg:system.cpu.user{*}" "avg:system.cpu.system{*}" --interval 3600`으로 지정합니다. 간격은 초 단위이며, 반환 포인트 수의 상한을 보장하지 않습니다.
 
 ## 0.3 업그레이드
 

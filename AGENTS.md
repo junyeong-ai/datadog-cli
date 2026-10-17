@@ -12,6 +12,8 @@ Rust 2024 CLI. `rust-toolchain.toml` pins development Rust; `Cargo.toml` declare
 - `src/handlers/`: endpoint-specific transformation and pagination. `common.rs` owns shared time, tag, pagination, and output-envelope behavior.
 - `src/output.rs`: JSON/JSONL/table writers. Stdout contains results; tracing writes to stderr. Propagate I/O errors so closed pipelines exit quietly.
 
+Pass metric query expressions unchanged. Use the structured timeseries interval for server-side rollup; do not infer query syntax or aggregation from string patterns.
+
 Time ranges use one reference instant and Unix seconds internally. Convert to milliseconds only at endpoints that require them. Do not unify distinct Datadog request envelopes or pagination families merely because command names resemble one another.
 
 ## API changes
@@ -28,7 +30,8 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo test --all-targets --all-features --locked
 cargo test --doc --locked
 cargo deny check
-shellcheck scripts/install.sh scripts/uninstall.sh
+shellcheck scripts/install.sh scripts/uninstall.sh tests/install_test.sh
+bash tests/install_test.sh
 actionlint
 ```
 
