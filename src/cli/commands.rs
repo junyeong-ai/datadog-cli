@@ -104,12 +104,7 @@ pub fn handle_config(action: &ConfigAction, cli: &super::Cli) -> Result<()> {
             writeln!(stdout, "Created: {}", path.display())?;
         }
         ConfigAction::Show => {
-            let output = Config::show_with_overrides(
-                cli.api_key.clone(),
-                cli.app_key.clone(),
-                cli.token.clone(),
-                cli.site.clone(),
-            )?;
+            let output = Config::show_with_options(cli.config_options())?;
             writeln!(stdout, "{}", output)?;
         }
         ConfigAction::Path => {

@@ -3,7 +3,7 @@ use crate::output;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-use crate::config::Config;
+use crate::config::{AuthMethod, Config, ConfigOptions};
 use crate::datadog::{DatadogClient, MAX_METRIC_QUERIES};
 use crate::error::Result;
 
@@ -51,14 +51,21 @@ pub struct Cli {
     )]
     pub site: Option<String>,
 
-    #[arg(long, global = true, value_enum, requires = "pup_org", conflicts_with_all = ["api_key", "app_key", "token"], help = "Obtain a bearer token from an explicit authentication provider")]
+    #[arg(long, global = true, value_enum, conflicts_with = "auth_method", conflicts_with_all = ["api_key", "app_key", "token"], help = "Use Pup OAuth (compatibility option for --auth-method oauth)")]
     pub auth_provider: Option<AuthProvider>,
 
     #[arg(
         long,
         global = true,
-        requires = "auth_provider",
-        help = "Named Pup OAuth session (--org used at pup auth login)"
+        value_enum,
+        help = "Authentication method (otherwise global config [auth].method)"
+    )]
+    pub auth_method: Option<AuthMethod>,
+
+    #[arg(
+        long,
+        global = true,
+        help = "Named Pup OAuth session (otherwise global config [auth].pup_org)"
     )]
     pub pup_org: Option<String>,
 
@@ -627,24 +634,17 @@ pub enum ConfigAction {
 
 pub async fn run(cli: Cli) -> Result<()> {
     if let Command::Config { ref action } = cli.command {
-        if cli.auth_provider.is_some() {
+        if !matches!(action, ConfigAction::Show)
+            && (cli.auth_provider.is_some() || cli.auth_method.is_some() || cli.pup_org.is_some())
+        {
             return Err(crate::error::DatadogError::InvalidInput(
-                "--auth-provider applies to API commands; manage OAuth sessions with pup auth"
-                    .into(),
+                "Authentication options apply to API commands and config show".into(),
             ));
         }
         return commands::handle_config(action, &cli);
     }
 
-    let config = match cli.auth_provider {
-        Some(AuthProvider::Pup) => {
-            let org = cli.pup_org.as_deref().ok_or_else(|| {
-                crate::error::DatadogError::InvalidInput("--pup-org is required".into())
-            })?;
-            Config::load_pup(cli.site, org).await?
-        }
-        None => Config::load(cli.api_key, cli.app_key, cli.token, cli.site)?,
-    };
+    let config = Config::load_with_options(cli.config_options()).await?;
     let client = DatadogClient::new(&config)?;
 
     let format_str = cli.format.as_deref().unwrap_or(&config.defaults.format);
@@ -660,4 +660,19 @@ pub async fn run(cli: Cli) -> Result<()> {
     }
 
     Ok(())
+}
+
+impl Cli {
+    fn config_options(&self) -> ConfigOptions {
+        ConfigOptions {
+            api_key: self.api_key.clone(),
+            app_key: self.app_key.clone(),
+            token: self.token.clone(),
+            site: self.site.clone(),
+            auth_method: self
+                .auth_method
+                .or(self.auth_provider.map(|_| AuthMethod::Oauth)),
+            pup_org: self.pup_org.clone(),
+        }
+    }
 }

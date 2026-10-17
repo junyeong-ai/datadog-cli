@@ -7,12 +7,17 @@ use tokio::process::{Child, Command};
 const MAX_TOKEN_BYTES: u64 = 16 * 1024;
 const PROVIDER_TIMEOUT: Duration = Duration::from_secs(60);
 
-pub(crate) async fn pup_token(site: &str, org: &str) -> Result<String> {
+pub(crate) fn validate_pup_org(org: &str) -> Result<()> {
     if org.trim().is_empty() || org.contains('\0') {
         return Err(DatadogError::InvalidInput(
-            "--pup-org must name a Pup OAuth session".into(),
+            "pup_org must name a nonempty Pup OAuth session".into(),
         ));
     }
+    Ok(())
+}
+
+pub(crate) async fn pup_token(site: &str, org: &str) -> Result<String> {
+    validate_pup_org(org)?;
     let mut command = Command::new("pup");
     command
         .args(["auth", "token"])

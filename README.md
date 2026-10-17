@@ -19,7 +19,7 @@ curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/script
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
-DATADOG_CLI_VERSION=0.7.0 bash install.sh
+DATADOG_CLI_VERSION=0.8.0 bash install.sh
 ```
 
 소스 빌드는 Rustup과 C 빌드 도구가 필요합니다. 개발 도구체인은 `rust-toolchain.toml`의 Rust 1.99.1이며, 최소 지원 버전은 Rust 1.97입니다.
@@ -61,13 +61,31 @@ export DD_SITE="datadoghq.com"
 
 ```bash
 pup auth login --site datadoghq.com --org cli-read --scopes timeseries_query,logs_read_data
-datadog-cli --auth-provider pup --pup-org cli-read --site datadoghq.com logs search "service:api"
 ```
 
-`--pup-org`는 Pup에 저장한 세션 이름이며, 실제 Datadog 조직은 브라우저 승인 과정에서 선택합니다. `--site`는 해당 세션의 사이트와 같아야 합니다. 다른 명령에는 해당 API의 scope와 사용자 권한이 필요합니다.
-CLI는 명령마다 `pup auth token --org=<세션>`을 한 번 실행합니다. Pup이 저장·갱신을 담당하며 이 CLI는 토큰을 파일에 저장하지 않습니다. 제공자 실행은 60초로 제한하고 실패·빈 값·잘못된 응답은 인증 오류(3)로 처리합니다. 키·토큰으로 자동 전환하지 않습니다.
-제공자 선택은 CLI 인자로만 가능하며 설정 파일에서 외부 명령 실행을 활성화할 수 없습니다. `--api-key`·`--app-key`·`--token`과 함께 지정할 수 없고 `config` 명령에는 적용되지 않습니다. 환경의 정적 자격 증명은 제공자 선택 시 사용하지 않습니다.
-개인 PAT와 서비스 계정 SAT는 `DD_TOKEN`으로 직접 사용할 수 있습니다. 무인 실행에는 SAT나 서비스 계정 키를 사용하세요. OAuth 동의와 세션 관리는 `pup auth`에서 수행합니다.
+전역 `~/.config/datadog-cli/config.toml`에 기본 인증 방식을 지정합니다. `site`는 최상위 필드이며 로그인한 사이트와 같아야 합니다.
+
+```toml
+site = "datadoghq.com"
+
+[auth]
+method = "oauth"
+pup_org = "cli-read"
+```
+
+이후에는 인증 옵션 없이 조회합니다.
+
+```bash
+datadog-cli logs search "service:api"
+datadog-cli config show
+```
+
+`method`는 `api-keys`·`token`·`oauth` 중 하나입니다. `api-keys`는 기존 `api_key`·`app_key`, `token`은 `token` 또는 `DD_TOKEN`을 사용합니다. `oauth`는 Pup 세션을 사용하며 정적 키·토큰은 사용하지 않습니다. 환경 변수는 선택한 방식의 자격증명 값만 덮어씁니다. `[auth]`가 없으면 기존 토큰·키 우선순위를 유지합니다.
+`pup_org`는 Pup에 저장한 세션 이름이며 실제 Datadog 조직은 브라우저 승인 과정에서 선택합니다. 다른 명령에는 해당 API의 scope와 사용자 권한이 필요합니다.
+한 명령만 다른 방식으로 실행하려면 `--auth-method api-keys|token|oauth`를 지정합니다. CLI에 직접 지정한 키·토큰도 전역 기본 방식보다 우선합니다. `--auth-method`와 맞지 않는 자격증명 옵션은 오류입니다. OAuth 세션은 `--pup-org`, 사이트는 `--site` 또는 `DD_SITE`로 재정의합니다. 기존 `--auth-provider pup`는 `--auth-method oauth`와 같은 방식으로 계속 사용할 수 있습니다.
+`[auth]`는 전역 파일에서만 허용합니다. 프로젝트 `.datadog.toml`이 다른 OAuth 사이트를 지정하면 오류이며, 변경하려면 `--site` 또는 `DD_SITE`로 명시해야 합니다. 임의 자격증명 명령은 설정할 수 없습니다.
+CLI는 OAuth 조회 명령마다 `pup auth token --org=<세션>`을 한 번 실행합니다. Pup이 저장·갱신을 담당하며 이 CLI는 토큰을 파일에 저장하지 않습니다. 제공자 실행은 60초로 제한하고 실패·빈 값·잘못된 응답은 인증 오류(3)로 처리합니다. 다른 키·토큰·세션으로 자동 전환하지 않습니다.
+`config show`는 인증 방식·선택 출처·세션과 마스킹한 설정을 표시하며 Pup을 실행하지 않습니다. 인증 옵션은 API 명령과 `config show`에 적용됩니다. 무인 실행에는 SAT나 서비스 계정 키를 사용하세요.
 
 ## 설정
 
@@ -110,6 +128,11 @@ datadog-cli config edit   # 위 경로를 $EDITOR로 열기; 기본값 vim
 
 `config init`은 전역 파일을 만듭니다. `DD_TAG_FILTER`는 기본 태그 필터, `RUST_LOG`는 로그 수준을 설정합니다.
 지원 사이트와 전체 옵션은 [명령 참조](.claude/skills/datadog-query/reference.md)를 확인하세요.
+
+## 0.8 업그레이드
+
+전역 `[auth]`에서 기본 인증 방식을 선택할 수 있습니다. `[auth]`가 없는 기존 설정은 호환됩니다. OAuth의 필수 세션은 설정과 CLI를 합친 뒤 검사합니다. Rust에서 인증 설정을 자동 적용하려면 비동기 `Config::load_with_options(ConfigOptions)`를 사용하세요. 동기 `Config::load`는 OAuth 설정에서 비동기 로더 사용을 안내하는 오류를 반환합니다.
+스킬은 백업 없이 전체 교체하며 임시 사본은 스킬 검색 경로 밖에서 준비합니다. 삭제를 선택한 스킬도 백업을 남기지 않습니다.
 
 ## 0.7 업그레이드
 

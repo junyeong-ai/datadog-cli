@@ -39,8 +39,9 @@ Options:
       --app-key <APP_KEY>              Application key (otherwise DD_APP_KEY or config)
       --token <TOKEN>                  Bearer token: PAT, SAT, or OAuth access token
       --site <SITE>                    Datadog site (otherwise DD_SITE or config)
-      --auth-provider <AUTH_PROVIDER>  Obtain a bearer token from an explicit authentication provider [possible values: pup]
-      --pup-org <PUP_ORG>              Named Pup OAuth session (--org used at pup auth login)
+      --auth-provider <AUTH_PROVIDER>  Use Pup OAuth (compatibility option for --auth-method oauth) [possible values: pup]
+      --auth-method <AUTH_METHOD>      Authentication method (otherwise global config [auth].method) [possible values: api-keys, token, oauth]
+      --pup-org <PUP_ORG>              Named Pup OAuth session (otherwise global config [auth].pup_org)
   -h, --help                           Print help
   -V, --version                        Print version
 ```

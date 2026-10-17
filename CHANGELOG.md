@@ -5,7 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] - 2026-10-17
+
+### Added
+
+- Global `[auth]` selects `api-keys`, `token`, or `oauth` with a named Pup session. `--auth-method` and explicit CLI credentials override the default; environment values supply only the selected credential type. Configurations without `[auth]` retain legacy precedence.
+- `config show` reports the selected authentication method, source, and session without invoking Pup. Rust callers can use asynchronous `Config::load_with_options(ConfigOptions)`.
+
+### Changed
+
+- OAuth session requirements are validated after configuration resolution. Project `[auth]` is rejected, and a conflicting project OAuth site requires an explicit trusted override. `--auth-provider pup` remains supported.
 
 ### Fixed
 

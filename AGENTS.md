@@ -5,8 +5,8 @@ Rust 2024 CLI. `rust-toolchain.toml` pins development Rust; `Cargo.toml` declare
 ## Architecture
 
 - `src/cli/mod.rs`: Clap arguments, defaults, and ranges. Handlers consume typed arguments directly.
-- `src/auth.rs`: fixed Pup token provider, bounded asynchronous process lifetime and output. Provider selection is CLI-only; do not allow project config to execute credential commands. Pin the selected site/session and never fall back to another identity on provider failure.
-- `src/config.rs`: global → nearest project → environment → CLI field merging and resolved configuration. A higher source with keys clears an inherited token; a nonempty token wins within a source. Config files reject unknown fields. Never include secret values or raw config snippets in errors.
+- `src/auth.rs`: fixed Pup token provider, bounded asynchronous process lifetime and output. Select OAuth through explicit CLI options or global `[auth]`; never allow project config to enable credential processes. Pin the selected site/session and never fall back to another identity on provider failure.
+- `src/config.rs`: global → nearest project → environment → CLI field merging and resolved configuration. A higher source with keys clears an inherited token; a nonempty token wins within a source. Explicit auth methods filter unrelated credentials before merging. `[auth]` is global-only; project site changes cannot silently select another OAuth identity. Keep configuration planning separate from credential execution so `config show` never invokes Pup. Config files reject unknown fields. Never include secret values or raw config snippets in errors.
 - `src/datadog/transport.rs`: pooled HTTP client, sensitive authentication headers, request deadlines, error mapping, and retries. Redirects and reqwest's automatic retries are disabled so one policy controls attempts.
 - `src/datadog/client.rs`: endpoint paths, request bodies, and shared search parameters.
 - `src/datadog/models.rs`: verified response fields and metric array alignment. Metric client methods reject processing errors before handlers transform results. Preserve extensible API fields where callers depend on passthrough data.

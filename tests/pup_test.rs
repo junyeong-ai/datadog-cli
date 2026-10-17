@@ -66,6 +66,8 @@ fn main() {
         let result = Command::new(std::env::current_exe().unwrap())
             .args(["--exact", "pup_provider_child", "--nocapture"])
             .current_dir(&project)
+            .env("HOME", root.path())
+            .env("USERPROFILE", root.path())
             .env("PATH", &paths)
             .env("TEST_PUP_CASE", case)
             .env("TEST_PUP_RECORD", &record)
@@ -86,8 +88,6 @@ fn main() {
         fs::remove_file(&record).unwrap();
     }
     for args in [
-        vec!["--auth-provider", "pup", "metrics", "q"],
-        vec!["--pup-org", "team", "metrics", "q"],
         vec![
             "--auth-provider",
             "pup",
@@ -112,6 +112,8 @@ fn main() {
         let result = Command::new(env!("CARGO_BIN_EXE_datadog-cli"))
             .args(args)
             .current_dir(&project)
+            .env("HOME", root.path())
+            .env("USERPROFILE", root.path())
             .env("PATH", &paths)
             .env("TEST_PUP_RECORD", &record)
             .output()
@@ -121,14 +123,8 @@ fn main() {
         assert!(!String::from_utf8_lossy(&result.stderr).contains("fixture-secret"));
     }
     for args in [
-        vec![
-            "--auth-provider",
-            "pup",
-            "--pup-org",
-            "team",
-            "config",
-            "show",
-        ],
+        vec!["--auth-provider", "pup", "metrics", "q"],
+        vec!["--pup-org", "team", "metrics", "q"],
         vec![
             "--auth-provider",
             "pup",
@@ -143,12 +139,102 @@ fn main() {
         let result = Command::new(env!("CARGO_BIN_EXE_datadog-cli"))
             .args(args)
             .current_dir(&project)
+            .env("HOME", root.path())
+            .env("USERPROFILE", root.path())
             .env("PATH", &paths)
             .env("TEST_PUP_RECORD", &record)
             .output()
             .unwrap();
         assert_eq!(result.status.code(), Some(1));
         assert!(!record.exists());
+    }
+    let global_directory = root.path().join(".config/datadog-cli");
+    fs::create_dir_all(&global_directory).unwrap();
+    let global_config = global_directory.join("config.toml");
+    fs::write(&global_config, "site='datadoghq.eu'\ntoken='unused-global-secret'\n[auth]\nmethod='oauth'\npup_org='team work 한글;$literal'\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&global_config, fs::Permissions::from_mode(0o600)).unwrap();
+    }
+    for (case, arguments, expected_exit, expected_provider) in [
+        ("failed", vec!["config", "show"], 0, false),
+        (
+            "success",
+            vec!["metrics", "q", "--from", "definitely-invalid"],
+            1,
+            true,
+        ),
+        (
+            "failed",
+            vec!["metrics", "q", "--from", "definitely-invalid"],
+            3,
+            true,
+        ),
+        (
+            "failed",
+            vec![
+                "--auth-method",
+                "api-keys",
+                "metrics",
+                "q",
+                "--from",
+                "definitely-invalid",
+            ],
+            1,
+            false,
+        ),
+        (
+            "failed",
+            vec![
+                "--auth-method",
+                "token",
+                "metrics",
+                "q",
+                "--from",
+                "definitely-invalid",
+            ],
+            1,
+            false,
+        ),
+    ] {
+        let result = Command::new(env!("CARGO_BIN_EXE_datadog-cli"))
+            .args(arguments)
+            .current_dir(&project)
+            .env("HOME", root.path())
+            .env("USERPROFILE", root.path())
+            .env("PATH", &paths)
+            .env_remove("DD_SITE")
+            .env("DD_TOKEN", "ambient-secret")
+            .env("DD_API_KEY", "ambient-api")
+            .env("DD_APP_KEY", "ambient-app")
+            .env("TEST_PUP_RECORD", &record)
+            .env("TEST_PUP_CASE", case)
+            .output()
+            .unwrap();
+        assert_eq!(
+            result.status.code(),
+            Some(expected_exit),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert_eq!(record.exists(), expected_provider);
+        let output = format!(
+            "{}{}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert!(
+            !output.contains("unused-global-secret")
+                && !output.contains("ambient-secret")
+                && !output.contains("fixture-secret")
+        );
+        if expected_exit == 0 {
+            assert!(output.contains("Authentication: oauth"));
+        }
+        if record.exists() {
+            fs::remove_file(&record).unwrap();
+        }
     }
 }
 
@@ -161,7 +247,7 @@ async fn pup_provider_child() {
     use datadog_cli::datadog::DatadogClient;
     use wiremock::matchers::{header, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
-    let result = Config::load_pup(None, "team work 한글;$literal").await;
+    let result = Config::load_pup(Some("datadoghq.eu".into()), "team work 한글;$literal").await;
     if case != "success" {
         let error = result.unwrap_err();
         assert_eq!(error.exit_code(), 3);

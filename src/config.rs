@@ -81,6 +81,41 @@ impl Default for Network {
 
 pub const DEFAULT_SITE: &str = "datadoghq.com";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, clap::ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum AuthMethod {
+    ApiKeys,
+    Token,
+    Oauth,
+}
+
+impl AuthMethod {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::ApiKeys => "api-keys",
+            Self::Token => "token",
+            Self::Oauth => "oauth",
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct ConfigOptions {
+    pub api_key: Option<String>,
+    pub app_key: Option<String>,
+    pub token: Option<String>,
+    pub site: Option<String>,
+    pub auth_method: Option<AuthMethod>,
+    pub pup_org: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AuthFile {
+    method: AuthMethod,
+    pup_org: Option<String>,
+}
+
 /// On-disk configuration schema. Every field is optional so that merging
 /// across tiers (global file, project file, env, CLI) is presence-based:
 /// a tier overrides only the fields it actually sets.
@@ -91,6 +126,7 @@ struct ConfigFile {
     app_key: Option<String>,
     token: Option<String>,
     site: Option<String>,
+    auth: Option<AuthFile>,
     #[serde(default)]
     defaults: DefaultsFile,
     #[serde(default)]
@@ -113,50 +149,20 @@ struct NetworkFile {
 }
 
 impl ConfigFile {
-    /// Priority: file < env < CLI args.
-    fn merged(
-        cli_api_key: Option<String>,
-        cli_app_key: Option<String>,
-        cli_token: Option<String>,
-        cli_site: Option<String>,
-        load_credentials: bool,
-    ) -> Result<Self> {
-        let mut config = Self::load_paths(
-            Config::global_config_path().as_deref(),
-            Config::find_project_config()?.as_deref(),
-        )?;
-        config.overlay(Self {
-            api_key: if load_credentials {
-                env_value("DD_API_KEY")?
-            } else {
-                None
-            },
-            app_key: if load_credentials {
-                env_value("DD_APP_KEY")?
-            } else {
-                None
-            },
-            token: if load_credentials {
-                env_value("DD_TOKEN")?
-            } else {
-                None
-            },
-            site: env_value("DD_SITE")?,
-            defaults: DefaultsFile {
-                tag_filter: env_value("DD_TAG_FILTER")?,
-                ..DefaultsFile::default()
-            },
-            ..Self::default()
-        });
-        config.overlay(Self {
-            api_key: cli_api_key,
-            app_key: cli_app_key,
-            token: cli_token,
-            site: cli_site,
-            ..Self::default()
-        });
-
-        Ok(config)
+    fn retain_credentials(&mut self, method: Option<AuthMethod>) {
+        match method {
+            Some(AuthMethod::ApiKeys) => self.token = None,
+            Some(AuthMethod::Token) => {
+                self.api_key = None;
+                self.app_key = None;
+            }
+            Some(AuthMethod::Oauth) => {
+                self.api_key = None;
+                self.app_key = None;
+                self.token = None;
+            }
+            None => {}
+        }
     }
 
     fn overlay(&mut self, higher: Self) {
@@ -180,27 +186,215 @@ impl ConfigFile {
             .or(self.network.total_timeout_secs);
     }
 
-    fn load_paths(global: Option<&Path>, project: Option<&Path>) -> Result<Self> {
-        let mut config = Self::default();
-        for path in [global, project].into_iter().flatten() {
+    fn read(path: Option<&Path>) -> Result<Self> {
+        if let Some(path) = path {
             let content = match fs::read_to_string(path) {
                 Ok(content) => content,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    return Ok(Self::default());
+                }
                 Err(error) => return Err(error.into()),
             };
             #[cfg(unix)]
             Config::check_permissions(path)?;
-            let layer = toml::from_str(&content).map_err(|error: toml::de::Error| {
+            return toml::from_str(&content).map_err(|error: toml::de::Error| {
                 let prefix = &content.as_bytes()[..error.span().map_or(0, |span| span.start)];
                 let line = prefix.iter().filter(|&&byte| byte == b'\n').count() + 1;
                 DatadogError::InvalidInput(format!(
                     "Invalid config in {} at line {line}: check TOML syntax and field names",
                     path.display()
                 ))
-            })?;
-            config.overlay(layer);
+            });
         }
-        Ok(config)
+        Ok(Self::default())
+    }
+}
+
+#[derive(Debug)]
+struct ConfigFiles {
+    global: ConfigFile,
+    project: ConfigFile,
+}
+
+impl ConfigFiles {
+    fn load_paths(global: Option<&Path>, project: Option<&Path>) -> Result<Self> {
+        let files = Self {
+            global: ConfigFile::read(global)?,
+            project: ConfigFile::read(project)?,
+        };
+        if files.project.auth.is_some() {
+            return Err(DatadogError::InvalidInput(
+                "[auth] is only supported in the global config.toml, not project .datadog.toml"
+                    .into(),
+            ));
+        }
+        Ok(files)
+    }
+
+    fn merged(mut self, method: Option<AuthMethod>) -> ConfigFile {
+        self.global.retain_credentials(method);
+        self.project.retain_credentials(method);
+        self.global.overlay(self.project);
+        self.global
+    }
+}
+
+struct ConfigPlan {
+    file: ConfigFile,
+    method: Option<AuthMethod>,
+    source: &'static str,
+    pup_org: Option<String>,
+}
+
+impl ConfigPlan {
+    fn load(options: ConfigOptions) -> Result<Self> {
+        let files = ConfigFiles::load_paths(
+            Config::global_config_path().as_deref(),
+            Config::find_project_config()?.as_deref(),
+        )?;
+        let (method, _) = Self::select_method(&files, &options);
+        let environment = ConfigFile {
+            api_key: if matches!(method, None | Some(AuthMethod::ApiKeys)) {
+                env_value("DD_API_KEY")?
+            } else {
+                None
+            },
+            app_key: if matches!(method, None | Some(AuthMethod::ApiKeys)) {
+                env_value("DD_APP_KEY")?
+            } else {
+                None
+            },
+            token: if matches!(method, None | Some(AuthMethod::Token)) {
+                env_value("DD_TOKEN")?
+            } else {
+                None
+            },
+            site: env_value("DD_SITE")?,
+            defaults: DefaultsFile {
+                tag_filter: env_value("DD_TAG_FILTER")?,
+                ..DefaultsFile::default()
+            },
+            ..ConfigFile::default()
+        };
+        Self::resolve(files, environment, options)
+    }
+
+    fn select_method(
+        files: &ConfigFiles,
+        options: &ConfigOptions,
+    ) -> (Option<AuthMethod>, &'static str) {
+        let cli_method = options.auth_method.or_else(|| {
+            if options
+                .token
+                .as_deref()
+                .is_some_and(|token| !token.is_empty())
+            {
+                Some(AuthMethod::Token)
+            } else if options.api_key.is_some() || options.app_key.is_some() {
+                Some(AuthMethod::ApiKeys)
+            } else {
+                None
+            }
+        });
+        let global_method = files.global.auth.as_ref().map(|auth| auth.method);
+        let method = cli_method.or(global_method);
+        let source = if cli_method.is_some() {
+            "CLI"
+        } else if global_method.is_some() {
+            "global config"
+        } else {
+            "legacy precedence"
+        };
+        (method, source)
+    }
+
+    fn resolve(
+        files: ConfigFiles,
+        mut environment: ConfigFile,
+        options: ConfigOptions,
+    ) -> Result<Self> {
+        let (method, source) = Self::select_method(&files, &options);
+        if let Some(method) = method {
+            let conflict = match method {
+                AuthMethod::ApiKeys => options.token.is_some(),
+                AuthMethod::Token => options.api_key.is_some() || options.app_key.is_some(),
+                AuthMethod::Oauth => {
+                    options.token.is_some()
+                        || options.api_key.is_some()
+                        || options.app_key.is_some()
+                }
+            };
+            if conflict && (options.auth_method.is_some() || method == AuthMethod::Oauth) {
+                return Err(DatadogError::InvalidInput(
+                    "Credential flags must match --auth-method".into(),
+                ));
+            }
+        }
+        if options.pup_org.is_some() && method != Some(AuthMethod::Oauth) {
+            return Err(DatadogError::InvalidInput(
+                "--pup-org requires OAuth authentication".into(),
+            ));
+        }
+        let pup_org = options.pup_org.or_else(|| {
+            files
+                .global
+                .auth
+                .as_ref()
+                .and_then(|auth| auth.pup_org.clone())
+        });
+        if method == Some(AuthMethod::Oauth) {
+            if let Some(org) = &pup_org {
+                crate::auth::validate_pup_org(org)?;
+            }
+            if options.site.is_none() && environment.site.is_none() {
+                let trusted_site = files.global.site.as_deref().unwrap_or(DEFAULT_SITE);
+                if files
+                    .project
+                    .site
+                    .as_deref()
+                    .is_some_and(|site| site != trusted_site)
+                {
+                    return Err(DatadogError::InvalidInput(
+                        "Project site conflicts with the OAuth site; select the site explicitly with --site or DD_SITE".into(),
+                    ));
+                }
+            }
+        }
+        let mut file = files.merged(method);
+        environment.retain_credentials(method);
+        file.overlay(environment);
+        file.overlay(ConfigFile {
+            api_key: options.api_key,
+            app_key: options.app_key,
+            token: options.token,
+            site: options.site,
+            ..ConfigFile::default()
+        });
+        Ok(Self {
+            file,
+            method,
+            source,
+            pup_org,
+        })
+    }
+
+    async fn execute(self) -> Result<Config> {
+        if self.method != Some(AuthMethod::Oauth) {
+            return Config::resolve_with_method(self.file, self.method);
+        }
+        let (site, defaults, network) = Config::resolve_settings(&self.file)?;
+        let org = self.pup_org.as_deref().ok_or_else(|| {
+            DatadogError::InvalidInput(
+                "OAuth requires [auth].pup_org in the global config.toml or --pup-org".into(),
+            )
+        })?;
+        let token = crate::auth::pup_token(&site, org).await?;
+        Ok(Config {
+            credentials: Credentials::Token(token),
+            site,
+            defaults,
+            network,
+        })
     }
 }
 
@@ -211,24 +405,63 @@ impl Config {
         cli_token: Option<String>,
         cli_site: Option<String>,
     ) -> Result<Self> {
-        let file = ConfigFile::merged(cli_api_key, cli_app_key, cli_token, cli_site, true)?;
-        Self::resolve(file)
+        let plan = ConfigPlan::load(ConfigOptions {
+            api_key: cli_api_key,
+            app_key: cli_app_key,
+            token: cli_token,
+            site: cli_site,
+            ..ConfigOptions::default()
+        })?;
+        Self::resolve_with_method(plan.file, plan.method)
+    }
+
+    pub async fn load_with_options(options: ConfigOptions) -> Result<Self> {
+        ConfigPlan::load(options)?.execute().await
     }
 
     pub async fn load_pup(cli_site: Option<String>, org: &str) -> Result<Self> {
-        let file = ConfigFile::merged(None, None, None, cli_site, false)?;
-        let (site, defaults, network) = Self::resolve_settings(&file)?;
-        let token = crate::auth::pup_token(&site, org).await?;
-        Ok(Self {
-            credentials: Credentials::Token(token),
-            site,
-            defaults,
-            network,
+        Self::load_with_options(ConfigOptions {
+            site: cli_site,
+            auth_method: Some(AuthMethod::Oauth),
+            pup_org: Some(org.into()),
+            ..ConfigOptions::default()
         })
+        .await
     }
 
+    #[cfg(test)]
     fn resolve(file: ConfigFile) -> Result<Self> {
+        Self::resolve_with_method(file, None)
+    }
+
+    fn resolve_with_method(file: ConfigFile, method: Option<AuthMethod>) -> Result<Self> {
+        if method == Some(AuthMethod::Oauth) {
+            return Err(DatadogError::InvalidInput(
+                "OAuth requires asynchronous Config::load_with_options".into(),
+            ));
+        }
         let (site, defaults, network) = Self::resolve_settings(&file)?;
+        if method == Some(AuthMethod::Token) {
+            let token = file
+                .token
+                .filter(|token| !token.is_empty())
+                .ok_or_else(|| {
+                    DatadogError::AuthError(
+                        "Token authentication requires token in config, DD_TOKEN, or --token"
+                            .into(),
+                    )
+                })?;
+            return Ok(Self {
+                credentials: Credentials::Token(token),
+                site,
+                defaults,
+                network,
+            });
+        }
+        let mut file = file;
+        if method == Some(AuthMethod::ApiKeys) {
+            file.token = None;
+        }
         let credentials = match file.token.filter(|t| !t.is_empty()) {
             Some(token) => Credentials::Token(token),
             None => {
@@ -367,9 +600,15 @@ impl Config {
 
         let template = r#"api_key = "your-api-key-here"
 app_key = "your-app-key-here"
-# Or authenticate with a personal access token instead of the key pair:
-# token = "ddpat_..."
+# Or authenticate with a bearer token instead of the key pair:
+# token = "your-bearer-token"
 site = "datadoghq.com"
+
+# Optional explicit authentication selection (global config only):
+# [auth]
+# method = "api-keys"
+# Use method = "oauth" with pup_org after logging in through Pup.
+# pup_org = "cli-read"
 
 [defaults]
 format = "json"
@@ -405,7 +644,18 @@ total_timeout_secs = 120
         token: Option<String>,
         site: Option<String>,
     ) -> Result<String> {
-        let file = ConfigFile::merged(api_key, app_key, token, site, true)?;
+        Self::show_with_options(ConfigOptions {
+            api_key,
+            app_key,
+            token,
+            site,
+            ..ConfigOptions::default()
+        })
+    }
+
+    pub fn show_with_options(options: ConfigOptions) -> Result<String> {
+        let plan = ConfigPlan::load(options)?;
+        let file = plan.file;
         let path = Self::active_config_path()?.display().to_string();
 
         let defaults = Defaults::default();
@@ -414,6 +664,9 @@ total_timeout_secs = 120
         Ok(format!(
             "Config: {}\n\
              Global config: {}\n\
+             Authentication: {}\n\
+             Auth source: {}\n\
+             Pup session: {}\n\
              API Key: {}\n\
              App Key: {}\n\
              Token: {}\n\
@@ -429,6 +682,14 @@ total_timeout_secs = 120
             Self::global_config_path()
                 .map(|p| p.display().to_string())
                 .unwrap_or_else(|| "(unavailable)".into()),
+            plan.method
+                .map_or("legacy (token/key precedence)", AuthMethod::as_str),
+            plan.source,
+            if plan.method == Some(AuthMethod::Oauth) {
+                plan.pup_org.as_deref().unwrap_or("(not set)")
+            } else {
+                "(not selected)"
+            },
             file.api_key
                 .as_deref()
                 .map_or("(not set)".to_string(), mask_token),
@@ -781,13 +1042,16 @@ mod tests {
         )
         .unwrap();
         fs::write(&project, "site = 'datadoghq.eu'\n").unwrap();
-        let merged =
-            Config::resolve(ConfigFile::load_paths(Some(&global), Some(&project)).unwrap())
-                .unwrap();
+        let merged = Config::resolve(
+            ConfigFiles::load_paths(Some(&global), Some(&project))
+                .unwrap()
+                .merged(None),
+        )
+        .unwrap();
         assert_eq!(merged.site, "datadoghq.eu");
         assert_eq!(merged.defaults.format, "jsonl");
         fs::write(&global, "api_key = 'secret-value' broken").unwrap();
-        let error = ConfigFile::load_paths(Some(&global), Some(&project))
+        let error = ConfigFiles::load_paths(Some(&global), Some(&project))
             .unwrap_err()
             .to_string();
         assert!(!error.contains("secret-value"));
@@ -831,5 +1095,230 @@ mod tests {
             file.defaults.format = Some(format.into());
             assert_eq!(Config::resolve(file).unwrap().defaults.format, format);
         }
+    }
+    fn auth_plan(
+        global: &str,
+        project: &str,
+        environment: &str,
+        options: ConfigOptions,
+    ) -> Result<ConfigPlan> {
+        ConfigPlan::resolve(
+            ConfigFiles {
+                global: toml::from_str(global).unwrap(),
+                project: toml::from_str(project).unwrap(),
+            },
+            toml::from_str(environment).unwrap(),
+            options,
+        )
+    }
+
+    #[test]
+    fn explicit_authentication_filters_other_methods_before_merging() {
+        let keys = auth_plan(
+            "api_key='test123'\napp_key='app456'\ntoken='unused'\n[auth]\nmethod='api-keys'",
+            "token='project-unused'",
+            "token='environment-unused'",
+            ConfigOptions::default(),
+        )
+        .unwrap();
+        assert_eq!(keys.method, Some(AuthMethod::ApiKeys));
+        assert_keys(&Config::resolve_with_method(keys.file, keys.method).unwrap());
+        let token = auth_plan(
+            "token='selected'\n[auth]\nmethod='token'",
+            "api_key='project-unused'\napp_key='project-unused'",
+            "api_key='environment-unused'\napp_key='environment-unused'",
+            ConfigOptions::default(),
+        )
+        .unwrap();
+        assert!(
+            matches!(Config::resolve_with_method(token.file, token.method).unwrap().credentials,
+            Credentials::Token(value) if value == "selected")
+        );
+        let oauth = auth_plan(
+            "token='unused'\n[auth]\nmethod='oauth'\npup_org='selected'",
+            "api_key='unused'\napp_key='unused'",
+            "token='unused'",
+            ConfigOptions::default(),
+        )
+        .unwrap();
+        assert_eq!(oauth.method, Some(AuthMethod::Oauth));
+        assert_eq!(oauth.pup_org.as_deref(), Some("selected"));
+        assert!(
+            oauth.file.token.is_none()
+                && oauth.file.api_key.is_none()
+                && oauth.file.app_key.is_none()
+        );
+    }
+
+    #[test]
+    fn explicit_authentication_never_uses_another_methods_credentials() {
+        for source in [
+            "token='other'\n[auth]\nmethod='api-keys'",
+            "api_key='only-one-key'\ntoken='other'\n[auth]\nmethod='api-keys'",
+            "api_key='k'\napp_key='a'\n[auth]\nmethod='token'",
+            "token=''\napi_key='k'\napp_key='a'\n[auth]\nmethod='token'",
+        ] {
+            let plan = auth_plan(source, "", "", ConfigOptions::default()).unwrap();
+            assert_eq!(
+                Config::resolve_with_method(plan.file, plan.method)
+                    .unwrap_err()
+                    .exit_code(),
+                3
+            );
+        }
+    }
+
+    #[test]
+    fn cli_authentication_overrides_global_defaults_and_rejects_conflicts() {
+        let global = "api_key='test123'\napp_key='app456'\ntoken='global-token'\n[auth]\nmethod='oauth'\npup_org='global-session'";
+        for options in [
+            ConfigOptions {
+                auth_method: Some(AuthMethod::ApiKeys),
+                ..ConfigOptions::default()
+            },
+            ConfigOptions {
+                api_key: Some("test123".into()),
+                ..ConfigOptions::default()
+            },
+        ] {
+            let plan = auth_plan(global, "", "", options).unwrap();
+            assert_eq!(plan.source, "CLI");
+            assert_keys(&Config::resolve_with_method(plan.file, plan.method).unwrap());
+        }
+        let plan = auth_plan(
+            global,
+            "",
+            "",
+            ConfigOptions {
+                token: Some("cli-token".into()),
+                ..ConfigOptions::default()
+            },
+        )
+        .unwrap();
+        assert!(
+            matches!(Config::resolve_with_method(plan.file, plan.method).unwrap().credentials, Credentials::Token(value) if value=="cli-token")
+        );
+        for options in [
+            ConfigOptions {
+                auth_method: Some(AuthMethod::ApiKeys),
+                token: Some("unused".into()),
+                ..ConfigOptions::default()
+            },
+            ConfigOptions {
+                auth_method: Some(AuthMethod::Token),
+                api_key: Some("unused".into()),
+                ..ConfigOptions::default()
+            },
+            ConfigOptions {
+                auth_method: Some(AuthMethod::Oauth),
+                token: Some("unused".into()),
+                ..ConfigOptions::default()
+            },
+            ConfigOptions {
+                token: Some(String::new()),
+                ..ConfigOptions::default()
+            },
+        ] {
+            assert_eq!(
+                auth_plan(global, "", "", options)
+                    .err()
+                    .unwrap()
+                    .exit_code(),
+                1
+            );
+        }
+    }
+
+    #[test]
+    fn oauth_site_and_session_require_trusted_selection() {
+        let global = "site='datadoghq.eu'\n[auth]\nmethod='oauth'\npup_org='global-session'";
+        assert_eq!(
+            auth_plan(global, "site='datadoghq.com'", "", ConfigOptions::default())
+                .err()
+                .unwrap()
+                .exit_code(),
+            1
+        );
+        for (environment, options) in [
+            ("site='datadoghq.com'", ConfigOptions::default()),
+            (
+                "",
+                ConfigOptions {
+                    site: Some("datadoghq.com".into()),
+                    ..ConfigOptions::default()
+                },
+            ),
+        ] {
+            let plan = auth_plan(global, "site='datadoghq.com'", environment, options).unwrap();
+            assert_eq!(plan.file.site.as_deref(), Some("datadoghq.com"));
+        }
+        let plan = auth_plan(
+            global,
+            "",
+            "",
+            ConfigOptions {
+                pup_org: Some("cli-session".into()),
+                ..ConfigOptions::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(plan.pup_org.as_deref(), Some("cli-session"));
+        assert!(
+            auth_plan(
+                "",
+                "",
+                "",
+                ConfigOptions {
+                    pup_org: Some("session".into()),
+                    ..ConfigOptions::default()
+                }
+            )
+            .is_err()
+        );
+        assert!(
+            auth_plan(
+                "[auth]\nmethod='oauth'\npup_org='  '",
+                "",
+                "",
+                ConfigOptions::default()
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn auth_schema_and_project_scope_are_strict() {
+        for source in [
+            "[auth]\nmethod='unknown'",
+            "[auth]\npup_org='session'",
+            "[auth]\nmethod='oauth'\ncommand='not-allowed'",
+        ] {
+            assert!(toml::from_str::<ConfigFile>(source).is_err());
+        }
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join(".datadog.toml");
+        fs::write(&path, "[auth]\nmethod='oauth'\npup_org='session'").unwrap();
+        assert_eq!(
+            ConfigFiles::load_paths(None, Some(&path))
+                .unwrap_err()
+                .exit_code(),
+            1
+        );
+    }
+
+    #[test]
+    fn legacy_empty_cli_token_still_clears_inherited_token() {
+        let plan = auth_plan(
+            "api_key='test123'\napp_key='app456'\ntoken='lower'",
+            "",
+            "",
+            ConfigOptions {
+                token: Some(String::new()),
+                ..ConfigOptions::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(plan.method, None);
+        assert_keys(&Config::resolve_with_method(plan.file, plan.method).unwrap());
     }
 }

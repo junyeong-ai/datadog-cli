@@ -19,7 +19,7 @@ The accompanying skill comes from the same release tag. Non-interactive installa
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
-DATADOG_CLI_VERSION=0.7.0 bash install.sh
+DATADOG_CLI_VERSION=0.8.0 bash install.sh
 ```
 
 Source builds require Rustup and C build tools. Development uses Rust 1.99.1 from `rust-toolchain.toml`; the minimum supported Rust version is 1.97.
@@ -61,13 +61,31 @@ Use [Pup 2.0+](https://github.com/DataDog/pup) for OAuth login and refresh. Inst
 
 ```bash
 pup auth login --site datadoghq.com --org cli-read --scopes timeseries_query,logs_read_data
-datadog-cli --auth-provider pup --pup-org cli-read --site datadoghq.com logs search "service:api"
 ```
 
-`--pup-org` is a saved Pup session name; select the actual Datadog organization during browser consent. `--site` must match that session's site. Other commands require their API scopes and user permissions.
-Each CLI command invokes `pup auth token --org=<session>` once. Pup owns storage and refresh; this CLI does not persist the token. Provider execution is limited to 60 seconds. Failure, empty output, or invalid output returns authentication error 3 without falling back to keys or another token.
-Provider selection is CLI-only; config files cannot enable external command execution. It conflicts with `--api-key`, `--app-key`, and `--token`, and does not apply to `config` commands. Ambient static credentials are ignored when the provider is selected.
-Personal PATs and service account SATs can be supplied directly through `DD_TOKEN`. Use SATs or service account keys for unattended execution. Manage OAuth consent and sessions through `pup auth`.
+Choose the default authentication method in the global `~/.config/datadog-cli/config.toml`. `site` is a top-level field and must match the login site.
+
+```toml
+site = "datadoghq.com"
+
+[auth]
+method = "oauth"
+pup_org = "cli-read"
+```
+
+Subsequent commands need no authentication options:
+
+```bash
+datadog-cli logs search "service:api"
+datadog-cli config show
+```
+
+`method` accepts `api-keys`, `token`, or `oauth`. `api-keys` uses the existing `api_key`/`app_key`; `token` uses `token` or `DD_TOKEN`. `oauth` uses the Pup session and ignores static keys/tokens. Environment variables override credential values only within the selected method. Without `[auth]`, existing token/key precedence is preserved.
+`pup_org` is a saved Pup session name; select the actual Datadog organization during browser consent. Other commands require their API scopes and user permissions.
+Use `--auth-method api-keys|token|oauth` to select a method for one invocation. Explicit CLI credentials also override the global default method. Credential options that conflict with `--auth-method` are errors. Override the session with `--pup-org` and the site with `--site` or `DD_SITE`. The existing `--auth-provider pup` remains equivalent to `--auth-method oauth`.
+`[auth]` is allowed only in the global file. A project `.datadog.toml` selecting a different OAuth site is an error unless the site is explicitly overridden with `--site` or `DD_SITE`. Arbitrary credential commands are not configurable.
+Each OAuth API command invokes `pup auth token --org=<session>` once. Pup owns storage and refresh; this CLI does not persist tokens. Provider execution is limited to 60 seconds. Failure, empty output, or invalid output returns authentication error 3 without falling back to another key, token, or session.
+`config show` displays the method, selection source, session, and masked configuration without invoking Pup. Authentication options apply to API commands and `config show`. Use SATs or service account keys for unattended execution.
 
 ## Configuration
 
@@ -110,6 +128,11 @@ datadog-cli config edit   # Open that path in $EDITOR; defaults to vim
 
 `config init` creates the global file. `DD_TAG_FILTER` sets the default tag filter; `RUST_LOG` sets the log level.
 See the [command reference](.claude/skills/datadog-query/reference.md) for supported sites and options.
+
+## Upgrading to 0.8
+
+The global `[auth]` section selects the default authentication method. Existing configurations without `[auth]` remain compatible. Required OAuth session values are checked after merging configuration and CLI options. Rust callers should use asynchronous `Config::load_with_options(ConfigOptions)` to apply authentication settings; synchronous `Config::load` returns an error directing OAuth callers to that loader.
+Skills are replaced completely without backups; temporary copies are prepared outside skill discovery directories. Selecting skill removal also leaves no backup.
 
 ## Upgrading to 0.7
 
