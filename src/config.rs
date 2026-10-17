@@ -423,10 +423,8 @@ total_timeout_secs = 120
             )));
         }
 
-        let editor = env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
-
-        let status = std::process::Command::new(&editor)
-            .arg(&path)
+        let editor = env_value("EDITOR")?.unwrap_or_else(|| "vim".to_string());
+        let status = editor_command(&editor, &path)?
             .status()
             .map_err(|e| DatadogError::InvalidInput(format!("Failed to launch editor: {}", e)))?;
 
@@ -438,6 +436,28 @@ total_timeout_secs = 120
 
         Ok(())
     }
+}
+
+fn editor_command(editor: &str, path: &Path) -> Result<std::process::Command> {
+    if editor.contains('\0') {
+        return Err(DatadogError::InvalidInput(
+            "EDITOR must not contain NUL characters".into(),
+        ));
+    }
+    #[cfg(not(windows))]
+    let words = shlex::split(editor).ok_or_else(|| {
+        DatadogError::InvalidInput("EDITOR contains invalid quoting or escapes".into())
+    })?;
+    #[cfg(windows)]
+    let words = windows_args::Args::parse_cmd(editor.trim_start()).collect::<Vec<_>>();
+
+    let (program, args) = words
+        .split_first()
+        .filter(|(program, _)| !program.is_empty())
+        .ok_or_else(|| DatadogError::InvalidInput("EDITOR must specify an executable".into()))?;
+    let mut command = std::process::Command::new(program);
+    command.args(args).arg(path);
+    Ok(command)
 }
 
 fn env_value(name: &str) -> Result<Option<String>> {
@@ -457,6 +477,38 @@ fn mask_token(token: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn editor_commands_reject_empty_executables_and_nul() {
+        for input in ["", "  ", "\"\"", "editor\0--wait"] {
+            assert!(matches!(
+                editor_command(input, Path::new("config.toml")),
+                Err(DatadogError::InvalidInput(_))
+            ));
+        }
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn editor_commands_reject_invalid_posix_quoting() {
+        for input in ["code --wait '", r"code --wait \"] {
+            assert!(editor_command(input, Path::new("config.toml")).is_err());
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn editor_commands_preserve_windows_paths() {
+        for input in [
+            r"C:\Windows\notepad.exe",
+            r#""C:\Program Files\Editor\editor.exe" --wait """#,
+        ] {
+            let command = editor_command(input, Path::new("config.toml")).unwrap();
+            let program = command.get_program().to_str().unwrap();
+            assert!(program.contains('\\'));
+            assert!(program.ends_with(".exe"));
+        }
+    }
 
     fn file_with_keys() -> ConfigFile {
         ConfigFile {

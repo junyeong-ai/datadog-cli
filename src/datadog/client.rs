@@ -1,6 +1,8 @@
 use super::models::*;
 pub use super::transport::DatadogClient;
-use crate::error::Result;
+use crate::error::{DatadogError, Result};
+
+pub const MAX_METRIC_QUERIES: usize = 26;
 
 /// Common parameters for cursor-paginated search endpoints.
 pub struct SearchParams<'a> {
@@ -54,9 +56,13 @@ impl DatadogClient {
         .await
     }
 
-    /// Formula reference names for v2 queries: a, b, c, ...
-    fn metric_query_name(index: usize) -> String {
-        char::from(b'a' + index as u8).to_string()
+    fn validate_metric_queries(queries: &[String]) -> Result<()> {
+        if !(1..=MAX_METRIC_QUERIES).contains(&queries.len()) {
+            return Err(DatadogError::InvalidInput(format!(
+                "Metric queries must contain between 1 and {MAX_METRIC_QUERIES} entries"
+            )));
+        }
+        Ok(())
     }
 
     /// v2 cross-product timeseries query with formula support.
@@ -69,14 +75,15 @@ impl DatadogClient {
         to_ms: i64,
         interval_ms: Option<i64>,
     ) -> Result<serde_json::Value> {
+        Self::validate_metric_queries(queries)?;
         let mut attributes = serde_json::json!({
             "from": from_ms,
             "to": to_ms,
-            "queries": queries.iter().enumerate().map(|(i, q)| {
+            "queries": queries.iter().zip(b'a'..=b'z').map(|(q, name)| {
                 serde_json::json!({
                     "data_source": "metrics",
                     "query": q,
-                    "name": Self::metric_query_name(i)
+                    "name": char::from(name).to_string()
                 })
             }).collect::<Vec<_>>()
         });
@@ -120,15 +127,16 @@ impl DatadogClient {
         from_ms: i64,
         to_ms: i64,
     ) -> Result<serde_json::Value> {
+        Self::validate_metric_queries(queries)?;
         let mut attributes = serde_json::json!({
             "from": from_ms,
             "to": to_ms,
-            "queries": queries.iter().enumerate().map(|(i, q)| {
+            "queries": queries.iter().zip(b'a'..=b'z').map(|(q, name)| {
                 serde_json::json!({
                     "data_source": "metrics",
                     "query": q,
                     "aggregator": aggregator,
-                    "name": Self::metric_query_name(i)
+                    "name": char::from(name).to_string()
                 })
             }).collect::<Vec<_>>()
         });

@@ -974,3 +974,62 @@ async fn conflicting_rate_limit_headers_report_the_effective_wait() {
         }
     ));
 }
+
+#[tokio::test]
+async fn metric_query_methods_validate_counts_before_http() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&server)
+        .await;
+    let client = client_for(&server, 0);
+    for count in [0, 27, 160, 256] {
+        let queries = vec!["avg:system.cpu.user{*}".to_string(); count];
+        let results = [
+            client.query_timeseries(&queries, &[], 0, 1, None).await,
+            client.query_scalar(&queries, &[], "avg", 0, 1).await,
+        ];
+        for result in results {
+            assert!(matches!(result, Err(DatadogError::InvalidInput(_))));
+        }
+    }
+}
+
+#[tokio::test]
+async fn metric_query_methods_accept_both_count_boundaries_with_unique_names() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {}})))
+        .expect(4)
+        .mount(&server)
+        .await;
+    let client = client_for(&server, 0);
+    for count in [1, 26] {
+        let queries = vec!["avg:system.cpu.user{*}".to_string(); count];
+        client
+            .query_timeseries(&queries, &[], 0, 1, None)
+            .await
+            .unwrap();
+        client
+            .query_scalar(&queries, &[], "avg", 0, 1)
+            .await
+            .unwrap();
+    }
+    let requests = server.received_requests().await.unwrap();
+    for (request, count) in requests.iter().zip([1, 1, 26, 26]) {
+        let body: serde_json::Value = request.body_json().unwrap();
+        let queries = body["data"]["attributes"]["queries"].as_array().unwrap();
+        assert_eq!(queries.len(), count);
+        let names: Vec<&str> = queries
+            .iter()
+            .map(|query| query["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(names[0], "a");
+        assert_eq!(names.last(), Some(&if count == 1 { "a" } else { "z" }));
+        assert_eq!(
+            names.iter().collect::<std::collections::HashSet<_>>().len(),
+            count
+        );
+    }
+}

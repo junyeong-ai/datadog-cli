@@ -4,7 +4,7 @@ use crate::output;
 use clap::{Args, Parser, Subcommand};
 
 use crate::config::Config;
-use crate::datadog::DatadogClient;
+use crate::datadog::{DatadogClient, MAX_METRIC_QUERIES};
 use crate::error::Result;
 
 const TIME_HELP: &str =
@@ -299,7 +299,7 @@ pub struct MetricsArgs {
 
 #[derive(Args)]
 pub struct TimeseriesArgs {
-    #[arg(required = true, num_args = 1..=26, help = "Metric queries, auto-named a, b, c… for formulas")]
+    #[arg(required = true, num_args = 1..=MAX_METRIC_QUERIES, help = "Metric queries, auto-named a, b, c… for formulas")]
     pub queries: Vec<String>,
 
     #[arg(
@@ -320,7 +320,7 @@ pub struct TimeseriesArgs {
 
 #[derive(Args)]
 pub struct ScalarArgs {
-    #[arg(required = true, num_args = 1..=26, help = "Metric queries, auto-named a, b, c… for formulas")]
+    #[arg(required = true, num_args = 1..=MAX_METRIC_QUERIES, help = "Metric queries, auto-named a, b, c… for formulas")]
     pub queries: Vec<String>,
 
     #[arg(

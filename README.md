@@ -19,7 +19,7 @@ curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/script
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
-DATADOG_CLI_VERSION=0.4.0 bash install.sh
+DATADOG_CLI_VERSION=0.4.1 bash install.sh
 ```
 
 소스 빌드는 Rustup과 C 빌드 도구가 필요합니다. 개발 도구체인은 `rust-toolchain.toml`의 Rust 1.99.1이며, 최소 지원 버전은 Rust 1.97입니다.
@@ -91,6 +91,8 @@ datadog-cli config show   # 비밀값을 마스킹한 유효 설정
 datadog-cli config path   # 프로젝트 파일이 있으면 해당 경로, 아니면 전역 경로
 datadog-cli config edit   # 위 경로를 $EDITOR로 열기; 기본값 vim
 ```
+
+`EDITOR`는 `code --wait`처럼 인자를 포함할 수 있습니다. 공백이 있는 실행 경로는 큰따옴표로 감싸세요. Linux·macOS는 POSIX 인용 규칙, Windows는 Windows 명령줄 인용 규칙을 사용하며, 변수 확장·파이프·명령 치환은 수행하지 않습니다.
 
 `config init`은 전역 파일을 만듭니다. `DD_TAG_FILTER`는 기본 태그 필터, `RUST_LOG`는 로그 수준을 설정합니다.
 지원 사이트와 전체 옵션은 [명령 참조](.claude/skills/datadog-query/reference.md)를 확인하세요.

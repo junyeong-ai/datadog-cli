@@ -1,6 +1,6 @@
 [package]
 name = "datadog-cli"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 rust-version = "1.97"
 authors = ["Datadog CLI Contributors"]
@@ -28,6 +28,12 @@ clap = { version = "4.6.7", features = ["derive"] }
 comfy-table = "8.0.1"
 fastrand = "2.5.0"
 httpdate = "1.0.3"
+
+[target.'cfg(not(windows))'.dependencies]
+shlex = "2.0.1"
+
+[target.'cfg(windows)'.dependencies]
+windows-args = "0.2.0"
 
 [dev-dependencies]
 tokio = { version = "1.53.3", features = ["net", "io-util"] }

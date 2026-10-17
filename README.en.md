@@ -19,7 +19,7 @@ The accompanying skill comes from the same release tag. Non-interactive installa
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
-DATADOG_CLI_VERSION=0.4.0 bash install.sh
+DATADOG_CLI_VERSION=0.4.1 bash install.sh
 ```
 
 Source builds require Rustup and C build tools. Development uses Rust 1.99.1 from `rust-toolchain.toml`; the minimum supported Rust version is 1.97.
@@ -91,6 +91,8 @@ datadog-cli config show   # Effective configuration with masked secrets
 datadog-cli config path   # Nearest project file, otherwise global path
 datadog-cli config edit   # Open that path in $EDITOR; defaults to vim
 ```
+
+`EDITOR` can include arguments, such as `code --wait`. Double-quote executable paths containing spaces. Linux/macOS use POSIX quoting rules; Windows uses Windows command-line quoting rules. Variables, pipelines, and command substitution are not expanded.
 
 `config init` creates the global file. `DD_TAG_FILTER` sets the default tag filter; `RUST_LOG` sets the log level.
 See the [command reference](.claude/skills/datadog-query/reference.md) for supported sites and options.
