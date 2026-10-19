@@ -669,13 +669,23 @@ pub enum ConfigAction {
 
 pub async fn run(cli: Cli) -> Result<()> {
     if let Command::Query(ref args) = cli.command {
-        let input = crate::query::read_input(args.input.as_deref()).await?;
+        let mut input = crate::query::read_input(args.input.as_deref()).await?;
+        let scope = crate::query::apply_time_range(
+            &mut input,
+            &args.domain,
+            &args.operation,
+            args.from.as_deref(),
+            args.to.as_deref(),
+            chrono::Utc::now(),
+        )?;
         let prepared = crate::query::PreparedQuery::prepare(
             &args.domain,
             &args.operation,
             &input,
             args.output.clone(),
-        )?;
+        )?
+        .with_time_scope(scope)
+        .with_selection(&args.select)?;
         let duration = std::time::Duration::from_secs(args.deadline);
         let (result, format) = tokio::time::timeout(duration, async {
             let started = std::time::Instant::now();

@@ -25,6 +25,34 @@ pub enum RetryPolicy {
     Never,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimeEncoding {
+    UnixSeconds,
+    UnixMilliseconds,
+    Rfc3339,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct TimeRangeContract {
+    pub from: String,
+    pub to: String,
+    pub encoding: TimeEncoding,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ProcessingContract {
+    pub pointer: String,
+    pub complete: Vec<String>,
+    pub partial: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ExclusiveInput {
+    pub field: String,
+    pub conflicts: Vec<String>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Parameter {
     pub name: String,
@@ -68,6 +96,10 @@ pub struct Operation {
     pub retry: Option<RetryPolicy>,
     pub pagination: Option<Value>,
     pub servers: Option<Value>,
+    pub time_range: Option<TimeRangeContract>,
+    pub processing: Option<ProcessingContract>,
+    #[serde(default)]
+    pub exclusive_input: Vec<ExclusiveInput>,
 }
 
 pub struct Catalog {
@@ -160,10 +192,29 @@ impl Catalog {
                 }
             }
         }
-        json!({"data":domains,"meta":{"catalog_source":self.source,"availability":"Not probed; product and user permissions are required."}})
+        let data = domains
+            .into_iter()
+            .map(|(id, mut value)| {
+                value["id"] = json!(id);
+                value
+            })
+            .collect::<Vec<_>>();
+        json!({"data":data,"meta":{"catalog_source":self.source,"availability":"Not probed; product and user permissions are required."}})
     }
 
-    pub fn list(&self, domain: Option<&str>, include_excluded: bool) -> Result<Value> {
+    pub fn list(
+        &self,
+        domain: Option<&str>,
+        include_excluded: bool,
+        search: Option<&str>,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Value> {
+        if !(1..=200).contains(&limit) {
+            return Err(DatadogError::InvalidInput(
+                "Capability page size must be between 1 and 200".into(),
+            ));
+        }
         if let Some(domain) = domain
             && !self.operations.values().any(|operation| {
                 operation
@@ -176,6 +227,7 @@ impl Catalog {
                 "Unknown domain {domain:?}"
             )));
         }
+        let search = search.map(str::to_ascii_lowercase);
         let operations = self
             .operations
             .values()
@@ -188,9 +240,24 @@ impl Catalog {
                             .any(|name| domain_id(name) == domain)
                     })
             })
+            .filter(|operation| {
+                search.as_ref().is_none_or(|search| {
+                    operation.id.to_ascii_lowercase().contains(search)
+                        || operation.summary.to_ascii_lowercase().contains(search)
+                })
+            })
+            .collect::<Vec<_>>();
+        let total = operations.len();
+        let data = operations
+            .into_iter()
+            .skip(offset)
+            .take(limit)
             .map(|operation| self.summary(operation))
             .collect::<Vec<_>>();
-        Ok(json!({"data":operations,"meta":{"catalog_source":self.source}}))
+        let next = offset.saturating_add(data.len());
+        Ok(
+            json!({"data":data,"pagination":{"returned":data.len(),"total_count":total,"next_offset":(next<total).then_some(next),"has_next":next<total,"has_next_is_estimate":false},"meta":{"catalog_source":self.source}}),
+        )
     }
 
     fn summary(&self, operation: &Operation) -> Value {
@@ -221,6 +288,8 @@ impl Catalog {
             description["responses"] = json!(responses);
             description["retry"] = json!(operation.retry);
             description["pagination"] = json!(operation.pagination);
+            description["time_range"] = json!(operation.time_range);
+            description["processing"] = json!(operation.processing);
         }
         Ok(json!({"data":description,"meta":{"catalog_source":self.source}}))
     }
@@ -256,7 +325,13 @@ impl Catalog {
                 required.push("body");
             }
         }
-        self.with_definitions(operation, json!({"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":properties,"required":required,"additionalProperties":false}))
+        let mut schema = self.with_definitions(operation, json!({"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":properties,"required":required,"additionalProperties":false}))?;
+        if !operation.exclusive_input.is_empty() {
+            schema["allOf"] = Value::Array(operation.exclusive_input.iter().map(|rule| {
+                json!({"not":{"allOf":[presence_schema(&rule.field),{"anyOf":rule.conflicts.iter().map(|pointer|presence_schema(pointer)).collect::<Vec<_>>()}]}})
+            }).collect());
+        }
+        Ok(schema)
     }
 
     pub fn with_definitions(&self, operation: &Operation, mut schema: Value) -> Result<Value> {
@@ -306,6 +381,19 @@ impl Catalog {
         }
         Ok(())
     }
+}
+
+fn presence_schema(pointer: &str) -> Value {
+    pointer
+        .split('/')
+        .skip(1)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .fold(json!({}), |schema, key| {
+            let key = key.replace("~1", "/").replace("~0", "~");
+            json!({"type":"object","required":[key],"properties":BTreeMap::from([(key,schema)])})
+        })
 }
 
 fn references(value: &Value, output: &mut Vec<String>) {

@@ -9,6 +9,7 @@ datadog-cli capabilities show v2.SearchCIAppPipelineEvents
 ```
 
 The catalog pins an official contract snapshot. It does not probe your organization's product access or user permissions.
+Operation lists default to 25 entries. Use `--search` for literal case-insensitive ID/summary matching and `--offset`/`--limit` for continuation.
 
 Execute a reviewed operation with `query DOMAIN VERSION.OPERATION --input JSON`.
 The request envelope uses `path`, `query`, `headers`, and `body` and is schema-validated before credential execution. Use `--input @request.json` or `--input -` for a file or stdin.
@@ -21,6 +22,10 @@ datadog-cli query metrics v1.GetMetricMetadata --input '{"path":{"metric_name":"
 For `query`, `.data` is the unmodified API response, distinct from the legacy commands' projections. `.meta` retains source, HTTP status, API metadata, and execution accounting. JSONL emits one API response without CLI metadata. A single response does not establish that all matching records were collected.
 
 Defaults bound authentication/API execution to 60 seconds, four API attempts including retries, and 8 MiB of cumulative response bodies. Adjust `--deadline`, `--max-calls`, and `--max-bytes` explicitly. CSV/binary responses require `--output PATH`; existing files are never overwritten. Product access, permissions, and site availability vary by API. See [contract maintenance and policy](api/README.md).
+
+Operations advertising `time_range` in `capabilities show` accept `--from "1 hour ago" --to now`. Bounds use one reference instant and the operation's reviewed seconds, milliseconds, or RFC3339 fields. Range flags conflict with native input time fields. Other operations retain their native input structure. `.meta.context.time_range` records the normalized requested bounds.
+
+Repeat `--select /data` with exact JSON Pointers to return a pointer-keyed projection. Missing paths are errors; API metadata remains available. `.meta.result.processing` is `complete`, `partial`, or `unknown` from explicitly mapped server states, independently of pagination.
 
 [한국어](README.md) · [Command reference](.claude/skills/datadog-query/reference.md)
 

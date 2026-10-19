@@ -17,6 +17,15 @@ pub enum CapabilitiesAction {
         domain: Option<String>,
         #[arg(long, help = "Include excluded operations and their reasons")]
         all: bool,
+        #[arg(
+            long,
+            help = "Literal case-insensitive text in the operation ID or summary"
+        )]
+        search: Option<String>,
+        #[arg(long, default_value = "0")]
+        offset: usize,
+        #[arg(long, default_value="25", value_parser=clap::value_parser!(u32).range(1..=200))]
+        limit: u32,
     },
     #[command(about = "Describe an operation, including its offline JSON input schema")]
     Show {
@@ -34,7 +43,19 @@ pub fn execute(action: &CapabilitiesAction) -> Result<Value> {
     let catalog = Catalog::load()?;
     match action {
         CapabilitiesAction::Domains { all } => Ok(catalog.domains(*all)),
-        CapabilitiesAction::List { domain, all } => catalog.list(domain.as_deref(), *all),
+        CapabilitiesAction::List {
+            domain,
+            all,
+            search,
+            offset,
+            limit,
+        } => catalog.list(
+            domain.as_deref(),
+            *all,
+            search.as_deref(),
+            *offset,
+            *limit as usize,
+        ),
         CapabilitiesAction::Show {
             operation,
             response_schema,

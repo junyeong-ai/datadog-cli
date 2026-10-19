@@ -25,6 +25,11 @@ response and a documentation reference. Apply only the evidenced constraint; ret
 type validation for other values. Operation-specific documented limits and additional
 statuses belong to `policy.json`.
 
+Reviewed time, processing-state, and mutually exclusive filter mappings are explicit
+policy entries. Generation verifies that each mapped JSON Pointer exists in the
+published schema and that time field types agree with their declared encoding.
+These mappings do not infer query syntax, units, or causality from telemetry text.
+
 Credential-bearing resources, remote mutations, deprecated operations, internal APIs,
 and operations on a different origin are listed with an exclusion reason. POST search
 and aggregation endpoints are individually reviewed. A GET method does not by itself

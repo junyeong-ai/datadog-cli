@@ -15,6 +15,23 @@ pub struct QueryArgs {
     pub input: Option<String>,
     #[arg(
         long,
+        help = "Start time using this operation's reviewed time mapping; conflicts with native input time fields"
+    )]
+    pub from: Option<String>,
+    #[arg(
+        long,
+        requires = "from",
+        help = "End time for --from (default now); resolved with the same reference instant"
+    )]
+    pub to: Option<String>,
+    #[arg(
+        long,
+        conflicts_with = "output",
+        help = "Select an exact JSON Pointer from each API response; repeat for multiple fields"
+    )]
+    pub select: Vec<String>,
+    #[arg(
+        long,
         help = "Save the original API response to a new file; required for binary/CSV responses"
     )]
     pub output: Option<PathBuf>,

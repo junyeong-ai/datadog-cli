@@ -105,7 +105,7 @@ async fn ci_search_preserves_attributes_and_api_metadata() {
         "299"
     );
     assert_eq!(result["meta"]["execution"]["calls"], 1);
-    assert_eq!(result["meta"]["result"]["processing"], "unknown");
+    assert_eq!(result["meta"]["result"]["processing"], "complete");
 }
 
 #[tokio::test]
@@ -363,5 +363,54 @@ async fn conditional_reads_are_not_empty_resources_and_downloads_preserve_bytes(
             Some(output)
         )
         .is_err()
+    );
+}
+
+#[tokio::test]
+async fn explicit_projection_preserves_partial_query_metadata_and_rejects_missing_fields() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST")).and(path("/api/v2/logs/events/search"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[],"meta":{"status":"timeout","warnings":[{"code":"partial","detail":"Query timed out"}]}})))
+        .expect(2).mount(&server).await;
+    let input = json!({"body":{"filter":{"query":"service:api"},"page":{"limit":1}}});
+    let prepared = PreparedQuery::prepare("logs", "v2.ListLogs", &input, None)
+        .unwrap()
+        .with_selection(&["/data".into()])
+        .unwrap();
+    let result = prepared
+        .execute(
+            &client(&server),
+            "datadoghq.com",
+            Duration::from_secs(2),
+            4096,
+            1,
+        )
+        .await
+        .unwrap();
+    assert_eq!(result["data"]["/data"], json!([]));
+    assert_eq!(result["meta"]["result"]["processing"], "partial");
+    assert_eq!(result["meta"]["api"]["warnings"][0]["code"], "partial");
+    let prepared = PreparedQuery::prepare("logs", "v2.ListLogs", &input, None)
+        .unwrap()
+        .with_selection(&["/missing".into()])
+        .unwrap();
+    assert!(matches!(
+        prepared
+            .execute(
+                &client(&server),
+                "datadoghq.com",
+                Duration::from_secs(2),
+                4096,
+                1
+            )
+            .await
+            .unwrap_err(),
+        DatadogError::QueryError(_)
+    ));
+    assert!(
+        PreparedQuery::prepare("logs", "v2.ListLogs", &input, None)
+            .unwrap()
+            .with_selection(&["/bad~2escape".into()])
+            .is_err()
     );
 }

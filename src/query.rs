@@ -10,6 +10,9 @@ use crate::catalog::{Catalog, Operation, RetryPolicy};
 use crate::datadog::{DatadogClient, QueryBudget, QueryCall, query_headers};
 use crate::error::{DatadogError, Result};
 
+mod time;
+pub use time::apply_time_range;
+
 const PATH_COMPONENT: &AsciiSet = &CONTROLS
     .add(b' ')
     .add(b'"')
@@ -37,6 +40,8 @@ pub struct PreparedQuery {
     operation: &'static Operation,
     call: QueryCall,
     output: Option<PathBuf>,
+    time_scope: Option<Value>,
+    selection: Vec<String>,
 }
 
 pub async fn read_input(argument: Option<&str>) -> Result<Value> {
@@ -182,7 +187,39 @@ impl PreparedQuery {
             operation,
             call,
             output,
+            time_scope: None,
+            selection: Vec::new(),
         })
+    }
+
+    pub fn with_time_scope(mut self, scope: Option<Value>) -> Self {
+        self.time_scope = scope;
+        self
+    }
+
+    pub fn with_selection(mut self, selection: &[String]) -> Result<Self> {
+        if !selection.is_empty() && self.output.is_some() {
+            return Err(DatadogError::InvalidInput(
+                "Response selection cannot be combined with file output".into(),
+            ));
+        }
+        for pointer in selection {
+            if !pointer.is_empty() && !pointer.starts_with('/') {
+                return Err(DatadogError::InvalidInput(
+                    "--select requires JSON Pointers beginning with /, or an empty pointer".into(),
+                ));
+            }
+            let mut characters = pointer.chars();
+            while let Some(character) = characters.next() {
+                if character == '~' && !matches!(characters.next(), Some('0' | '1')) {
+                    return Err(DatadogError::InvalidInput(
+                        "Invalid JSON Pointer escape in --select".into(),
+                    ));
+                }
+            }
+        }
+        self.selection = selection.to_vec();
+        Ok(self)
     }
 
     pub async fn execute(
@@ -234,13 +271,39 @@ impl PreparedQuery {
             ));
         };
         let api_meta = body.get("meta").cloned();
+        let processing = self
+            .operation
+            .processing
+            .as_ref()
+            .and_then(|contract| {
+                let status = body.pointer(&contract.pointer)?.as_str()?;
+                if contract.complete.iter().any(|value| value == status) {
+                    Some("complete")
+                } else if contract.partial.iter().any(|value| value == status) {
+                    Some("partial")
+                } else {
+                    None
+                }
+            })
+            .unwrap_or("unknown");
         let data = if reply.status == 304 {
             Value::Null
         } else if let Some(path) = &self.output {
             write_download(path, &reply.bytes)?;
             json!({"path":path,"bytes":reply.bytes.len(),"media":media})
-        } else {
+        } else if self.selection.is_empty() {
             body
+        } else {
+            let mut fields = serde_json::Map::new();
+            for pointer in &self.selection {
+                let value = body.pointer(pointer).ok_or_else(|| {
+                    DatadogError::QueryError(format!(
+                        "Selected JSON Pointer {pointer:?} is absent from the API response"
+                    ))
+                })?;
+                fields.insert(pointer.clone(), value.clone());
+            }
+            Value::Object(fields)
         };
         Ok(json!({
             "data":data,
@@ -249,7 +312,9 @@ impl PreparedQuery {
                 "source":{"operation":self.operation.id,"site":site,"path":self.operation.path,"catalog_commit":Catalog::load()?.source["commit"],"preview":self.operation.preview.is_some()},
                 "http":{"status":reply.status,"headers":reply.headers},
                 "execution":{"calls":budget.calls,"received_bytes":budget.received_bytes,"elapsed_ms":start.elapsed().as_millis()},
-                "result":{"processing":"unknown","collection":"single_response","not_modified":reply.status==304}
+                "context":{"time_range":self.time_scope},
+                "projection":{"pointers":self.selection},
+                "result":{"processing":processing,"collection":"single_response","not_modified":reply.status==304}
             }
         }))
     }

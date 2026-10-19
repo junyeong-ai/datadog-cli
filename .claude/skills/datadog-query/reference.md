@@ -108,6 +108,9 @@ Arguments:
 
 Options:
       --input <INPUT>          JSON request envelope, @FILE, or - for stdin; keys: path, query, headers, body
+      --from <FROM>            Start time using this operation's reviewed time mapping; conflicts with native input time fields
+      --to <TO>                End time for --from (default now); resolved with the same reference instant
+      --select <SELECT>        Select an exact JSON Pointer from each API response; repeat for multiple fields
       --output <OUTPUT>        Save the original API response to a new file; required for binary/CSV responses
       --deadline <DEADLINE>    Authentication and API execution deadline in seconds [default: 60]
       --max-calls <MAX_CALLS>  Maximum API attempts, including retries [default: 4]
@@ -154,6 +157,9 @@ Usage: datadog-cli capabilities list [OPTIONS]
 Options:
       --domain <DOMAIN>  Exact domain ID from capabilities domains
       --all              Include excluded operations and their reasons
+      --search <SEARCH>  Literal case-insensitive text in the operation ID or summary
+      --offset <OFFSET>  [default: 0]
+      --limit <LIMIT>    [default: 25]
   -h, --help             Print help
 ```
 

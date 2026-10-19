@@ -93,6 +93,15 @@ def lines_object(value):
     ) + "\n}\n"
 
 
+def property_at(document, root, pointer):
+    if not pointer.startswith("/"):
+        raise ValueError(f"Invalid contract pointer: {pointer}")
+    for component in pointer[1:].split("/"):
+        root = resolve(document, root)
+        root = root["properties"][component.replace("~1", "/").replace("~0", "~")]
+    return resolve(document, root)
+
+
 def main():
     import yaml
 
@@ -185,9 +194,34 @@ def main():
                     entry["retry"] = decision.get("retry", "read")
                     entry["pagination"] = decision.get("pagination")
                     entry["servers"] = operation.get("servers")
+                    entry["time_range"] = decision.get("time_range")
+                    entry["processing"] = decision.get("processing")
+                    entry["exclusive_input"] = decision.get("exclusive_input", [])
                 operations[key] = entry
     if seen != set(decisions):
         raise ValueError(f"Stale review decisions: {set(decisions) - seen}")
+    for operation in operations.values():
+        if operation["access"] != "query":
+            continue
+        document = {"definitions": definitions[operation["version"]]}
+        groups = {"properties": {"body": operation["body_schema"]}}
+        for container, location in [("path", "path"), ("query", "query"), ("headers", "header")]:
+            groups["properties"][container] = {"properties": {
+                parameter["name"]: parameter["schema"] for parameter in operation["parameters"]
+                if parameter["location"] == location
+            }}
+        if contract := operation["time_range"]:
+            expected_type = "string" if contract["encoding"] == "rfc3339" else "integer"
+            for pointer in [contract["from"], contract["to"]]:
+                if property_at(document, groups, pointer).get("type") != expected_type:
+                    raise ValueError(f"Incorrect time field type: {operation['id']} {pointer}")
+        if contract := operation["processing"]:
+            status = property_at(document, operation["responses"]["200"]["schema"], contract["pointer"])
+            if status.get("type") != "string":
+                raise ValueError(f"Incorrect processing status: {operation['id']}")
+        for rule in operation["exclusive_input"]:
+            for pointer in [rule["field"], *rule["conflicts"]]:
+                property_at(document, groups, pointer)
     (API / "catalog.json").write_text(lines_object(operations))
     for version, values in definitions.items():
         pending = []
