@@ -14,3 +14,5 @@ pub use error::{DatadogError, Result};
 pub(crate) mod output;
 
 mod auth;
+
+pub mod catalog;

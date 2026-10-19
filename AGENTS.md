@@ -10,6 +10,7 @@ Rust 2024 CLI. `rust-toolchain.toml` pins development Rust; `Cargo.toml` declare
 - `src/datadog/transport.rs`: pooled HTTP client, sensitive authentication headers, request deadlines, error mapping, and retries. Redirects and reqwest's automatic retries are disabled so one policy controls attempts.
 - `src/datadog/client.rs`: endpoint paths, request bodies, and shared search parameters.
 - `src/datadog/models.rs`: verified response fields and metric array alignment. Metric client methods reject processing errors before handlers transform results. Preserve extensible API fields where callers depend on passthrough data.
+- `src/catalog.rs` and `api/`: offline discovery and schema validation of explicitly reviewed official API contracts. Pin upstream commit and document hashes. Every operation needs a policy decision; never infer read safety from names or HTTP methods. Capabilities commands must not load configuration or invoke credential providers.
 - `src/handlers/`: endpoint-specific transformation and pagination. `common.rs` owns shared time, tag, pagination, and output-envelope behavior.
 - `src/diagnostics.rs`: shared fallible stderr writes. Ignore diagnostic BrokenPipe, propagate other warning I/O errors, and preserve the original exit code when a final error cannot be printed.
 - `src/output.rs`: JSON/JSONL/table writers. Stdout contains results; tracing writes to stderr. Propagate I/O errors so closed pipelines exit quietly.

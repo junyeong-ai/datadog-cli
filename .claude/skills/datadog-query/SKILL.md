@@ -9,6 +9,7 @@ allowed-tools: Bash, Read
 Use `datadog-cli` to query existing resources. Report the observed result, time window, and scope. Dashboard creation and other remote mutations are not supported.
 
 - **Command syntax:** use `datadog-cli <command> --help` or the relevant section of [reference.md](reference.md). Read only the commands needed.
+- **API discovery:** `capabilities domains`, then `capabilities list --domain DOMAIN` and `capabilities show VERSION.OPERATION` provide reviewed contracts without authentication. Catalog support does not establish organization access.
 - **Investigations and bounded pagination:** read [examples.md](examples.md) for counts, samples, correlation, formulas, and LLM spans.
 - **Setup or authentication failures:** read [authentication guidance](examples.md#authentication-and-access). Use configured credentials without printing them or changing identity automatically.
 

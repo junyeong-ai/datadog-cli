@@ -6,6 +6,10 @@ Global options work before or after subcommands. JSON retains pagination metadat
 ## Contents
 
 - [`datadog-cli`](#datadog-cli)
+- [`datadog-cli capabilities`](#datadog-cli-capabilities)
+- [`datadog-cli capabilities domains`](#datadog-cli-capabilities-domains)
+- [`datadog-cli capabilities list`](#datadog-cli-capabilities-list)
+- [`datadog-cli capabilities show`](#datadog-cli-capabilities-show)
 - [`datadog-cli metrics`](#datadog-cli-metrics)
 - [`datadog-cli timeseries`](#datadog-cli-timeseries)
 - [`datadog-cli scalar`](#datadog-cli-scalar)
@@ -52,6 +56,7 @@ High-performance Datadog CLI
 Usage: datadog-cli [OPTIONS] <COMMAND>
 
 Commands:
+  capabilities    Discover reviewed API queries and their input schemas without authentication
   metrics         Query time series metrics
   timeseries      Query timeseries with formulas across multiple metric queries
   scalar          Query scalar values (single aggregate per query) with formulas
@@ -86,6 +91,63 @@ Options:
       --pup-org <PUP_ORG>              Named Pup OAuth session (otherwise global config [auth].pup_org)
   -h, --help                           Print help
   -V, --version                        Print version
+```
+
+## `datadog-cli capabilities`
+
+```text
+Discover reviewed API queries and their input schemas without authentication
+
+Usage: datadog-cli capabilities <COMMAND>
+
+Commands:
+  domains  List API domains; organization access is not probed
+  list     List reviewed API operations
+  show     Describe an operation, including its offline JSON input schema
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help
+```
+
+## `datadog-cli capabilities domains`
+
+```text
+List API domains; organization access is not probed
+
+Usage: datadog-cli capabilities domains [OPTIONS]
+
+Options:
+      --all   Include domains with only excluded operations
+  -h, --help  Print help
+```
+
+## `datadog-cli capabilities list`
+
+```text
+List reviewed API operations
+
+Usage: datadog-cli capabilities list [OPTIONS]
+
+Options:
+      --domain <DOMAIN>  Exact domain ID from capabilities domains
+      --all              Include excluded operations and their reasons
+  -h, --help             Print help
+```
+
+## `datadog-cli capabilities show`
+
+```text
+Describe an operation, including its offline JSON input schema
+
+Usage: datadog-cli capabilities show [OPTIONS] <OPERATION>
+
+Arguments:
+  <OPERATION>  Version-qualified operation ID, for example v2.SearchCIAppPipelineEvents
+
+Options:
+      --response-schema  Include complete response schemas; large products can have large schemas
+  -h, --help             Print help
 ```
 
 ## `datadog-cli metrics`

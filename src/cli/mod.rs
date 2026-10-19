@@ -1,4 +1,5 @@
 mod commands;
+mod discovery;
 use crate::output;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -84,6 +85,13 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
+    #[command(
+        about = "Discover reviewed API queries and their input schemas without authentication"
+    )]
+    Capabilities {
+        #[command(subcommand)]
+        action: discovery::CapabilitiesAction,
+    },
     #[command(about = "Query time series metrics")]
     Metrics(MetricsArgs),
 
@@ -657,6 +665,12 @@ pub enum ConfigAction {
 }
 
 pub async fn run(cli: Cli) -> Result<()> {
+    if let Command::Capabilities { ref action } = cli.command {
+        let data = discovery::execute(action)?;
+        let format = output::Format::from_str(cli.format.as_deref().unwrap_or("json"))
+            .map_err(crate::error::DatadogError::InvalidInput)?;
+        return output::print(&data, &format).map_err(Into::into);
+    }
     if let Command::Config { ref action } = cli.command {
         if !matches!(action, ConfigAction::Show)
             && (cli.auth_provider.is_some() || cli.auth_method.is_some() || cli.pup_org.is_some())

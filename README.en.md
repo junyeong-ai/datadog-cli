@@ -1,5 +1,15 @@
 # Datadog CLI
 
+Discover reviewed API operations and their input schemas without credentials:
+
+```bash
+datadog-cli capabilities domains
+datadog-cli capabilities list --domain ci-visibility-pipelines
+datadog-cli capabilities show v2.SearchCIAppPipelineEvents
+```
+
+The catalog pins an official contract snapshot. It does not probe your organization's product access or user permissions.
+
 [한국어](README.md) · [Command reference](.claude/skills/datadog-query/reference.md)
 
 A Rust CLI for querying Datadog logs, metrics, APM, RUM, and operational resources.

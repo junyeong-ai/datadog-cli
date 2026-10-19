@@ -11,6 +11,9 @@ use crate::handlers;
 
 pub async fn execute(command: &Command, client: &DatadogClient) -> Result<Value> {
     match command {
+        Command::Capabilities { .. } => {
+            unreachable!("Capabilities are handled without credentials")
+        }
         Command::Metrics(args) => handlers::metrics::MetricsHandler::query(client, args).await,
 
         Command::Timeseries(args) => {

@@ -35,6 +35,14 @@ Cargo로 바이너리만 관리하려면 `cargo install --path . --locked --targ
 
 ## 시작하기
 
+API 기능과 요청 스키마는 인증 없이 탐색할 수 있습니다. 목록은 고정된 공식 명세를 기준으로 하며, 현재 조직의 제품 활성화나 사용자 권한을 검사하지 않습니다.
+
+```bash
+datadog-cli capabilities domains
+datadog-cli capabilities list --domain ci-visibility-pipelines
+datadog-cli capabilities show v2.SearchCIAppPipelineEvents
+```
+
 ```bash
 datadog-cli config init
 datadog-cli config edit
