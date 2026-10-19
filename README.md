@@ -19,7 +19,7 @@ curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/script
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
-DATADOG_CLI_VERSION=0.9.1 bash install.sh
+DATADOG_CLI_VERSION=0.9.2 bash install.sh
 ```
 
 소스 빌드는 Rustup과 C 빌드 도구가 필요합니다. 개발 도구체인은 `rust-toolchain.toml`의 Rust 1.99.1이며, 최소 지원 버전은 Rust 1.97입니다.
@@ -53,7 +53,7 @@ datadog-cli query metrics v1.GetMetricMetadata --input '{"path":{"metric_name":"
 
 `query`의 `.data`는 변형하지 않은 API 응답이며 기존 조회 명령의 출력 경로와 다릅니다. `.meta`에는 명세 출처·HTTP 상태·API 메타데이터·실행 비용을 보존합니다. JSONL은 API 응답 하나만 출력하며 CLI 메타데이터는 포함하지 않습니다. 단일 응답은 전체 검색 결과 수집 완료를 뜻하지 않습니다.
 
-기본 제한은 인증·API 실행 60초, 재시도 포함 4회 호출, 누적 응답 본문 8 MiB입니다. `--deadline`·`--max-calls`·`--max-bytes`로 조정할 수 있습니다. CSV·바이너리는 `--output PATH`가 필요하며 기존 파일을 덮어쓰지 않습니다. 제품 활성화·권한·사이트 지원은 API에 따라 다릅니다. [명세와 지원 정책](api/README.md)을 참고하세요. 자격증명이나 전체 인증 설정을 반환하는 API는 제외합니다. Synthetic 조회는 전용 실행 결과·이력 API를 사용합니다.
+기본 제한은 인증·API 실행 60초, 재시도 포함 4회 호출, 누적 응답 본문 8 MiB입니다. `--deadline`·`--max-calls`·`--max-bytes`로 조정할 수 있습니다. CSV·바이너리는 `--output PATH`가 필요하며 기존 파일을 덮어쓰지 않습니다. 제품 활성화·권한·사이트 지원은 API에 따라 다릅니다. [명세와 지원 정책](api/README.md)을 참고하세요. 자격증명이나 전체 인증 설정을 반환하는 API는 제외합니다. Webhook URL에는 Basic 인증 정보가 포함될 수 있어 전체 설정 조회도 제외합니다. Synthetic 조회는 전용 실행 결과·이력 API를 사용합니다.
 
 `capabilities show`에 `time_range`가 있는 작업은 `--from "1 hour ago" --to now`를 지원합니다. 하나의 기준 시각으로 계산한 뒤 해당 API의 초·밀리초·RFC3339 필드에 넣으며, 입력 JSON의 시간 필드와 함께 지정하면 오류입니다. 그 외 작업은 공식 입력 구조를 그대로 사용합니다. `.meta.context.time_range`는 정규화한 요청 시간 범위입니다.
 

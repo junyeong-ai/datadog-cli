@@ -21,7 +21,7 @@ datadog-cli query metrics v1.GetMetricMetadata --input '{"path":{"metric_name":"
 
 For `query`, `.data` is the unmodified API response, distinct from the legacy commands' projections. `.meta` retains source, HTTP status, API metadata, and execution accounting. JSONL emits one API response without CLI metadata. A single response does not establish that all matching records were collected.
 
-Defaults bound authentication/API execution to 60 seconds, four API attempts including retries, and 8 MiB of cumulative response bodies. Adjust `--deadline`, `--max-calls`, and `--max-bytes` explicitly. CSV/binary responses require `--output PATH`; existing files are never overwritten. Product access, permissions, and site availability vary by API. See [contract maintenance and policy](api/README.md). APIs returning credentials or complete authentication configurations are excluded. Synthetic investigations use dedicated result and history APIs.
+Defaults bound authentication/API execution to 60 seconds, four API attempts including retries, and 8 MiB of cumulative response bodies. Adjust `--deadline`, `--max-calls`, and `--max-bytes` explicitly. CSV/binary responses require `--output PATH`; existing files are never overwritten. Product access, permissions, and site availability vary by API. See [contract maintenance and policy](api/README.md). APIs returning credentials or complete authentication configurations are excluded. Webhook configuration reads are excluded because URLs can contain Basic authentication credentials. Synthetic investigations use dedicated result and history APIs.
 
 Operations advertising `time_range` in `capabilities show` accept `--from "1 hour ago" --to now`. Bounds use one reference instant and the operation's reviewed seconds, milliseconds, or RFC3339 fields. Range flags conflict with native input time fields. Other operations retain their native input structure. `.meta.context.time_range` records the normalized requested bounds.
 
@@ -50,7 +50,7 @@ The accompanying skill comes from the same release tag. Non-interactive installa
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
-DATADOG_CLI_VERSION=0.9.1 bash install.sh
+DATADOG_CLI_VERSION=0.9.2 bash install.sh
 ```
 
 Source builds require Rustup and C build tools. Development uses Rust 1.99.1 from `rust-toolchain.toml`; the minimum supported Rust version is 1.97.
