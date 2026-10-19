@@ -3,6 +3,47 @@
 Generated from Clap with `cargo run --locked --example command_reference`.
 Global options work before or after subcommands. JSON retains pagination metadata; JSONL emits data records only.
 
+## Contents
+
+- [`datadog-cli`](#datadog-cli)
+- [`datadog-cli metrics`](#datadog-cli-metrics)
+- [`datadog-cli timeseries`](#datadog-cli-timeseries)
+- [`datadog-cli scalar`](#datadog-cli-scalar)
+- [`datadog-cli logs`](#datadog-cli-logs)
+- [`datadog-cli logs search`](#datadog-cli-logs-search)
+- [`datadog-cli logs aggregate`](#datadog-cli-logs-aggregate)
+- [`datadog-cli logs timeseries`](#datadog-cli-logs-timeseries)
+- [`datadog-cli monitors`](#datadog-cli-monitors)
+- [`datadog-cli monitors list`](#datadog-cli-monitors-list)
+- [`datadog-cli monitors get`](#datadog-cli-monitors-get)
+- [`datadog-cli events`](#datadog-cli-events)
+- [`datadog-cli hosts`](#datadog-cli-hosts)
+- [`datadog-cli dashboards`](#datadog-cli-dashboards)
+- [`datadog-cli dashboards list`](#datadog-cli-dashboards-list)
+- [`datadog-cli dashboards get`](#datadog-cli-dashboards-get)
+- [`datadog-cli spans`](#datadog-cli-spans)
+- [`datadog-cli services`](#datadog-cli-services)
+- [`datadog-cli rum`](#datadog-cli-rum)
+- [`datadog-cli slo`](#datadog-cli-slo)
+- [`datadog-cli slo list`](#datadog-cli-slo-list)
+- [`datadog-cli slo get`](#datadog-cli-slo-get)
+- [`datadog-cli incidents`](#datadog-cli-incidents)
+- [`datadog-cli incidents list`](#datadog-cli-incidents-list)
+- [`datadog-cli incidents get`](#datadog-cli-incidents-get)
+- [`datadog-cli error-tracking`](#datadog-cli-error-tracking)
+- [`datadog-cli error-tracking search`](#datadog-cli-error-tracking-search)
+- [`datadog-cli error-tracking get`](#datadog-cli-error-tracking-get)
+- [`datadog-cli downtimes`](#datadog-cli-downtimes)
+- [`datadog-cli audit`](#datadog-cli-audit)
+- [`datadog-cli teams`](#datadog-cli-teams)
+- [`datadog-cli llm-obs`](#datadog-cli-llm-obs)
+- [`datadog-cli config`](#datadog-cli-config)
+- [`datadog-cli config init`](#datadog-cli-config-init)
+- [`datadog-cli config show`](#datadog-cli-config-show)
+- [`datadog-cli config path`](#datadog-cli-config-path)
+- [`datadog-cli config edit`](#datadog-cli-config-edit)
+- [Supported sites](#supported-sites)
+
 ## `datadog-cli`
 
 ```text
