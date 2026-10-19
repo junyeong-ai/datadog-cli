@@ -1082,20 +1082,51 @@ mod tests {
     }
 
     #[test]
-    fn config_rejects_unknown_fields_invalid_formats_and_unsupported_timeouts() {
+    fn config_rejects_unknown_fields_invalid_formats_and_zero_timeouts() {
         assert!(toml::from_str::<ConfigFile>("[network]\ntimeout_sec = 30").is_err());
         for source in [
             "[defaults]\nformat = 'yaml'",
             "[network]\ntimeout_secs = 0",
             "[network]\ntotal_timeout_secs = 0",
-            "[network]\ntimeout_secs = 9223372036854775807",
-            "[network]\ntotal_timeout_secs = 9223372036854775807",
         ] {
             let mut file = file_with_keys();
             file.overlay(toml::from_str(source).unwrap());
             assert!(Config::resolve(file).is_err());
         }
     }
+
+    #[test]
+    fn large_network_timeouts_follow_the_platform_clock_range() {
+        let seconds = i64::MAX as u64;
+        let duration = std::time::Duration::from_secs(seconds);
+        let representable = std::time::Instant::now().checked_add(duration).is_some();
+        for key in ["timeout_secs", "total_timeout_secs"] {
+            let mut file = file_with_keys();
+            file.overlay(toml::from_str(&format!("[network]\n{key} = {seconds}")).unwrap());
+            match Config::resolve(file) {
+                Ok(config) => {
+                    assert!(
+                        representable,
+                        "Accepted an unrepresentable timeout for {key}"
+                    );
+                    let actual = if key == "timeout_secs" {
+                        config.network.timeout_secs
+                    } else {
+                        config.network.total_timeout_secs
+                    };
+                    assert_eq!(actual, seconds);
+                }
+                Err(error) => {
+                    assert!(
+                        !representable,
+                        "Rejected a representable timeout for {key}: {error}"
+                    );
+                    assert!(error.to_string().contains("platform clock range"));
+                }
+            }
+        }
+    }
+
     #[test]
     fn initialization_is_private_and_never_overwrites_an_existing_config() {
         let directory = tempfile::tempdir().unwrap();
