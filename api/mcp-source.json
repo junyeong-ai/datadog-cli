@@ -2,5 +2,16 @@
   "url": "https://docs.datadoghq.com/mcp_server/tools.md",
   "retrieved_at": "2026-10-19",
   "sha256": "5e3106c3756212e8e09a0b82abd6499a6e06981e10ab9983aa941d9a7b05bb5f",
-  "policy": "Only individually reviewed read and analysis tools are callable. Unknown tools, mutations, remote actions, onboarding and code execution are excluded. Server annotations cannot authorize additional tools."
+  "policy": "Only individually reviewed read and analysis tools are callable. Unknown tools, mutations, remote actions, onboarding and code execution are excluded. Server annotations cannot authorize additional tools.",
+  "server_supplements": {
+    "url": "https://mcp.datadoghq.com/v1/mcp?toolsets=core",
+    "method": "tools/list",
+    "observed_at": "2026-10-19",
+    "tools": [
+      "get_change_stories",
+      "list_datadog_skills",
+      "load_datadog_skill"
+    ],
+    "review": "Server descriptions and schemas expose retrieval of existing change events and skill guides. The internal do-not-call visualization tool _dd_gff remains excluded."
+  }
 }

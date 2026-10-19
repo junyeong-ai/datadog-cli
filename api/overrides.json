@@ -3,8 +3,36 @@
     "evidence": "https://docs.datadoghq.com/api/latest/metrics/get-metric-metadata/",
     "observation": "GetMetricMetadata for system.cpu.user returned null per_unit and statsd_interval on 2026-10-19. These fields describe optional unit denominators and StatsD collection settings.",
     "properties": {
-      "per_unit": {"type": ["string", "null"]},
-      "statsd_interval": {"type": ["integer", "null"]}
+      "per_unit": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "statsd_interval": {
+        "type": [
+          "integer",
+          "null"
+        ]
+      }
     }
+  },
+  "v2.OrganizationAttributes": {
+    "properties": {
+      "description": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "url": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "evidence": "https://docs.datadoghq.com/api/latest/users/#get-current-user-information",
+    "observation": "2026-10-19: authenticated current-user response included an organization with null description and url."
   }
 }

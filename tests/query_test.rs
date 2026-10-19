@@ -582,3 +582,35 @@ async fn ddsql_wait_polls_without_resubmitting_and_validates_column_alignment() 
         DatadogError::DecodeError(_)
     ));
 }
+
+#[tokio::test]
+async fn current_user_organization_null_fields_preserve_relationships_and_reject_wrong_types() {
+    let server = MockServer::start().await;
+    let response = json!({"data":{"type":"users","id":"user-1"},"included":[{"type":"orgs","id":"org-1","attributes":{"name":"Example","description":null,"url":null}}]});
+    Mock::given(method("GET"))
+        .and(path("/api/v2/current_user"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response.clone()))
+        .mount(&server)
+        .await;
+    let result = execute(&server, "users", "v2.GetCurrentUser", json!({}))
+        .await
+        .unwrap();
+    assert_eq!(
+        result["data"]["included"][0]["attributes"]["name"],
+        "Example"
+    );
+    assert!(result["data"]["included"][0]["attributes"]["url"].is_null());
+    server.reset().await;
+    let mut invalid = response;
+    invalid["included"][0]["attributes"]["url"] = json!(42);
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(invalid))
+        .mount(&server)
+        .await;
+    assert!(matches!(
+        execute(&server, "users", "v2.GetCurrentUser", json!({}))
+            .await
+            .unwrap_err(),
+        DatadogError::DecodeError(_)
+    ));
+}
