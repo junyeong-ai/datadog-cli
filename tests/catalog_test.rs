@@ -114,6 +114,7 @@ fn credential_bearing_contracts_are_excluded_before_request_validation() {
     let catalog = Catalog::load().unwrap();
     for id in [
         "v1.ListAzureIntegration",
+        "v1.GetWebhooksIntegration",
         "v2.GetActionConnection",
         "v1.GetAPITest",
         "v1.GetAPITestResult",

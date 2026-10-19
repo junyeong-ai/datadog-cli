@@ -149,7 +149,7 @@
 "v1.GetUsageTimeseries":{"method":"get","path":"/api/v1/usage/timeseries","access":"deprecated","reason":"Deprecated in the pinned official contract."},
 "v1.GetUsageTopAvgMetrics":{"method":"get","path":"/api/v1/usage/top_avg_metrics","access":"query"},
 "v1.GetUser":{"method":"get","path":"/api/v1/user/{user_handle}","access":"query"},
-"v1.GetWebhooksIntegration":{"method":"get","path":"/api/v1/integration/webhooks/configuration/webhooks/{webhook_name}","access":"query"},
+"v1.GetWebhooksIntegration":{"method":"get","path":"/api/v1/integration/webhooks/configuration/webhooks/{webhook_name}","access":"credential-material","reason":"Full credential-bearing webhook configuration can contain authentication in its URL and custom headers; excluded from analysis output."},
 "v1.GetWebhooksIntegrationCustomVariable":{"method":"get","path":"/api/v1/integration/webhooks/configuration/custom-variables/{custom_variable_name}","access":"credential-material","reason":"Credential-bearing resource; excluded from analysis output."},
 "v1.ListAPIKeys":{"method":"get","path":"/api/v1/api_key","access":"credential-material","reason":"Credential-bearing resource; excluded from analysis output."},
 "v1.ListAWSAccounts":{"method":"get","path":"/api/v1/integration/aws","access":"deprecated","reason":"Deprecated in the pinned official contract."},
