@@ -416,6 +416,24 @@ async fn monitor_details_preserve_evaluation_settings_and_extensible_fields() {
 }
 
 #[tokio::test]
+async fn permission_denials_have_a_distinct_machine_readable_kind() {
+    for (status, kind) in [(401, "authentication"), (403, "permission_denied")] {
+        let server = MockServer::start().await;
+        Mock::given(path("/api/v1/monitor/1"))
+            .respond_with(ResponseTemplate::new(status).set_body_json(json!({"errors":["denied"]})))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let error = client(&server).get_monitor(1).await.unwrap_err();
+        assert_eq!(error.exit_code(), 3);
+        assert_eq!(error.diagnostic()["error"]["kind"], kind);
+        if status == 403 {
+            assert_eq!(error.diagnostic()["error"]["http_status"], 403);
+        }
+    }
+}
+
+#[tokio::test]
 async fn metric_units_preserve_denominators_scaling_and_null_positions() {
     for units in [
         json!([

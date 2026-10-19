@@ -218,6 +218,8 @@ jq -r '.pagination.next_cursor // empty' page.json
 반복 조회에서는 절대 시작·종료 시간을 고정해 같은 기간을 조회하세요. API별 페이지 방식은 명령 참조를 확인하세요.
 `--tag-filter "env:,service:"`는 해당 접두어만 유지하고 `""`는 모든 태그를 제외하며 `"*"`는 모두 유지합니다.
 
+`--error-format json`은 최종 런타임 오류를 stderr의 JSON 한 줄로 출력합니다. `.error.kind`로 `authentication`과 `permission_denied`를 구분하며 둘 다 종료 코드 3을 유지합니다. 재시도 로그 등 다른 진단이 앞에 올 수 있으며 CLI 문법 오류는 텍스트입니다.
+
 종료 코드: `0` 성공·닫힌 stdout 파이프, `1` 입력·설정·기타 오류, `2` CLI 문법,
 `3` 인증, `4` API, `5` 요청 제한, `6` 네트워크·타임아웃, `7` 응답 디코딩, `130` Ctrl+C.
 

@@ -1,5 +1,5 @@
 use clap::Parser;
-use datadog_cli::error::DatadogError;
+use datadog_cli::error::{DatadogError, ErrorFormat};
 use std::io::ErrorKind;
 use std::process;
 
@@ -8,6 +8,7 @@ mod diagnostics;
 #[tokio::main]
 async fn main() {
     let cli = datadog_cli::cli::Cli::parse();
+    let error_format = cli.error_format;
 
     let result = async {
         init_logging(cli.verbose)?;
@@ -44,7 +45,11 @@ async fn main() {
         }
 
         if !matches!(e, DatadogError::Interrupted) {
-            let _ = diagnostics::write(&mut std::io::stderr().lock(), format_args!("Error: {e}"));
+            let message = match error_format {
+                ErrorFormat::Text => format!("Error: {e}"),
+                ErrorFormat::Json => e.diagnostic().to_string(),
+            };
+            let _ = diagnostics::write(&mut std::io::stderr().lock(), format_args!("{message}"));
         }
         process::exit(e.exit_code());
     }

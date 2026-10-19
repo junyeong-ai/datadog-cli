@@ -21,6 +21,15 @@ pub enum AuthProvider {
 #[command(version)]
 #[command(about = "High-performance Datadog CLI")]
 pub struct Cli {
+    #[arg(
+        long,
+        global = true,
+        value_enum,
+        default_value = "text",
+        help = "Final runtime error format on stderr; CLI usage errors remain text"
+    )]
+    pub error_format: crate::error::ErrorFormat,
+
     #[arg(long, global = true, value_parser = ["json", "jsonl", "table"], help = "Output format (default from config)")]
     pub format: Option<String>,
 

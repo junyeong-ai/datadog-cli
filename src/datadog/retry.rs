@@ -107,10 +107,12 @@ mod tests {
         for status in [400, 404, 422, 600] {
             assert_eq!(next_delay(&server_error(status), 0, 3, None), None);
         }
-        assert_eq!(
-            next_delay(&DatadogError::AuthError("denied".to_string()), 0, 3, None),
-            None
-        );
+        for error in [
+            DatadogError::AuthError("denied".into()),
+            DatadogError::PermissionDenied("denied".into()),
+        ] {
+            assert_eq!(next_delay(&error, 0, 3, None), None);
+        }
         assert_eq!(
             next_delay(
                 &DatadogError::DecodeError("bad json".to_string()),

@@ -33,6 +33,7 @@ Commands:
   help            Print this message or the help of the given subcommand(s)
 
 Options:
+      --error-format <ERROR_FORMAT>    Final runtime error format on stderr; CLI usage errors remain text [default: text] [possible values: text, json]
       --format <FORMAT>                Output format (default from config) [possible values: json, jsonl, table]
   -v, --verbose                        Enable debug logging
       --api-key <API_KEY>              API key (otherwise DD_API_KEY or config)

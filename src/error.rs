@@ -1,5 +1,11 @@
 use thiserror::Error;
 
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub enum ErrorFormat {
+    Text,
+    Json,
+}
+
 #[derive(Error, Debug)]
 pub enum DatadogError {
     #[error("API request failed (HTTP {status}): {message}")]
@@ -13,6 +19,9 @@ pub enum DatadogError {
 
     #[error("Authentication failed: {0}")]
     AuthError(String),
+
+    #[error("Permission denied (HTTP 403): {0}")]
+    PermissionDenied(String),
 
     #[error("Invalid date format: {0}")]
     DateParseError(String),
@@ -44,7 +53,7 @@ impl DatadogError {
     /// usage errors; codes 3-7 distinguish failure classes for scripting.
     pub fn exit_code(&self) -> i32 {
         match self {
-            DatadogError::AuthError(_) => 3,
+            DatadogError::AuthError(_) | DatadogError::PermissionDenied(_) => 3,
             DatadogError::ApiError { .. } | DatadogError::QueryError(_) => 4,
             DatadogError::Interrupted => 130,
             DatadogError::RateLimitError { .. } => 5,
@@ -55,6 +64,35 @@ impl DatadogError {
             | DatadogError::JsonError(_)
             | DatadogError::IoError(_) => 1,
         }
+    }
+
+    pub fn diagnostic(&self) -> serde_json::Value {
+        let (kind, status) = match self {
+            Self::ApiError { status, .. } => ("api", Some(*status)),
+            Self::AuthError(_) => ("authentication", None),
+            Self::PermissionDenied(_) => ("permission_denied", Some(403)),
+            Self::QueryError(_) => ("query", None),
+            Self::Interrupted => ("interrupted", None),
+            Self::DateParseError(_) => ("invalid_time", None),
+            Self::NetworkError(_) => ("network", None),
+            Self::DecodeError(_) => ("decode", None),
+            Self::JsonError(_) => ("json", None),
+            Self::IoError(_) => ("io", None),
+            Self::InvalidInput(_) => ("invalid_input", None),
+            Self::RateLimitError { .. } => ("rate_limit", Some(429)),
+            Self::TimeoutError => ("timeout", None),
+        };
+        let mut error = serde_json::json!({"kind":kind,"exit_code":self.exit_code(),"message":self.to_string()});
+        if let Some(status) = status {
+            error["http_status"] = serde_json::json!(status);
+        }
+        if let Self::RateLimitError {
+            reset_secs: Some(seconds),
+        } = self
+        {
+            error["retry_after_seconds"] = serde_json::json!(seconds);
+        }
+        serde_json::json!({"error":error})
     }
 }
 
