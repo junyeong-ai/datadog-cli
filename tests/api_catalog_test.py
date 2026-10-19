@@ -26,6 +26,16 @@ class SchemaConversionTest(unittest.TestCase):
                                         "exclusiveMaximum": False}),
                          {"type": "integer", "maximum": 2})
 
+    def test_nullable_enums_include_null_without_changing_source_values(self):
+        for kind, values in [("string", ["active", "stable"]), ("integer", [1, 2]),
+                             ("string", [None, "pdf"])]:
+            original = list(values)
+            source = {"type": kind, "nullable": True, "enum": values}
+            converted = catalog.schema(source)
+            self.assertEqual(converted["enum"], original if None in original else [*original, None])
+            self.assertEqual(source["enum"], original)
+            self.assertEqual(converted["enum"].count(None), 1)
+
     def test_references_are_rewritten_only_in_schema_locations(self):
         source = {"properties": {"ref": {"$ref": "#/components/schemas/Item"}},
                   "default": {"$ref": "application-value"}}
@@ -33,6 +43,18 @@ class SchemaConversionTest(unittest.TestCase):
         self.assertEqual(converted["properties"]["ref"]["$ref"], "#/definitions/Item")
         self.assertEqual(converted["default"], source["default"])
         self.assertEqual(list(catalog.references(converted)), ["Item"])
+
+    def test_nullable_compositions_keep_non_null_constraints_and_annotations(self):
+        for keyword in ["allOf", "anyOf", "oneOf", "not"]:
+            constraint = {"type": "object", "required": ["id"]}
+            source = {"type": "object", "nullable": True, "readOnly": True,
+                      keyword: constraint if keyword == "not" else [constraint]}
+            converted = catalog.schema(source)
+            self.assertTrue(converted["readOnly"])
+            self.assertEqual(converted["anyOf"], [
+                {key: value for key, value in source.items() if key not in ["nullable", "readOnly"]},
+                {"type": "null"},
+            ])
 
     def test_nullable_references_keep_annotations_at_the_property_root(self):
         source = {"$ref": "#/components/schemas/Item", "nullable": True,

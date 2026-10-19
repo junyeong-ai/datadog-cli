@@ -58,18 +58,23 @@ def schema(value):
             if enabled:
                 result[exclusive] = result.pop(inclusive)
     if nullable:
-        if "type" in result:
-            result["type"] = [result["type"], "null"]
-        elif "$ref" in result:
-            # Honor Datadog's nullable-reference contracts; Draft7 ignores $ref siblings.
+        if "$ref" in result or any(key in result for key in ("allOf", "anyOf", "oneOf", "not")):
+            # Keep null outside constraints that would otherwise reject it.
             annotations = {
                 key: result.pop(key)
                 for key in ("title", "description", "default", "readOnly", "writeOnly", "deprecated")
                 if key in result
             }
-            reference = {"$ref": result.pop("$ref")}
-            non_null = {"allOf": [reference, result]} if result else reference
+            if "$ref" in result:
+                reference = {"$ref": result.pop("$ref")}
+                non_null = {"allOf": [reference, result]} if result else reference
+            else:
+                non_null = result
             result = {**annotations, "anyOf": [non_null, {"type": "null"}]}
+        elif "type" in result:
+            result["type"] = [result["type"], "null"]
+            if "enum" in result and None not in result["enum"]:
+                result["enum"] = [*result["enum"], None]
     return result
 
 
@@ -143,7 +148,9 @@ def main():
         for name, override in overrides.items():
             schema_version, model = name.split(".", 1)
             if schema_version == version:
-                for field, constraints in override["properties"].items():
+                if "schema" in override:
+                    definitions[version][model] = override["schema"]
+                for field, constraints in override.get("properties", {}).items():
                     definitions[version][model]["properties"][field].update(constraints)
         for path, methods in document["paths"].items():
             for method, operation in methods.items():

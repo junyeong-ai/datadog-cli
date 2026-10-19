@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.4] - 2026-10-19
+
+### Fixed
+
+- Nullable API enums accept null while retaining their declared non-null values, including report delivery formats and incident field categories.
+- Nullable composed schemas preserve null independently of their non-null alternatives. Agent Observability dataset and experiment values retain arbitrary JSON as documented by the official model.
+
 ## [0.9.3] - 2026-10-19
 
 ### Fixed

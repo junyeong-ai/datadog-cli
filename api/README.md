@@ -15,13 +15,15 @@ uv run --with PyYAML==6.0.3 python scripts/update_api_catalog.py
 ```
 
 OpenAPI 3.0 schemas are converted to JSON Schema Draft 7 by translating local
-references, typed `nullable`, Datadog's nullable references, and boolean exclusive bounds. Nullable references use a union with null, matching documented states such as [custom rules without revisions](https://docs.datadoghq.com/api/latest/static-analysis/show-custom-rule/). Validation constraints,
+references, typed `nullable`, Datadog's nullable references, and boolean exclusive bounds. Nullable enums include null; references and compositions use a union with null, matching documented states such as [custom rules without revisions](https://docs.datadoghq.com/api/latest/static-analysis/show-custom-rule/). Validation constraints,
 property names, enum values, and additional properties retain their API meanings.
 Request schemas omit `readOnly` properties from required fields; response schemas omit `writeOnly` properties from required fields. Other required fields and property types remain validated. This normalization visits schema positions only, including local referenced definitions, without rewriting default or enum instance data. Examples and OpenAPI-only annotations are omitted. Requests reject unknown parameter
 names; extensible body and response fields follow the published schema.
 
-`overrides.json` records field-level contract corrections supported by an observed
-response and a documentation reference. Apply only the evidenced constraint; retain
+`overrides.json` records field or model corrections supported by observed responses
+or explicit official model contracts, with source references. `AnyValue` preserves
+arbitrary JSON as documented by the official SDK despite its contradictory OpenAPI
+object constraint. Apply only the evidenced constraint; retain
 type validation for other values. Operation-specific documented limits and additional
 statuses belong to `policy.json`.
 

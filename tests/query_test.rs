@@ -717,7 +717,7 @@ async fn sentinel_response_omits_write_only_fields_without_relaxing_required_res
 }
 
 #[tokio::test]
-async fn nullable_references_accept_null_without_accepting_invalid_values() {
+async fn nullable_references_and_compositions_preserve_null_and_reject_invalid_values() {
     for (domain, operation, endpoint, input, response, pointer) in [
         (
             "dashboards",
@@ -734,6 +734,14 @@ async fn nullable_references_accept_null_without_accepting_invalid_values() {
             json!({"path":{"ruleset_name":"ruleset-1","rule_name":"rule-1"}}),
             json!({"data":{"id":"rule-1","type":"custom_rule","attributes":{"name":"rule-1","created_at":"2026-10-19T00:00:00Z","created_by":"user-1","last_revision":null,"revisions":[]}}}),
             "/data/attributes/last_revision",
+        ),
+        (
+            "logs-archives",
+            "v2.GetLogsArchive",
+            "/api/v2/logs/config/archives/archive-1",
+            json!({"path":{"archive_id":"archive-1"}}),
+            json!({"data":{"type":"archives","id":"archive-1","attributes":{"name":"Archive","query":"*","destination":null}}}),
+            "/data/attributes/destination",
         ),
     ] {
         let server = MockServer::start().await;
@@ -766,5 +774,105 @@ async fn nullable_references_accept_null_without_accepting_invalid_values() {
                 DatadogError::DecodeError(_)
             ));
         }
+    }
+}
+
+#[tokio::test]
+async fn nullable_enums_preserve_null_and_reject_unknown_values() {
+    let server = MockServer::start().await;
+    let response = json!({"data": [{"id":"schedule-1","type":"schedule","attributes": {
+        "delivery_format":null,"description":"Weekly report","next_recurrence":null,
+        "recipients":[],"resource_id":"dashboard-1","resource_type":"dashboard",
+        "rrule":"FREQ=WEEKLY","status":"inactive","tab_id":null,
+        "template_variables":[],"timeframe":null,"timezone":"UTC","title":"Weekly report"
+    },"relationships":{"author":{"data":{"id":"user-1","type":"users"}}}}]});
+    for value in [
+        Value::Null,
+        json!("pdf"),
+        json!("png"),
+        json!("pdf_and_png"),
+        json!("unknown"),
+        json!(42),
+    ] {
+        server.reset().await;
+        let mut body = response.clone();
+        body["data"][0]["attributes"]["delivery_format"] = value.clone();
+        Mock::given(method("GET"))
+            .and(path("/api/v2/reporting/schedule/list"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(body.clone()))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let result = execute(
+            &server,
+            "report-schedules",
+            "v2.ListReportSchedules",
+            json!({}),
+        )
+        .await;
+        if value.is_null() || ["pdf", "png", "pdf_and_png"].contains(&value.as_str().unwrap_or(""))
+        {
+            assert_eq!(result.unwrap()["data"], body);
+        } else {
+            assert!(matches!(result.unwrap_err(), DatadogError::DecodeError(_)));
+        }
+    }
+}
+
+#[tokio::test]
+async fn dataset_records_preserve_arbitrary_json_without_relaxing_record_fields() {
+    let server = MockServer::start().await;
+    for value in [
+        json!("question"),
+        Value::Null,
+        json!(42),
+        json!(true),
+        json!({"nested":[null,[]]}),
+        json!(["answer", 42, true]),
+        json!([[null]]),
+    ] {
+        server.reset().await;
+        let response = json!({"data":[{"id":"record-1","dataset_id":"dataset-1",
+            "input":value,"expected_output":value,"metadata":null,
+            "created_at":"2026-10-19T00:00:00Z","updated_at":"2026-10-19T00:00:00Z"}]});
+        Mock::given(method("GET"))
+            .and(path(
+                "/api/v2/llm-obs/v1/project-1/datasets/dataset-1/records",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(response.clone()))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let input = json!({"path":{"project_id":"project-1","dataset_id":"dataset-1"}});
+        assert_eq!(
+            execute(
+                &server,
+                "agent-observability",
+                "v2.ListLLMObsDatasetRecords",
+                input.clone()
+            )
+            .await
+            .unwrap()["data"],
+            response
+        );
+        server.reset().await;
+        let mut invalid = response;
+        invalid["data"][0]["metadata"] = json!(42);
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(invalid))
+            .expect(1)
+            .mount(&server)
+            .await;
+        assert!(matches!(
+            execute(
+                &server,
+                "agent-observability",
+                "v2.ListLLMObsDatasetRecords",
+                input
+            )
+            .await
+            .unwrap_err(),
+            DatadogError::DecodeError(_)
+        ));
     }
 }

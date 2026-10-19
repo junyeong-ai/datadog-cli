@@ -1,4 +1,11 @@
 {
+  "v2.AnyValue": {
+    "evidence": "https://github.com/DataDog/datadog-api-client-rust/blob/fca853cf6750c4c453558088fc5c4491f98dc5f1/src/datadogV2/model/model_any_value.rs",
+    "observation": "The pinned contract describes any valid JSON value and the official Rust model accepts scalar, object and array values. Its OpenAPI root object type conflicts with those alternatives; nested JSON values and null retain their documented meaning.",
+    "schema": {
+      "description": "Represents any valid JSON value."
+    }
+  },
   "v1.MetricMetadata": {
     "evidence": "https://docs.datadoghq.com/api/latest/metrics/get-metric-metadata/",
     "observation": "GetMetricMetadata for system.cpu.user returned null per_unit and statsd_interval on 2026-10-19. These fields describe optional unit denominators and StatsD collection settings.",
