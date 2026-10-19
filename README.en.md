@@ -204,10 +204,13 @@ Metric `.data[].units` preserves primary/per-unit order, null positions, and sca
 
 ```bash
 datadog-cli logs search "status:error" --format jsonl | jq -r '.service'
+datadog-cli logs aggregate "status:error" --group-by service --group-limit 10
 datadog-cli monitors list --format table
 datadog-cli spans "service:api" --limit 100 --format json > page.json
 jq -r '.pagination.next_cursor // empty' page.json
 ```
+
+`logs aggregate` and `logs timeseries` accept `--group-by` and `--group-limit` to compute the most frequent groups on the server. This is a bounded ranking, not an exhaustive list of groups; inspect API warnings alongside the result.
 
 Search returns one page. Pass the returned cursor with `--cursor` to fetch another.
 `pagination.returned` counts records in this response; `total_count` is the server-reported total or `null` when unknown.

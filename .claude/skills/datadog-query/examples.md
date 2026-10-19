@@ -10,6 +10,7 @@ FROM="2026-10-17T00:00:00Z"
 TO="2026-10-17T01:00:00Z"
 
 datadog-cli logs aggregate "service:api status:error" --from "$FROM" --to "$TO"
+datadog-cli logs aggregate "status:error" --group-by service --group-limit 10 --from "$FROM" --to "$TO"
 datadog-cli logs search "service:api status:error" --from "$FROM" --to "$TO" --limit 20 --format jsonl |
   jq -r '[.timestamp, .service, .message] | @tsv'
 datadog-cli spans "service:api error:true" --from "$FROM" --to "$TO" --limit 20 --format jsonl |

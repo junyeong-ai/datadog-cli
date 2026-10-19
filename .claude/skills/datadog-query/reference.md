@@ -147,9 +147,11 @@ Arguments:
   [QUERY]  [default: *]
 
 Options:
-      --from <FROM>  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
-      --to <TO>      Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
-  -h, --help         Print help
+      --from <FROM>                Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
+      --to <TO>                    Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --group-by <GROUP_BY>        Group by a facet; buckets are ordered by descending log count
+      --group-limit <GROUP_LIMIT>  Maximum groups to return (default 10, max 10000)
+  -h, --help                       Print help
 ```
 
 ## `datadog-cli logs timeseries`
@@ -168,6 +170,8 @@ Options:
       --interval <INTERVAL>        Rollup interval (e.g., 5m, 1h, 1d) [default: 1h]
       --aggregation <AGGREGATION>  Aggregation type (count, avg, sum, min, max) [default: count]
       --metric <METRIC>            Metric field for aggregation
+      --group-by <GROUP_BY>        Group by a facet; buckets are ordered by descending log count
+      --group-limit <GROUP_LIMIT>  Maximum groups to return (default 10, max 10000)
   -h, --help                       Print help
 ```
 

@@ -298,6 +298,84 @@ async fn log_custom_attributes_preserve_correlation_and_business_context() {
 }
 
 #[tokio::test]
+async fn log_groups_are_ranked_on_the_server_and_keep_query_diagnostics() {
+    for mode in ["aggregate", "timeseries"] {
+        let server = MockServer::start().await;
+        let data = json!({"buckets":[{"by":{"service":"api"},"computes":{"c0":42}}]});
+        let metadata =
+            json!({"status":"timeout","warnings":[{"code":"partial","detail":"fixture"}]});
+        respond(
+            &server,
+            "/api/v2/logs/analytics/aggregate",
+            json!({"data":data,"meta":metadata}),
+        )
+        .await;
+        let Command::Logs { action } = Cli::parse_from([
+            "datadog-cli",
+            "logs",
+            mode,
+            "status:error",
+            "--group-by",
+            "service",
+            "--group-limit",
+            "3",
+        ])
+        .command
+        else {
+            panic!()
+        };
+        let client = client(&server);
+        let result = match action {
+            LogsAction::Aggregate(args) => LogsHandler::aggregate(&client, &args).await,
+            LogsAction::Timeseries(args) => LogsHandler::timeseries(&client, &args).await,
+            _ => panic!(),
+        }
+        .unwrap();
+        assert_eq!(result["data"], data);
+        assert_eq!(result["meta"]["api"], metadata);
+        assert_eq!(result["meta"]["group_by"], "service");
+        assert_eq!(result["meta"]["group_limit"], 3);
+        let requests = server.received_requests().await.unwrap();
+        let body: Value = serde_json::from_slice(&requests[0].body).unwrap();
+        assert_eq!(body["filter"]["query"], "status:error");
+        assert_eq!(
+            body["group_by"],
+            json!([{"facet":"service","limit":3,"sort":{"type":"measure","aggregation":"count","order":"desc"}}])
+        );
+        assert_eq!(
+            body["compute"][0]["type"],
+            if mode == "aggregate" {
+                "total"
+            } else {
+                "timeseries"
+            }
+        );
+    }
+    for argv in [
+        vec!["datadog-cli", "logs", "aggregate", "--group-limit", "3"],
+        vec![
+            "datadog-cli",
+            "logs",
+            "aggregate",
+            "--group-by",
+            "service",
+            "--group-limit",
+            "10001",
+        ],
+        vec!["datadog-cli", "logs", "aggregate", "--group-by", ""],
+    ] {
+        assert!(Cli::try_parse_from(argv).is_err());
+    }
+    let server = MockServer::start().await;
+    let error = client(&server)
+        .aggregate_logs_with_group_by("*", "now-5m", "now", vec![], Some(" "), 10)
+        .await
+        .unwrap_err();
+    assert_eq!(error.exit_code(), 1);
+    assert!(server.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn monitor_details_preserve_evaluation_settings_and_extensible_fields() {
     let server = MockServer::start().await;
     let original = json!({

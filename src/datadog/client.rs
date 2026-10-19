@@ -222,7 +222,27 @@ impl DatadogClient {
         to: &str,
         compute: Vec<LogsCompute>,
     ) -> Result<serde_json::Value> {
-        let body = serde_json::json!({
+        self.aggregate_logs_with_group_by(query, from, to, compute, None, 10)
+            .await
+    }
+
+    pub async fn aggregate_logs_with_group_by(
+        &self,
+        query: &str,
+        from: &str,
+        to: &str,
+        compute: Vec<LogsCompute>,
+        group_by: Option<&str>,
+        group_limit: i32,
+    ) -> Result<serde_json::Value> {
+        if group_by.is_some_and(|facet| facet.trim().is_empty())
+            || !(1..=10000).contains(&group_limit)
+        {
+            return Err(DatadogError::InvalidInput(
+                "Log grouping requires a nonempty facet and a limit between 1 and 10000".into(),
+            ));
+        }
+        let mut body = serde_json::json!({
             "filter": {
                 "query": query,
                 "from": from,
@@ -230,6 +250,13 @@ impl DatadogClient {
             },
             "compute": compute
         });
+        if let Some(facet) = group_by {
+            body["group_by"] = serde_json::json!([{
+                "facet":facet,
+                "limit":group_limit,
+                "sort":{"type":"measure","aggregation":"count","order":"desc"}
+            }]);
+        }
 
         self.request(
             reqwest::Method::POST,

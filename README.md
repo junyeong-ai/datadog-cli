@@ -204,10 +204,13 @@ JSON은 터미널에서 들여쓰기하고 파이프에서는 압축합니다. J
 
 ```bash
 datadog-cli logs search "status:error" --format jsonl | jq -r '.service'
+datadog-cli logs aggregate "status:error" --group-by service --group-limit 10
 datadog-cli monitors list --format table
 datadog-cli spans "service:api" --limit 100 --format json > page.json
 jq -r '.pagination.next_cursor // empty' page.json
 ```
+
+`logs aggregate`와 `logs timeseries`의 `--group-by`는 서버에서 로그 수 내림차순으로 최대 `--group-limit`개 그룹을 구합니다. 전체 그룹 전수 조회가 아니며 서버 경고는 결과와 함께 확인해야 합니다.
 
 검색 결과는 한 페이지입니다. 다음 페이지는 반환된 커서를 `--cursor`로 전달합니다.
 `pagination.returned`는 이번 응답 건수이며 `total_count`는 서버가 알려준 전체 건수입니다. 알 수 없으면 `null`입니다.

@@ -529,6 +529,15 @@ pub struct LogsSearchArgs {
 }
 
 #[derive(Args)]
+pub struct LogsGroupByArgs {
+    #[arg(long, value_parser = clap::builder::NonEmptyStringValueParser::new(), help = "Group by a facet; buckets are ordered by descending log count")]
+    pub group_by: Option<String>,
+
+    #[arg(long, requires = "group_by", value_parser = clap::value_parser!(i32).range(1..=10000), help = "Maximum groups to return (default 10, max 10000)")]
+    pub group_limit: Option<i32>,
+}
+
+#[derive(Args)]
 pub struct LogsAggregateArgs {
     #[arg(default_value = "*")]
     pub query: String,
@@ -538,6 +547,9 @@ pub struct LogsAggregateArgs {
 
     #[arg(long, default_value = "now", help = TIME_HELP)]
     pub to: String,
+
+    #[command(flatten)]
+    pub grouping: LogsGroupByArgs,
 }
 
 #[derive(Args)]
@@ -567,6 +579,9 @@ pub struct LogsTimeseriesArgs {
 
     #[arg(long, help = "Metric field for aggregation")]
     pub metric: Option<String>,
+
+    #[command(flatten)]
+    pub grouping: LogsGroupByArgs,
 }
 
 #[derive(Subcommand)]

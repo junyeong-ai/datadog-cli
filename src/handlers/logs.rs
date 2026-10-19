@@ -106,7 +106,14 @@ impl LogsHandler {
         }];
 
         let response = client
-            .aggregate_logs(&args.query, &from, &to, compute)
+            .aggregate_logs_with_group_by(
+                &args.query,
+                &from,
+                &to,
+                compute,
+                args.grouping.group_by.as_deref(),
+                args.grouping.group_limit.unwrap_or(10),
+            )
             .await?;
 
         let data = crate::datadog::models::response_resource(&response)?;
@@ -116,12 +123,16 @@ impl LogsHandler {
             .map(|b| b.len())
             .unwrap_or(0);
 
-        let meta = json!({
+        let mut meta = json!({
             "query": args.query,
             "from": from,
             "to": to,
             "buckets_count": buckets_count
         });
+        if let Some(facet) = &args.grouping.group_by {
+            meta["group_by"] = json!(facet);
+            meta["group_limit"] = json!(args.grouping.group_limit.unwrap_or(10));
+        }
 
         Ok(handler.with_api_meta(
             handler.format_list(data, None, Some(meta)),
@@ -144,7 +155,14 @@ impl LogsHandler {
         }];
 
         let response = client
-            .aggregate_logs(&args.query, &from, &to, compute)
+            .aggregate_logs_with_group_by(
+                &args.query,
+                &from,
+                &to,
+                compute,
+                args.grouping.group_by.as_deref(),
+                args.grouping.group_limit.unwrap_or(10),
+            )
             .await?;
 
         let data = crate::datadog::models::response_resource(&response)?;
@@ -154,7 +172,7 @@ impl LogsHandler {
             .map(|b| b.len())
             .unwrap_or(0);
 
-        let meta = json!({
+        let mut meta = json!({
             "query": args.query,
             "from": from,
             "to": to,
@@ -162,6 +180,10 @@ impl LogsHandler {
             "aggregation": args.aggregation,
             "buckets_count": buckets_count
         });
+        if let Some(facet) = &args.grouping.group_by {
+            meta["group_by"] = json!(facet);
+            meta["group_limit"] = json!(args.grouping.group_limit.unwrap_or(10));
+        }
 
         Ok(handler.with_api_meta(
             handler.format_list(data, None, Some(meta)),
