@@ -64,25 +64,17 @@ impl SpansHandler {
                         }
                     }
 
-                    if let Some(ingestion_reason) = attrs_obj.get("ingestion_reason")
-                        && ingestion_reason.as_str().unwrap_or("").is_empty()
-                    {
-                        attrs_obj.remove("ingestion_reason");
-                    }
-
                     if let Some(custom) = attrs_obj.get_mut("custom")
                         && let Some(custom_obj) = custom.as_object_mut()
+                        && let Some(error) = custom_obj.get_mut("error")
+                        && let Some(error_obj) = error.as_object_mut()
+                        && let Some(stack) = error_obj.get_mut("stack")
+                        && let Some(stack_str) = stack.as_str()
+                        && !args.full_stack_trace
                     {
-                        if let Some(error) = custom_obj.get_mut("error")
-                            && let Some(error_obj) = error.as_object_mut()
-                            && let Some(stack) = error_obj.get_mut("stack")
-                            && let Some(stack_str) = stack.as_str()
-                            && !args.full_stack_trace
-                        {
-                            let truncated =
-                                handler.truncate_stack_trace(stack_str, DEFAULT_STACK_TRACE_LINES);
-                            *stack = Value::String(truncated);
-                        }
+                        let truncated =
+                            handler.truncate_stack_trace(stack_str, DEFAULT_STACK_TRACE_LINES);
+                        *stack = Value::String(truncated);
                     }
                 }
 

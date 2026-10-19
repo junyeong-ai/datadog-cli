@@ -544,7 +544,7 @@ async fn spans_preserve_http_and_messaging_details_with_both_stack_modes() {
             &server,
             "/api/v2/spans/events/search",
             json!({
-                "data":[{"id":"span-1","attributes":{"custom":custom}}]
+                "data":[{"id":"span-1","attributes":{"custom":custom,"ingestion_reason":""}}]
             }),
         )
         .await;
@@ -562,5 +562,9 @@ async fn spans_preserve_http_and_messaging_details_with_both_stack_modes() {
                 json!(datadog_cli::utils::truncate_stack_trace(&stack, 10));
         }
         assert_eq!(output["data"][0]["attributes"]["custom"], expected);
+        assert_eq!(
+            output["data"][0]["attributes"].get("ingestion_reason"),
+            Some(&json!(""))
+        );
     }
 }
