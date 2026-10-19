@@ -16,7 +16,7 @@ fn query_contracts_compile_offline() {
         }
         for response in operation.responses.values() {
             if let Some(schema) = &response.schema {
-                let schema = catalog.with_definitions(operation, schema.clone()).unwrap();
+                let schema = catalog.response_schema(operation, schema.clone()).unwrap();
                 if let Err(error) = jsonschema::options()
                     .with_draft(jsonschema::Draft::Draft7)
                     .offline()
@@ -144,4 +144,36 @@ fn credential_bearing_contracts_are_excluded_before_request_validation() {
     ] {
         assert!(catalog.query("synthetics", id).is_ok());
     }
+}
+
+#[test]
+fn monitor_validation_does_not_require_response_only_fields() {
+    let catalog = Catalog::load().unwrap();
+    let mut input = json!({"body":{"type":"query alert","query":"avg(last_5m):avg:system.cpu.user{*}>90","matching_downtimes":[{}]}});
+    catalog
+        .validate_input(
+            catalog.query("monitors", "v1.ValidateMonitor").unwrap(),
+            &input,
+        )
+        .unwrap();
+    input["path"] = json!({"monitor_id":1});
+    catalog
+        .validate_input(
+            catalog
+                .query("monitors", "v1.ValidateExistingMonitor")
+                .unwrap(),
+            &input,
+        )
+        .unwrap();
+    input["body"].as_object_mut().unwrap().remove("query");
+    assert!(
+        catalog
+            .validate_input(
+                catalog
+                    .query("monitors", "v1.ValidateExistingMonitor")
+                    .unwrap(),
+                &input
+            )
+            .is_err()
+    );
 }

@@ -549,7 +549,7 @@ fn is_json(media: &str) -> bool {
 }
 
 fn validate_response(operation: &Operation, schema: &Value, body: &Value) -> Result<()> {
-    let schema = Catalog::load()?.with_definitions(operation, schema.clone())?;
+    let schema = Catalog::load()?.response_schema(operation, schema.clone())?;
     let validator = jsonschema::options()
         .with_draft(jsonschema::Draft::Draft7)
         .offline()

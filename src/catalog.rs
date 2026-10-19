@@ -287,7 +287,7 @@ impl Catalog {
             for (status, response) in &operation.responses {
                 let mut contract = json!({"media":response.media});
                 if include_response_schema && let Some(schema) = &response.schema {
-                    contract["schema"] = self.with_definitions(operation, schema.clone())?;
+                    contract["schema"] = self.response_schema(operation, schema.clone())?;
                 }
                 responses.insert(status.clone(), contract);
             }
@@ -332,6 +332,11 @@ impl Catalog {
             }
         }
         let mut schema = self.with_definitions(operation, json!({"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":properties,"required":required,"additionalProperties":false}))?;
+        apply_schema_context(
+            &mut schema,
+            SchemaContext::Request,
+            &self.definitions[&operation.version],
+        );
         if !operation.exclusive_input.is_empty() {
             schema["allOf"] = Value::Array(operation.exclusive_input.iter().map(|rule| {
                 json!({"not":{"allOf":[presence_schema(&rule.field),{"anyOf":rule.conflicts.iter().map(|pointer|presence_schema(pointer)).collect::<Vec<_>>()}]}})
@@ -360,6 +365,16 @@ impl Catalog {
                 .into_iter()
                 .map(|name| (name.clone(), definitions[&name].clone()))
                 .collect(),
+        );
+        Ok(schema)
+    }
+
+    pub fn response_schema(&self, operation: &Operation, schema: Value) -> Result<Value> {
+        let mut schema = self.with_definitions(operation, schema)?;
+        apply_schema_context(
+            &mut schema,
+            SchemaContext::Response,
+            &self.definitions[&operation.version],
         );
         Ok(schema)
     }
@@ -433,5 +448,106 @@ fn references(value: &Value, output: &mut Vec<String>) {
         if let Some(values) = fields.get(keyword).and_then(Value::as_array) {
             values.iter().for_each(|value| references(value, output));
         }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum SchemaContext {
+    Request,
+    Response,
+}
+
+fn apply_schema_context(schema: &mut Value, context: SchemaContext, definitions: &Value) {
+    let Some(fields) = schema.as_object_mut() else {
+        return;
+    };
+    let annotation = match context {
+        SchemaContext::Request => "readOnly",
+        SchemaContext::Response => "writeOnly",
+    };
+    let omitted = fields
+        .get("properties")
+        .and_then(Value::as_object)
+        .map(|properties| {
+            properties
+                .iter()
+                .filter(|(_, property)| has_annotation(property, annotation, definitions))
+                .map(|(name, _)| name.clone())
+                .collect::<BTreeSet<_>>()
+        })
+        .unwrap_or_default();
+    if let Some(required) = fields.get_mut("required").and_then(Value::as_array_mut) {
+        required.retain(|name| name.as_str().is_none_or(|name| !omitted.contains(name)));
+    }
+    for keyword in ["properties", "patternProperties", "definitions", "$defs"] {
+        if let Some(values) = fields.get_mut(keyword).and_then(Value::as_object_mut) {
+            for value in values.values_mut() {
+                apply_schema_context(value, context, definitions);
+            }
+        }
+    }
+    for keyword in [
+        "items",
+        "additionalProperties",
+        "not",
+        "contains",
+        "propertyNames",
+    ] {
+        if let Some(value) = fields.get_mut(keyword) {
+            apply_schema_context(value, context, definitions);
+        }
+    }
+    for keyword in ["allOf", "oneOf", "anyOf"] {
+        if let Some(values) = fields.get_mut(keyword).and_then(Value::as_array_mut) {
+            for value in values {
+                apply_schema_context(value, context, definitions);
+            }
+        }
+    }
+}
+
+fn has_annotation<'a>(mut schema: &'a Value, annotation: &str, definitions: &'a Value) -> bool {
+    let mut visited = BTreeSet::new();
+    loop {
+        if schema.get(annotation).and_then(Value::as_bool) == Some(true) {
+            return true;
+        }
+        let Some(name) = schema
+            .get("$ref")
+            .and_then(Value::as_str)
+            .and_then(|reference| reference.strip_prefix("#/definitions/"))
+        else {
+            return false;
+        };
+        if !visited.insert(name) {
+            return false;
+        }
+        let Some(definition) = definitions.get(name) else {
+            return false;
+        };
+        schema = definition;
+    }
+}
+
+#[cfg(test)]
+mod schema_context_tests {
+    use super::*;
+
+    #[test]
+    fn directional_requirements_leave_instance_values_and_opposite_context_intact() {
+        let original = json!({"type":"object","properties":{
+            "id":{"$ref":"#/definitions/Id"},
+            "secret":{"type":"string","writeOnly":true},
+            "required":{"default":{"properties":{"id":{"readOnly":true}},"required":["id"]}}
+        },"required":["id","secret","required"]});
+        let definitions = json!({"Id":{"type":"string","readOnly":true}});
+        let mut request = original.clone();
+        apply_schema_context(&mut request, SchemaContext::Request, &definitions);
+        assert_eq!(request["required"], json!(["secret", "required"]));
+        let mut response = original.clone();
+        apply_schema_context(&mut response, SchemaContext::Response, &definitions);
+        assert_eq!(response["required"], json!(["id", "required"]));
+        assert_eq!(request["properties"], original["properties"]);
+        assert_eq!(response["properties"], original["properties"]);
     }
 }

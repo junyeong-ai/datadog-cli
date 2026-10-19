@@ -614,3 +614,60 @@ async fn current_user_organization_null_fields_preserve_relationships_and_reject
         DatadogError::DecodeError(_)
     ));
 }
+
+#[tokio::test]
+async fn sentinel_response_omits_write_only_fields_without_relaxing_required_response_fields() {
+    let server = MockServer::start().await;
+    let destination = json!({"type":"custom_destination","id":"destination-id","attributes":{"forwarder_destination":{"type":"microsoft_sentinel","tenant_id":"tenant","client_id":"client","data_collection_endpoint":"https://example.com","data_collection_rule_id":"rule"}}});
+    for (id, endpoint, input, response) in [
+        (
+            "v2.GetLogsCustomDestination",
+            "/api/v2/logs/config/custom-destinations/destination-id",
+            json!({"path":{"custom_destination_id":"destination-id"}}),
+            json!({"data":destination.clone()}),
+        ),
+        (
+            "v2.ListLogsCustomDestinations",
+            "/api/v2/logs/config/custom-destinations",
+            json!({}),
+            json!({"data":[destination.clone()]}),
+        ),
+    ] {
+        server.reset().await;
+        Mock::given(method("GET"))
+            .and(path(endpoint))
+            .respond_with(ResponseTemplate::new(200).set_body_json(response.clone()))
+            .expect(1)
+            .mount(&server)
+            .await;
+        assert_eq!(
+            execute(&server, "logs-custom-destinations", id, input.clone())
+                .await
+                .unwrap()["data"],
+            response
+        );
+        server.reset().await;
+        let mut invalid = response;
+        let item = if invalid["data"].is_array() {
+            &mut invalid["data"][0]
+        } else {
+            &mut invalid["data"]
+        };
+        item["attributes"]["forwarder_destination"]
+            .as_object_mut()
+            .unwrap()
+            .remove("tenant_id");
+        Mock::given(method("GET"))
+            .and(path(endpoint))
+            .respond_with(ResponseTemplate::new(200).set_body_json(invalid))
+            .expect(1)
+            .mount(&server)
+            .await;
+        assert!(matches!(
+            execute(&server, "logs-custom-destinations", id, input)
+                .await
+                .unwrap_err(),
+            DatadogError::DecodeError(_)
+        ));
+    }
+}
