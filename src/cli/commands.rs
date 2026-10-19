@@ -14,6 +14,9 @@ pub async fn execute(command: &Command, client: &DatadogClient) -> Result<Value>
         Command::Capabilities { .. } => {
             unreachable!("Capabilities are handled without credentials")
         }
+        Command::Query(_) => {
+            unreachable!("Reviewed queries are prepared before credential execution")
+        }
         Command::Metrics(args) => handlers::metrics::MetricsHandler::query(client, args).await,
 
         Command::Timeseries(args) => {

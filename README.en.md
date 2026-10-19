@@ -10,6 +10,18 @@ datadog-cli capabilities show v2.SearchCIAppPipelineEvents
 
 The catalog pins an official contract snapshot. It does not probe your organization's product access or user permissions.
 
+Execute a reviewed operation with `query DOMAIN VERSION.OPERATION --input JSON`.
+The request envelope uses `path`, `query`, `headers`, and `body` and is schema-validated before credential execution. Use `--input @request.json` or `--input -` for a file or stdin.
+
+```bash
+datadog-cli query containers v2.ListContainers
+datadog-cli query metrics v1.GetMetricMetadata --input '{"path":{"metric_name":"system.cpu.user"}}'
+```
+
+For `query`, `.data` is the unmodified API response, distinct from the legacy commands' projections. `.meta` retains source, HTTP status, API metadata, and execution accounting. JSONL emits one API response without CLI metadata. A single response does not establish that all matching records were collected.
+
+Defaults bound authentication/API execution to 60 seconds, four API attempts including retries, and 8 MiB of cumulative response bodies. Adjust `--deadline`, `--max-calls`, and `--max-bytes` explicitly. CSV/binary responses require `--output PATH`; existing files are never overwritten. Product access, permissions, and site availability vary by API. See [contract maintenance and policy](api/README.md).
+
 [한국어](README.md) · [Command reference](.claude/skills/datadog-query/reference.md)
 
 A Rust CLI for querying Datadog logs, metrics, APM, RUM, and operational resources.

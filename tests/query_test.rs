@@ -1,0 +1,336 @@
+use std::time::Duration;
+
+use datadog_cli::config::{Config, Credentials, Defaults, Network};
+use datadog_cli::datadog::DatadogClient;
+use datadog_cli::error::DatadogError;
+use datadog_cli::query::PreparedQuery;
+use serde_json::{Value, json};
+use wiremock::matchers::{body_json, header, method, path, query_param};
+use wiremock::{Mock, MockServer, ResponseTemplate};
+
+fn client(server: &MockServer) -> DatadogClient {
+    DatadogClient::with_base_url(
+        &Config {
+            credentials: Credentials::Token("test-token".into()),
+            site: "datadoghq.com".into(),
+            defaults: Defaults::default(),
+            network: Network {
+                timeout_secs: 2,
+                max_retries: 3,
+                ..Network::default()
+            },
+        },
+        server.uri(),
+    )
+    .unwrap()
+}
+
+async fn execute(
+    server: &MockServer,
+    domain: &str,
+    id: &str,
+    input: Value,
+) -> datadog_cli::Result<Value> {
+    PreparedQuery::prepare(domain, id, &input, None)?
+        .execute(
+            &client(server),
+            "datadoghq.com",
+            Duration::from_secs(5),
+            1024 * 1024,
+            4,
+        )
+        .await
+}
+
+#[tokio::test]
+async fn ci_search_preserves_attributes_and_api_metadata() {
+    let server = MockServer::start().await;
+    let body = json!({"filter":{"query":"@ci.pipeline.name:build","from":"2026-10-01T00:00:00Z","to":"2026-10-02T00:00:00Z"},"page":{"limit":1}});
+    let response = json!({"data":[{"id":"pipeline-1","type":"cipipeline","attributes":{"attributes":{"pipeline":{"id":"run-1"},"future":{"value":42}},"ci_level":"pipeline","tags":["env:ci"]}}],"meta":{"page":{"after":"next-page"},"status":"done"}});
+    Mock::given(method("POST"))
+        .and(path("/api/v2/ci/pipelines/events/search"))
+        .and(header("authorization", "Bearer test-token"))
+        .and(body_json(&body))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(&response)
+                .insert_header("x-ratelimit-remaining", "299"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let result = execute(
+        &server,
+        "ci-visibility-pipelines",
+        "v2.SearchCIAppPipelineEvents",
+        json!({"body":body}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(result["data"], response);
+    assert_eq!(result["meta"]["api"]["page"]["after"], "next-page");
+    assert_eq!(
+        result["meta"]["http"]["headers"]["x-ratelimit-remaining"],
+        "299"
+    );
+    assert_eq!(result["meta"]["execution"]["calls"], 1);
+    assert_eq!(result["meta"]["result"]["processing"], "unknown");
+}
+
+#[tokio::test]
+async fn declared_array_serialization_and_encoded_paths_reach_only_the_selected_endpoint() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v2/team"))
+        .and(query_param("fields[team]", "name,handle"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[]})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    execute(
+        &server,
+        "teams",
+        "v2.ListTeams",
+        json!({"query":{"fields[team]":["name","handle"]}}),
+    )
+    .await
+    .unwrap();
+    Mock::given(method("GET"))
+        .and(path("/api/v1/metrics/a%2Fb%3Ftoken%3Dx"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"type":"gauge"})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    execute(
+        &server,
+        "metrics",
+        "v1.GetMetricMetadata",
+        json!({"path":{"metric_name":"a/b?token=x"}}),
+    )
+    .await
+    .unwrap();
+    let requests = server.received_requests().await.unwrap();
+    assert!(requests[1].url.query().is_none());
+    assert!(
+        PreparedQuery::prepare(
+            "metrics",
+            "v1.GetMetricMetadata",
+            &json!({"path":{"metric_name":".."}}),
+            None
+        )
+        .is_err()
+    );
+}
+
+#[tokio::test]
+async fn response_limits_and_request_limits_are_observable_errors() {
+    let server = MockServer::start().await;
+    assert!(
+        PreparedQuery::prepare(
+            "containers",
+            "v2.ListContainers",
+            &json!({"query":{"unknown":"secret-value"}}),
+            None
+        )
+        .is_err()
+    );
+    Mock::given(method("GET"))
+        .and(path("/api/v2/containers"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"data":[],"extra":"x".repeat(100)})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let prepared =
+        PreparedQuery::prepare("containers", "v2.ListContainers", &json!({}), None).unwrap();
+    let error = prepared
+        .execute(
+            &client(&server),
+            "datadoghq.com",
+            Duration::from_secs(2),
+            32,
+            4,
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, DatadogError::QueryError(_)));
+    assert!(error.to_string().contains("byte execution budget"));
+}
+
+#[tokio::test]
+async fn query_deadlines_include_retry_wait_and_denials_never_retry() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v2/containers"))
+        .respond_with(ResponseTemplate::new(503).insert_header("retry-after", "5"))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let prepared =
+        PreparedQuery::prepare("containers", "v2.ListContainers", &json!({}), None).unwrap();
+    assert!(matches!(
+        prepared
+            .execute(
+                &client(&server),
+                "datadoghq.com",
+                Duration::from_millis(200),
+                4096,
+                4
+            )
+            .await
+            .unwrap_err(),
+        DatadogError::TimeoutError
+    ));
+    server.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v2/containers"))
+        .respond_with(
+            ResponseTemplate::new(403).set_body_json(json!({"errors":["Permission denied"]})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    assert!(matches!(
+        execute(&server, "containers", "v2.ListContainers", json!({}))
+            .await
+            .unwrap_err(),
+        DatadogError::PermissionDenied(_)
+    ));
+}
+
+#[tokio::test]
+async fn query_submissions_are_not_retried_and_api_call_budgets_bound_search_retries() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/api/v2/ddsql/query/tabular"))
+        .respond_with(ResponseTemplate::new(503))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let input = json!({"body":{"data":{"type":"ddsql_query_request","attributes":{"query":"SELECT 1","time":{"from_timestamp":1,"to_timestamp":2}}}}});
+    assert!(matches!(
+        execute(&server, "ddsql", "v2.ExecuteDdsqlTabularQuery", input)
+            .await
+            .unwrap_err(),
+        DatadogError::ApiError { status: 503, .. }
+    ));
+    server.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v2/containers"))
+        .respond_with(ResponseTemplate::new(503))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let prepared =
+        PreparedQuery::prepare("containers", "v2.ListContainers", &json!({}), None).unwrap();
+    assert!(matches!(
+        prepared
+            .execute(
+                &client(&server),
+                "datadoghq.com",
+                Duration::from_secs(2),
+                4096,
+                1
+            )
+            .await
+            .unwrap_err(),
+        DatadogError::ApiError { status: 503, .. }
+    ));
+}
+
+#[tokio::test]
+async fn successful_http_does_not_hide_processing_or_schema_errors() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/api/v2/query/scalar"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"errors":"Invalid metric query"})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let input = json!({"body":{"data":{"type":"scalar_request","attributes":{"from":1,"to":2,"queries":[{"data_source":"metrics","query":"bad","name":"a","aggregator":"avg"}]}}}});
+    assert!(matches!(
+        execute(&server, "metrics", "v2.QueryScalarData", input)
+            .await
+            .unwrap_err(),
+        DatadogError::QueryError(_)
+    ));
+    Mock::given(method("GET"))
+        .and(path("/api/v2/containers"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":"invalid"})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    assert!(matches!(
+        execute(&server, "containers", "v2.ListContainers", json!({}))
+            .await
+            .unwrap_err(),
+        DatadogError::DecodeError(_)
+    ));
+}
+
+#[tokio::test]
+async fn conditional_reads_are_not_empty_resources_and_downloads_preserve_bytes() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v2/csm/ownership/resource/team"))
+        .and(header("if-none-match", "\"version-1\""))
+        .respond_with(ResponseTemplate::new(304).insert_header("etag", "\"version-1\""))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let result = execute(&server,"csm-ownership","v2.GetOwnershipInference",json!({"path":{"resource_id":"resource","owner_type":"team"},"headers":{"If-None-Match":"\"version-1\""}})).await.unwrap();
+    assert!(result["data"].is_null());
+    assert_eq!(result["meta"]["result"]["not_modified"], true);
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("records.csv");
+    let input = json!({"path":{"project_id":"project","dataset_id":"dataset"}});
+    assert!(
+        PreparedQuery::prepare(
+            "agent-observability",
+            "v2.ExportLLMObsDataset",
+            &input,
+            None
+        )
+        .is_err()
+    );
+    Mock::given(method("GET"))
+        .and(path("/api/v2/llm-obs/v1/project/datasets/dataset/export"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_bytes(b"name,value\nitem,1\n".to_vec())
+                .insert_header("content-type", "text/csv"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let prepared = PreparedQuery::prepare(
+        "agent-observability",
+        "v2.ExportLLMObsDataset",
+        &input,
+        Some(output.clone()),
+    )
+    .unwrap();
+    prepared
+        .execute(
+            &client(&server),
+            "datadoghq.com",
+            Duration::from_secs(2),
+            4096,
+            1,
+        )
+        .await
+        .unwrap();
+    assert_eq!(std::fs::read(&output).unwrap(), b"name,value\nitem,1\n");
+    assert!(
+        PreparedQuery::prepare(
+            "agent-observability",
+            "v2.ExportLLMObsDataset",
+            &input,
+            Some(output)
+        )
+        .is_err()
+    );
+}

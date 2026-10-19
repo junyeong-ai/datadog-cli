@@ -6,6 +6,7 @@ Global options work before or after subcommands. JSON retains pagination metadat
 ## Contents
 
 - [`datadog-cli`](#datadog-cli)
+- [`datadog-cli query`](#datadog-cli-query)
 - [`datadog-cli capabilities`](#datadog-cli-capabilities)
 - [`datadog-cli capabilities domains`](#datadog-cli-capabilities-domains)
 - [`datadog-cli capabilities list`](#datadog-cli-capabilities-list)
@@ -56,6 +57,7 @@ High-performance Datadog CLI
 Usage: datadog-cli [OPTIONS] <COMMAND>
 
 Commands:
+  query           Execute a reviewed API query with offline schema validation
   capabilities    Discover reviewed API queries and their input schemas without authentication
   metrics         Query time series metrics
   timeseries      Query timeseries with formulas across multiple metric queries
@@ -91,6 +93,26 @@ Options:
       --pup-org <PUP_ORG>              Named Pup OAuth session (otherwise global config [auth].pup_org)
   -h, --help                           Print help
   -V, --version                        Print version
+```
+
+## `datadog-cli query`
+
+```text
+Execute a reviewed API query with offline schema validation
+
+Usage: datadog-cli query [OPTIONS] <DOMAIN> <OPERATION>
+
+Arguments:
+  <DOMAIN>     Exact domain ID from capabilities domains
+  <OPERATION>  Version-qualified operation ID from capabilities list
+
+Options:
+      --input <INPUT>          JSON request envelope, @FILE, or - for stdin; keys: path, query, headers, body
+      --output <OUTPUT>        Save the original API response to a new file; required for binary/CSV responses
+      --deadline <DEADLINE>    Authentication and API execution deadline in seconds [default: 60]
+      --max-calls <MAX_CALLS>  Maximum API attempts, including retries [default: 4]
+      --max-bytes <MAX_BYTES>  Maximum response bytes across API attempts [default: 8388608]
+  -h, --help                   Print help
 ```
 
 ## `datadog-cli capabilities`

@@ -7,6 +7,9 @@ use super::retry;
 use crate::config::{Config, Credentials};
 use crate::error::{DatadogError, Result};
 
+mod query;
+pub(crate) use query::{QueryBudget, QueryCall, query_headers};
+
 pub struct DatadogClient {
     client: Client,
     base_url: String,

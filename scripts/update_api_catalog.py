@@ -10,9 +10,6 @@ import json
 from pathlib import Path
 import urllib.request
 
-import yaml
-
-
 ROOT = Path(__file__).resolve().parent.parent
 API = ROOT / "api"
 METHODS = {"get", "post", "put", "patch", "delete"}
@@ -73,6 +70,22 @@ def media(content):
     return next(iter(content))
 
 
+def references(value):
+    if not isinstance(value, dict):
+        return
+    reference = value.get("$ref")
+    if isinstance(reference, str) and reference.startswith("#/definitions/"):
+        yield reference.removeprefix("#/definitions/")
+    for key in ("properties", "patternProperties", "definitions", "$defs"):
+        for item in value.get(key, {}).values():
+            yield from references(item)
+    for key in ("items", "additionalProperties", "not", "contains", "propertyNames"):
+        yield from references(value.get(key))
+    for key in ("allOf", "oneOf", "anyOf"):
+        for item in value.get(key, []):
+            yield from references(item)
+
+
 def lines_object(value):
     return "{\n" + ",\n".join(
         json.dumps(key) + ":" + json.dumps(item, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
@@ -81,6 +94,8 @@ def lines_object(value):
 
 
 def main():
+    import yaml
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-dir", type=Path, help="Use already downloaded v1.yaml/v2.yaml")
     args = parser.parse_args()
@@ -152,7 +167,7 @@ def main():
                     entry["body_schema"] = schema(request["content"][request_media].get("schema", {})) if request_media else None
                     entry["responses"] = {}
                     for status, response in operation.get("responses", {}).items():
-                        if not str(status).startswith("2"):
+                        if not str(status).startswith("2") and str(status) != "304":
                             continue
                         response = resolve(document, response)
                         response_media = media(response.get("content", {}))
@@ -160,6 +175,7 @@ def main():
                             "media": response_media,
                             "schema": schema(response["content"][response_media].get("schema", {})) if response_media else None,
                         }
+                    entry["responses"].update(decision.get("additional_responses", {}))
                     entry["retry"] = decision.get("retry", "read")
                     entry["pagination"] = decision.get("pagination")
                     entry["servers"] = operation.get("servers")
@@ -168,7 +184,22 @@ def main():
         raise ValueError(f"Stale review decisions: {set(decisions) - seen}")
     (API / "catalog.json").write_text(lines_object(operations))
     for version, values in definitions.items():
-        (API / f"{version}.schemas.json").write_text(lines_object(values))
+        pending = []
+        for operation in operations.values():
+            if operation["version"] != version or operation["access"] != "query":
+                continue
+            roots = [parameter["schema"] for parameter in operation["parameters"]]
+            roots.append(operation["body_schema"])
+            roots.extend(response["schema"] for response in operation["responses"].values())
+            for root in roots:
+                pending.extend(references(root))
+        needed = set()
+        while pending:
+            name = pending.pop()
+            if name not in needed:
+                needed.add(name)
+                pending.extend(references(values[name]))
+        (API / f"{version}.schemas.json").write_text(lines_object({name: values[name] for name in needed}))
     print(json.dumps({"operations": len(operations), "query": sum(o["access"] == "query" for o in operations.values())}))
 
 

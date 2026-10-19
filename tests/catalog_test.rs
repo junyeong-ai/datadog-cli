@@ -14,6 +14,18 @@ fn query_contracts_compile_offline() {
         if let Err(error) = jsonschema::options().offline().build(&schema) {
             failures.push(format!("{}: {error}", operation.id));
         }
+        for response in operation.responses.values() {
+            if let Some(schema) = &response.schema {
+                let schema = catalog.with_definitions(operation, schema.clone()).unwrap();
+                if let Err(error) = jsonschema::options()
+                    .with_draft(jsonschema::Draft::Draft7)
+                    .offline()
+                    .build(&schema)
+                {
+                    failures.push(format!("{} response: {error}", operation.id));
+                }
+            }
+        }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

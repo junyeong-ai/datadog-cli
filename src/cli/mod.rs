@@ -1,5 +1,6 @@
 mod commands;
 mod discovery;
+mod query;
 use crate::output;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -85,6 +86,8 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
+    #[command(about = "Execute a reviewed API query with offline schema validation")]
+    Query(query::QueryArgs),
     #[command(
         about = "Discover reviewed API queries and their input schemas without authentication"
     )]
@@ -665,6 +668,38 @@ pub enum ConfigAction {
 }
 
 pub async fn run(cli: Cli) -> Result<()> {
+    if let Command::Query(ref args) = cli.command {
+        let input = crate::query::read_input(args.input.as_deref()).await?;
+        let prepared = crate::query::PreparedQuery::prepare(
+            &args.domain,
+            &args.operation,
+            &input,
+            args.output.clone(),
+        )?;
+        let duration = std::time::Duration::from_secs(args.deadline);
+        let (result, format) = tokio::time::timeout(duration, async {
+            let started = std::time::Instant::now();
+            let config = Config::load_with_options(cli.config_options()).await?;
+            let client = DatadogClient::new(&config)?;
+            let remaining = duration.saturating_sub(started.elapsed());
+            let max_bytes = usize::try_from(args.max_bytes).map_err(|_| {
+                crate::error::DatadogError::InvalidInput(
+                    "Response byte budget is too large for this platform".into(),
+                )
+            })?;
+            let result = prepared
+                .execute(&client, &config.site, remaining, max_bytes, args.max_calls)
+                .await?;
+            let format =
+                output::Format::from_str(cli.format.as_deref().unwrap_or(&config.defaults.format))
+                    .map_err(crate::error::DatadogError::InvalidInput)?;
+            Ok::<_, crate::error::DatadogError>((result, format))
+        })
+        .await
+        .map_err(|_| crate::error::DatadogError::TimeoutError)??;
+        output::print_api_diagnostics(&result)?;
+        return output::print(&result, &format).map_err(Into::into);
+    }
     if let Command::Capabilities { ref action } = cli.command {
         let data = discovery::execute(action)?;
         let format = output::Format::from_str(cli.format.as_deref().unwrap_or("json"))

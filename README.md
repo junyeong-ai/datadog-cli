@@ -43,6 +43,17 @@ datadog-cli capabilities list --domain ci-visibility-pipelines
 datadog-cli capabilities show v2.SearchCIAppPipelineEvents
 ```
 
+검토된 API는 `query DOMAIN VERSION.OPERATION --input JSON`으로 실행합니다. 입력의 `path`·`query`·`headers`·`body`는 해당 공식 API 구조를 따르며, 인증 실행 전에 스키마를 검증합니다. `--input @request.json` 또는 `--input -`로 파일·표준 입력을 사용할 수 있습니다.
+
+```bash
+datadog-cli query containers v2.ListContainers
+datadog-cli query metrics v1.GetMetricMetadata --input '{"path":{"metric_name":"system.cpu.user"}}'
+```
+
+`query`의 `.data`는 변형하지 않은 API 응답이며 기존 조회 명령의 출력 경로와 다릅니다. `.meta`에는 명세 출처·HTTP 상태·API 메타데이터·실행 비용을 보존합니다. JSONL은 API 응답 하나만 출력하며 CLI 메타데이터는 포함하지 않습니다. 단일 응답은 전체 검색 결과 수집 완료를 뜻하지 않습니다.
+
+기본 제한은 인증·API 실행 60초, 재시도 포함 4회 호출, 누적 응답 본문 8 MiB입니다. `--deadline`·`--max-calls`·`--max-bytes`로 조정할 수 있습니다. CSV·바이너리는 `--output PATH`가 필요하며 기존 파일을 덮어쓰지 않습니다. 제품 활성화·권한·사이트 지원은 API에 따라 다릅니다. [명세와 지원 정책](api/README.md)을 참고하세요.
+
 ```bash
 datadog-cli config init
 datadog-cli config edit

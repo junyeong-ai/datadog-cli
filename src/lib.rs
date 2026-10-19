@@ -16,3 +16,4 @@ pub(crate) mod output;
 mod auth;
 
 pub mod catalog;
+pub mod query;

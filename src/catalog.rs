@@ -309,18 +309,35 @@ impl Catalog {
 }
 
 fn references(value: &Value, output: &mut Vec<String>) {
-    match value {
-        Value::Object(fields) => {
-            if let Some(reference) = fields.get("$ref").and_then(Value::as_str)
-                && let Some(name) = reference.strip_prefix("#/definitions/")
-            {
-                output.push(name.to_string());
-            }
-            for value in fields.values() {
-                references(value, output);
-            }
+    let Some(fields) = value.as_object() else {
+        return;
+    };
+    if let Some(name) = fields
+        .get("$ref")
+        .and_then(Value::as_str)
+        .and_then(|value| value.strip_prefix("#/definitions/"))
+    {
+        output.push(name.to_string());
+    }
+    for keyword in ["properties", "patternProperties", "definitions", "$defs"] {
+        if let Some(values) = fields.get(keyword).and_then(Value::as_object) {
+            values.values().for_each(|value| references(value, output));
         }
-        Value::Array(values) => values.iter().for_each(|value| references(value, output)),
-        _ => {}
+    }
+    for keyword in [
+        "items",
+        "additionalProperties",
+        "not",
+        "contains",
+        "propertyNames",
+    ] {
+        if let Some(value) = fields.get(keyword) {
+            references(value, output);
+        }
+    }
+    for keyword in ["allOf", "oneOf", "anyOf"] {
+        if let Some(values) = fields.get(keyword).and_then(Value::as_array) {
+            values.iter().for_each(|value| references(value, output));
+        }
     }
 }

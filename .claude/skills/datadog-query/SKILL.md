@@ -10,6 +10,7 @@ Use `datadog-cli` to query existing resources. Report the observed result, time 
 
 - **Command syntax:** use `datadog-cli <command> --help` or the relevant section of [reference.md](reference.md). Read only the commands needed.
 - **API discovery:** `capabilities domains`, then `capabilities list --domain DOMAIN` and `capabilities show VERSION.OPERATION` provide reviewed contracts without authentication. Catalog support does not establish organization access.
+- **Additional products:** execute `query DOMAIN VERSION.OPERATION --input JSON` using the discovered schema. The envelope accepts `path`, `query`, `headers`, and `body`; `@FILE` and `-` read a file or stdin. `.data` retains the original API response, unlike legacy projections. JSONL emits one response without metadata. Each invocation returns one response; retain API continuation and fix time bounds across pages. CSV/binary responses require a new `--output` file. Keep the execution deadline, call, and response-byte budgets bounded.
 - **Investigations and bounded pagination:** read [examples.md](examples.md) for counts, samples, correlation, formulas, and LLM spans.
 - **Setup or authentication failures:** read [authentication guidance](examples.md#authentication-and-access). Use configured credentials without printing them or changing identity automatically.
 

@@ -29,6 +29,7 @@ fastrand = "2.5.0"
 httpdate = "1.0.3"
 jsonschema = { version = "0.59.0", default-features = false }
 percent-encoding = "2.3.2"
+tempfile = "3.27.0"
 
 [target.'cfg(not(windows))'.dependencies]
 shlex = "2.0.1"
@@ -40,7 +41,6 @@ windows-args = "0.2.0"
 tokio = { version = "1.53.3", features = ["net", "io-util"] }
 wiremock = "0.6.5"
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support", "html_reports"] }
-tempfile = "3.27.0"
 
 [target.'cfg(unix)'.dev-dependencies]
 libc = "0.2.191"

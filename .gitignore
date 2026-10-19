@@ -76,5 +76,6 @@ mcp-datadog
 *.dylib
 
 # Test artifacts
+__pycache__/
 test-results/
 *.test
