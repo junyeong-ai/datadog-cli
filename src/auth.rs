@@ -1,4 +1,6 @@
 use crate::error::{DatadogError, Result};
+use std::fs::{File, TryLockError};
+use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
@@ -28,7 +30,59 @@ pub(crate) async fn pup_token(site: &str, org: &str) -> Result<String> {
         .env_remove("DD_TOKEN")
         .env_remove("DD_API_KEY")
         .env_remove("DD_APP_KEY");
-    token_from_command(command, PROVIDER_TIMEOUT).await
+    let lock_path = crate::config::Config::global_config_path()
+        .ok_or_else(|| DatadogError::AuthError("Cannot determine the OAuth lock directory".into()))?
+        .with_file_name(format!(".pup-{site}.lock"));
+    token_from_command_locked(command, &lock_path, PROVIDER_TIMEOUT).await
+}
+
+async fn provider_lock(path: &Path) -> Result<File> {
+    let parent = path.parent().ok_or_else(|| {
+        DatadogError::AuthError("Cannot determine the OAuth lock directory".into())
+    })?;
+    std::fs::create_dir_all(parent)
+        .map_err(|_| DatadogError::AuthError("Cannot create the OAuth lock directory".into()))?;
+    let mut options = File::options();
+    options.read(true).write(true).create(true).truncate(false);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let file = options
+        .open(path)
+        .map_err(|_| DatadogError::AuthError("Cannot open the OAuth provider lock".into()))?;
+    loop {
+        match file.try_lock() {
+            Ok(()) => return Ok(file),
+            Err(TryLockError::WouldBlock) => tokio::time::sleep(Duration::from_millis(25)).await,
+            Err(TryLockError::Error(_)) => {
+                return Err(DatadogError::AuthError(
+                    "Cannot lock the OAuth provider".into(),
+                ));
+            }
+        }
+    }
+}
+
+async fn token_from_command_locked(
+    command: Command,
+    path: &Path,
+    timeout: Duration,
+) -> Result<String> {
+    let started = tokio::time::Instant::now();
+    let _guard = tokio::time::timeout(timeout, provider_lock(path))
+        .await
+        .map_err(|_| {
+            DatadogError::AuthError("Pup authentication exceeded its time limit".into())
+        })??;
+    let remaining = timeout
+        .checked_sub(started.elapsed())
+        .filter(|remaining| !remaining.is_zero())
+        .ok_or_else(|| {
+            DatadogError::AuthError("Pup authentication exceeded its time limit".into())
+        })?;
+    token_from_command(command, remaining).await
 }
 
 async fn token_from_command(mut command: Command, timeout: Duration) -> Result<String> {
@@ -117,6 +171,15 @@ mod tests {
 use std::io::Write;
 fn main() {
     std::fs::write(std::env::args_os().nth(1).unwrap(), std::process::id().to_string()).unwrap();
+    if std::env::args().nth(2).as_deref() == Some("serialized") {
+        let marker = std::env::args_os().nth(3).unwrap();
+        let guard = std::fs::File::create_new(&marker).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(75));
+        drop(guard);
+        std::fs::remove_file(marker).unwrap();
+        println!("fixture-token");
+        return;
+    }
     if std::env::args().nth(2).as_deref() == Some("oversize") {
         std::io::stdout().write_all(&vec![b'x'; 32768]).unwrap();
     }
@@ -149,5 +212,43 @@ fn main() {
             #[cfg(windows)]
             let _ = pid;
         }
+        let lock = root.path().join("provider.lock");
+        let marker = root.path().join("critical-section");
+        let commands = ["first", "second", "third"].map(|name| {
+            let mut command = Command::new(&executable);
+            command
+                .arg(root.path().join(name))
+                .arg("serialized")
+                .arg(&marker);
+            command
+        });
+        let [first, second, third] = commands;
+        let results = tokio::join!(
+            token_from_command_locked(first, &lock, Duration::from_secs(3)),
+            token_from_command_locked(second, &lock, Duration::from_secs(3)),
+            token_from_command_locked(third, &lock, Duration::from_secs(3)),
+        );
+        assert_eq!(results.0.unwrap(), "fixture-token");
+        assert_eq!(results.1.unwrap(), "fixture-token");
+        assert_eq!(results.2.unwrap(), "fixture-token");
+    }
+
+    #[tokio::test]
+    async fn provider_lock_timeout_does_not_start_a_credential_process() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("provider.lock");
+        let guard = provider_lock(&path).await.unwrap();
+        let error = token_from_command_locked(
+            Command::new(root.path().join("must-not-start")),
+            &path,
+            Duration::from_millis(50),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.exit_code(), 3);
+        assert!(error.to_string().contains("time limit"));
+        drop(guard);
+        let guard = provider_lock(&path).await.unwrap();
+        drop(guard);
     }
 }

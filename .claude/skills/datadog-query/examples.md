@@ -114,7 +114,7 @@ Configuration merges global `~/.config/datadog-cli/config.toml` → nearest proj
 
 The global `[auth].method` selects `api-keys`, `token`, or `oauth`. An explicit method ignores unrelated credential types, including environment values. Without it, a nonempty token wins within a source, and explicit keys in a higher source replace a lower token. Missing key fields inherit lower values; an empty token clears an inherited token.
 
-OAuth uses global `[auth].pup_org` and Pup 2.0+ on PATH. Pup owns storage and refresh. For a user-selected override, use `--auth-method oauth --pup-org <session> --site <site>`. The session name identifies stored credentials; the actual Datadog organization is selected during consent. Project `[auth]` is rejected, and a conflicting project site requires an explicit site override.
+OAuth uses global `[auth].pup_org` and Pup 2.0+ on PATH. Pup owns storage and refresh. The CLI serializes provider processes per site with a token-free OS file lock; waiting and execution share a 60-second budget. Direct Pup commands do not participate in that CLI lock. For a user-selected override, use `--auth-method oauth --pup-org <session> --site <site>`. The session name identifies stored credentials; the actual Datadog organization is selected during consent. Project `[auth]` is rejected, and a conflicting project site requires an explicit site override.
 
 ### Failures
 
