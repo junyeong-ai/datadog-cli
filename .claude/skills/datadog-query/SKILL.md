@@ -12,6 +12,7 @@ Use `datadog-cli <command> --help` or the relevant section in [reference.md](ref
 
 ## Query decisions
 
+- For `llm-obs`, use a positional query or structured `--ml-app`/`--span-kind` filters, never both. This preview API follows the Agent Observability contract.
 - Select the narrowest useful service, environment, and time window. Time inputs accept relative expressions, RFC3339, or Unix seconds.
 - Use `--format json` when pagination or metadata matters. Use `--format jsonl` for record pipelines. Global flags work before or after subcommands; diagnostics go to stderr.
 - Inspect `.meta.api.status` and `.meta.api.warnings` in JSON. Server timeouts and warnings are also reported on stderr in every format, even when the command exits 0. Treat warned results as potentially incomplete; do not interpret warned aggregates as complete counts.

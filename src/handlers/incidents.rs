@@ -17,7 +17,7 @@ impl IncidentsHandler {
             .list_incidents(args.count, args.start, args.include.as_deref())
             .await?;
 
-        let data = response.get("data").cloned().unwrap_or_else(|| json!([]));
+        let data = json!(crate::datadog::models::response_records(&response)?);
         let returned = data.as_array().map(|a| a.len()).unwrap_or(0);
 
         let pagination = PaginationInfo::from_offset_without_total(
@@ -43,7 +43,7 @@ impl IncidentsHandler {
         let response = client
             .get_incident(&args.incident_id, args.include.as_deref())
             .await?;
-        let data = response.get("data").cloned().unwrap_or(Value::Null);
+        let data = crate::datadog::models::response_resource(&response)?;
 
         let meta = response
             .get("included")

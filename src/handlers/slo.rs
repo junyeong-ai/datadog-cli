@@ -22,7 +22,7 @@ impl SloHandler {
             )
             .await?;
 
-        let data = response.get("data").cloned().unwrap_or_else(|| json!([]));
+        let data = json!(crate::datadog::models::response_records(&response)?);
         let returned = data.as_array().map(|a| a.len()).unwrap_or(0);
 
         let pagination = PaginationInfo::from_offset_total(
@@ -42,7 +42,7 @@ impl SloHandler {
         let handler = SloHandler;
 
         let response = client.get_slo(slo_id).await?;
-        let data = response.get("data").cloned().unwrap_or(Value::Null);
+        let data = crate::datadog::models::response_resource(&response)?;
 
         Ok(handler.format_detail(data))
     }

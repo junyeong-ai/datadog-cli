@@ -186,11 +186,12 @@ datadog-cli hosts --filter "env:production"
 datadog-cli dashboards list
 datadog-cli teams --keyword platform
 datadog-cli audit "@action:login"
-datadog-cli llm-obs "@ml_app:chatbot" --span-kind llm
+datadog-cli llm-obs --ml-app chatbot --span-kind llm
 ```
 
 시간은 `now`, `1 hour ago`, `30m ago`, RFC3339 또는 Unix **초**로 입력합니다. 시작 시간은 종료 시간보다 늦을 수 없습니다.
-LLM Observability는 프리뷰 API에 의존합니다. 인시던트 등 제품별 기능은 계정의 제품 활성화와 권한이 필요합니다.
+LLM Observability는 Agent Observability 프리뷰 API에 의존합니다. 위치 인자로 쿼리를 전달하거나 `--ml-app`·`--span-kind`로 필터링할 수 있으며, 두 방식은 함께 사용할 수 없습니다. 쿼리는 수정 없이 전송합니다.
+Rust의 `search_llm_obs_spans`는 `LlmObsSearchParams`와 `LlmObsFilter`로 조회 방식을 구분합니다. 인시던트 등 제품별 기능은 계정의 제품 활성화와 권한이 필요합니다.
 
 ## 출력과 자동화
 

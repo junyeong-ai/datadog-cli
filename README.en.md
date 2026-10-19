@@ -186,11 +186,12 @@ datadog-cli hosts --filter "env:production"
 datadog-cli dashboards list
 datadog-cli teams --keyword platform
 datadog-cli audit "@action:login"
-datadog-cli llm-obs "@ml_app:chatbot" --span-kind llm
+datadog-cli llm-obs --ml-app chatbot --span-kind llm
 ```
 
 Time inputs accept `now`, `1 hour ago`, `30m ago`, RFC3339, or Unix **seconds**. Start time must not exceed end time.
-LLM Observability uses a preview API. Product-specific features such as incidents require the relevant product and permissions.
+LLM Observability uses the Agent Observability preview API. Supply a positional query or structured `--ml-app`/`--span-kind` filters; the two modes are mutually exclusive. Queries are passed unchanged.
+Rust `search_llm_obs_spans` accepts `LlmObsSearchParams` and `LlmObsFilter` to distinguish these modes. Product-specific features such as incidents require the relevant product and permissions.
 
 ## Output and automation
 

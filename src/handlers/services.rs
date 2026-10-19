@@ -27,7 +27,7 @@ impl ServicesHandler {
         // Catalog entities are passed through unmodified: their shape is
         // schema-version dependent (v3 entity model), so projecting fields
         // here would silently drop data.
-        let data = response.get("data").cloned().unwrap_or_else(|| json!([]));
+        let data = json!(crate::datadog::models::response_records(&response)?);
         let returned = data.as_array().map(|a| a.len()).unwrap_or(0);
 
         let pagination = PaginationInfo::from_offset_total(

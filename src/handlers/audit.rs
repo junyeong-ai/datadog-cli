@@ -27,7 +27,7 @@ impl AuditHandler {
             })
             .await?;
 
-        let data = response.get("data").cloned().unwrap_or_else(|| json!([]));
+        let data = json!(crate::datadog::models::response_records(&response)?);
         let returned = data.as_array().map(|a| a.len()).unwrap_or(0);
 
         let next_cursor = response

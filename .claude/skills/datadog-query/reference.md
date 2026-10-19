@@ -130,7 +130,7 @@ Options:
       --to <TO>                      Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
       --limit <LIMIT>                [default: 10]
       --cursor <CURSOR>              Pagination cursor from previous response
-      --sort <SORT>                  Sort order (use --sort="-timestamp" for descending)
+      --sort <SORT>                  Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
       --storage-tier <STORAGE_TIER>  Storage tier to search (default: indexes) [possible values: indexes, online-archives, flex]
       --tag-filter <TAG_FILTER>      Tag prefixes to include (default from config)
   -h, --help                         Print help
@@ -198,7 +198,7 @@ Options:
       --tags <TAGS>                  Filter by resource tags
       --monitor-tags <MONITOR_TAGS>  Filter by monitor tags
       --page <PAGE>                  Page number [default: 0]
-      --page-size <PAGE_SIZE>        Results per page [default: 100]
+      --page-size <PAGE_SIZE>        Results per page (max 1000) [default: 100]
   -h, --help                         Print help
 ```
 
@@ -231,7 +231,7 @@ Options:
       --to <TO>          Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
       --limit <LIMIT>    [default: 10]
       --cursor <CURSOR>  Pagination cursor from previous response
-      --sort <SORT>      Sort order (use --sort="-timestamp" for descending)
+      --sort <SORT>      Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
   -h, --help             Print help
 ```
 
@@ -313,7 +313,7 @@ Options:
       --to <TO>                  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
       --limit <LIMIT>            [default: 10]
       --cursor <CURSOR>          Pagination cursor from previous response
-      --sort <SORT>              Sort order (use --sort="-timestamp" for descending)
+      --sort <SORT>              Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
       --tag-filter <TAG_FILTER>  Tag prefixes to include (default from config)
       --full-stack-trace         Show full stack traces
   -h, --help                     Print help
@@ -351,7 +351,7 @@ Options:
       --to <TO>                  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
       --limit <LIMIT>            [default: 10]
       --cursor <CURSOR>          Pagination cursor from previous response
-      --sort <SORT>              Sort order (use --sort="-timestamp" for descending)
+      --sort <SORT>              Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
       --tag-filter <TAG_FILTER>  Tag prefixes to include (default from config)
       --full-stack-trace         Show full stack traces
   -h, --help                     Print help
@@ -524,7 +524,7 @@ Options:
       --to <TO>          Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
       --limit <LIMIT>    [default: 10]
       --cursor <CURSOR>  Pagination cursor from previous response
-      --sort <SORT>      Sort order (use --sort="-timestamp" for descending)
+      --sort <SORT>      Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
   -h, --help             Print help
 ```
 
@@ -551,16 +551,16 @@ Search LLM Observability spans (preview API, subject to change)
 Usage: datadog-cli llm-obs [OPTIONS] [QUERY]
 
 Arguments:
-  [QUERY]  LLM Observability span query [default: *]
+  [QUERY]  Agent Observability query; conflicts with structured filters
 
 Options:
       --from <FROM>            Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
       --to <TO>                Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
-      --limit <LIMIT>          Results per page (max 5000) [default: 10]
+      --limit <LIMIT>          Results per page (CLI max 5000) [default: 10]
       --cursor <CURSOR>        Pagination cursor from previous response
       --sort <SORT>            Sort order (use --sort="-timestamp" for descending)
       --ml-app <ML_APP>        Filter by ML application name
-      --span-kind <SPAN_KIND>  Filter by span kind [possible values: agent, workflow, llm, tool, task, embedding, retrieval]
+      --span-kind <SPAN_KIND>  Filter by span kind (e.g. agent, workflow, llm, tool)
   -h, --help                   Print help
 ```
 

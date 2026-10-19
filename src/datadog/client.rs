@@ -14,6 +14,23 @@ pub struct SearchParams<'a> {
     pub sort: Option<&'a str>,
 }
 
+pub enum LlmObsFilter<'a> {
+    Query(&'a str),
+    Structured {
+        ml_app: Option<&'a str>,
+        span_kind: Option<&'a str>,
+    },
+}
+
+pub struct LlmObsSearchParams<'a> {
+    pub filter: LlmObsFilter<'a>,
+    pub from: &'a str,
+    pub to: &'a str,
+    pub limit: i32,
+    pub cursor: Option<&'a str>,
+    pub sort: Option<&'a str>,
+}
+
 impl DatadogClient {
     /// Builds the common request body for the v2 cursor-paginated search
     /// endpoints: `filter.{query,from,to}` + `page.{limit,cursor}` + `sort`.
@@ -501,6 +518,7 @@ impl DatadogClient {
             None::<()>,
         )
         .await
+        .and_then(validate_required_records)
     }
 
     pub async fn get_incident(
@@ -513,6 +531,7 @@ impl DatadogClient {
 
         self.request(reqwest::Method::GET, &endpoint, params, None::<()>)
             .await
+            .and_then(validate_required_resource)
     }
 
     // ============= Error Tracking API =============
@@ -631,22 +650,32 @@ impl DatadogClient {
 
     // ============= LLM Observability API =============
 
-    /// Preview endpoint ("subject to change" per Datadog docs). Requires the
-    /// JSON:API content type and a `type: "spans"` envelope — this differs
-    /// from the APM spans endpoint's `search_request` type.
+    /// Preview Agent Observability API. Query and structured filters are
+    /// separate modes because the API ignores structured filters with a query.
     pub async fn search_llm_obs_spans(
         &self,
-        params: &SearchParams<'_>,
-        ml_app: Option<&str>,
-        span_kind: Option<&str>,
+        params: &LlmObsSearchParams<'_>,
     ) -> Result<serde_json::Value> {
-        let mut attributes = Self::search_body(params);
-
-        if let Some(app) = ml_app {
-            attributes["filter"]["ml_app"] = serde_json::json!(app);
+        let mut attributes = serde_json::json!({
+            "filter": {"from":params.from, "to":params.to},
+            "page": {"limit":params.limit}
+        });
+        match &params.filter {
+            LlmObsFilter::Query(query) => attributes["filter"]["query"] = serde_json::json!(query),
+            LlmObsFilter::Structured { ml_app, span_kind } => {
+                if let Some(app) = ml_app {
+                    attributes["filter"]["ml_app"] = serde_json::json!(app);
+                }
+                if let Some(kind) = span_kind {
+                    attributes["filter"]["span_kind"] = serde_json::json!(kind);
+                }
+            }
         }
-        if let Some(kind) = span_kind {
-            attributes["filter"]["span_kind"] = serde_json::json!(kind);
+        if let Some(cursor) = params.cursor {
+            attributes["page"]["cursor"] = serde_json::json!(cursor);
+        }
+        if let Some(sort) = params.sort {
+            attributes["sort"] = serde_json::json!(sort);
         }
 
         let body = serde_json::json!({
@@ -656,13 +685,13 @@ impl DatadogClient {
             }
         });
 
-        self.request_with_content_type(
+        self.request(
             reqwest::Method::POST,
             "/api/v2/llm-obs/v1/spans/events/search",
             None,
             Some(body),
-            "application/vnd.api+json",
         )
         .await
+        .and_then(validate_llm_response)
     }
 }

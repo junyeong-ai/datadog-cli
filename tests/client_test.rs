@@ -525,24 +525,24 @@ async fn list_catalog_entities_sends_offset_pagination() {
 }
 
 #[tokio::test]
-async fn search_llm_obs_spans_uses_spans_envelope_and_vnd_content_type() {
+async fn search_llm_obs_spans_uses_documented_query_envelope() {
     let server = MockServer::start().await;
 
     Mock::given(method("POST"))
         .and(path("/api/v2/llm-obs/v1/spans/events/search"))
-        .and(header("content-type", "application/vnd.api+json"))
+        .and(header("content-type", "application/json"))
         .and(body_partial_json(json!({
             "data": {
                 "type": "spans",
                 "attributes": {
-                    "filter": { "query": "@ml_app:chatbot", "ml_app": "chatbot" },
+                    "filter": { "query": "@ml_app:chatbot" },
                     "page": { "limit": 50 }
                 }
             }
         })))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "data": [{ "id": "llm-span-1", "type": "spans" }],
-            "meta": { "page": { "after": "llm-cursor" } }
+            "data": [{ "id": "llm-span-1", "type": "span", "attributes": {} }],
+            "meta": { "page": { "after": "llm-cursor" }, "elapsed":1, "request_id":"fixture", "status":"done" }
         })))
         .expect(1)
         .mount(&server)
@@ -550,18 +550,14 @@ async fn search_llm_obs_spans_uses_spans_envelope_and_vnd_content_type() {
 
     let client = client_for(&server, 3);
     let response = client
-        .search_llm_obs_spans(
-            &SearchParams {
-                query: "@ml_app:chatbot",
-                from: "2026-07-10T00:00:00+00:00",
-                to: "2026-07-10T01:00:00+00:00",
-                limit: 50,
-                cursor: None,
-                sort: None,
-            },
-            Some("chatbot"),
-            None,
-        )
+        .search_llm_obs_spans(&datadog_cli::datadog::LlmObsSearchParams {
+            filter: datadog_cli::datadog::LlmObsFilter::Query("@ml_app:chatbot"),
+            from: "2026-07-10T00:00:00+00:00",
+            to: "2026-07-10T01:00:00+00:00",
+            limit: 50,
+            cursor: None,
+            sort: None,
+        })
         .await
         .unwrap();
 

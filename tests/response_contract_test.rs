@@ -3,9 +3,9 @@ use datadog_cli::cli::{Cli, Command, LogsAction};
 use datadog_cli::config::{Config, Credentials, Defaults, Network};
 use datadog_cli::datadog::DatadogClient;
 use datadog_cli::handlers::{
-    downtimes::DowntimesHandler, logs::LogsHandler, metrics::MetricsHandler,
-    monitors::MonitorsHandler, services::ServicesHandler, slo::SloHandler, spans::SpansHandler,
-    teams::TeamsHandler,
+    downtimes::DowntimesHandler, llm_obs::LlmObsHandler, logs::LogsHandler,
+    metrics::MetricsHandler, monitors::MonitorsHandler, services::ServicesHandler, slo::SloHandler,
+    spans::SpansHandler, teams::TeamsHandler,
 };
 use serde_json::{Value, json};
 use wiremock::matchers::path;
@@ -25,6 +25,144 @@ fn client(server: &MockServer) -> DatadogClient {
         server.uri(),
     )
     .unwrap()
+}
+
+#[tokio::test]
+async fn llm_query_and_structured_filters_are_distinct_request_modes() {
+    for (argv, expected_query, expected_app) in [
+        (vec!["datadog-cli", "llm-obs"], None, None),
+        (
+            vec![
+                "datadog-cli",
+                "llm-obs",
+                "@ml_app:chatbot AND @meta.span.kind:llm",
+            ],
+            Some("@ml_app:chatbot AND @meta.span.kind:llm"),
+            None,
+        ),
+        (
+            vec![
+                "datadog-cli",
+                "llm-obs",
+                "--ml-app",
+                "chatbot",
+                "--span-kind",
+                "llm",
+            ],
+            None,
+            Some("chatbot"),
+        ),
+    ] {
+        let server = MockServer::start().await;
+        respond(
+            &server,
+            "/api/v2/llm-obs/v1/spans/events/search",
+            json!({
+                "data":[], "meta":{"elapsed":1,"request_id":"fixture","status":"done","page":{}}
+            }),
+        )
+        .await;
+        let Command::LlmObs(args) = Cli::parse_from(argv).command else {
+            panic!()
+        };
+        LlmObsHandler::search(&client(&server), &args)
+            .await
+            .unwrap();
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(
+            requests[0].headers.get("content-type").unwrap(),
+            "application/json"
+        );
+        let body: Value = serde_json::from_slice(&requests[0].body).unwrap();
+        let filter = &body["data"]["attributes"]["filter"];
+        assert_eq!(filter.get("query").and_then(Value::as_str), expected_query);
+        assert_eq!(filter.get("ml_app").and_then(Value::as_str), expected_app);
+        if expected_app.is_some() {
+            assert_eq!(filter["span_kind"], "llm");
+        }
+    }
+    for args in [
+        vec!["datadog-cli", "llm-obs", "*", "--ml-app", "chatbot"],
+        vec![
+            "datadog-cli",
+            "llm-obs",
+            "@ml_app:chatbot",
+            "--span-kind",
+            "llm",
+        ],
+        vec!["datadog-cli", "events", "--limit", "1001"],
+        vec!["datadog-cli", "monitors", "list", "--page-size", "1001"],
+        vec!["datadog-cli", "events", "--sort", "banana"],
+    ] {
+        assert!(Cli::try_parse_from(args).is_err());
+    }
+    assert!(Cli::try_parse_from(["datadog-cli", "events", "--limit", "1000"]).is_ok());
+    assert!(
+        Cli::try_parse_from(["datadog-cli", "monitors", "list", "--page-size", "1000"]).is_ok()
+    );
+}
+
+#[tokio::test]
+async fn malformed_required_responses_fail_instead_of_becoming_empty_results() {
+    use datadog_cli::datadog::{LlmObsFilter, LlmObsSearchParams};
+    for body in [
+        json!({}),
+        json!({"data":null}),
+        json!({"data":{}}),
+        json!({"data":[42]}),
+    ] {
+        let server = MockServer::start().await;
+        respond(&server, "/api/v2/incidents", body).await;
+        assert_eq!(
+            client(&server)
+                .list_incidents(1, 0, None)
+                .await
+                .unwrap_err()
+                .exit_code(),
+            7
+        );
+    }
+    for body in [json!({}), json!({"data":null}), json!({"data":[]})] {
+        let server = MockServer::start().await;
+        respond(&server, "/api/v2/incidents/incident-1", body).await;
+        assert_eq!(
+            client(&server)
+                .get_incident("incident-1", None)
+                .await
+                .unwrap_err()
+                .exit_code(),
+            7
+        );
+    }
+    for body in [
+        json!({"meta":{"elapsed":1,"request_id":"fixture","status":"done","page":{}}}),
+        json!({"data":[]}),
+        json!({"data":[],"meta":{"elapsed":"invalid","request_id":"fixture","status":"done","page":{}}}),
+        json!({"data":[{"id":"span-1","type":"span"}],"meta":{"elapsed":1,"request_id":"fixture","status":"done","page":{}}}),
+    ] {
+        let server = MockServer::start().await;
+        respond(&server, "/api/v2/llm-obs/v1/spans/events/search", body).await;
+        let params = LlmObsSearchParams {
+            filter: LlmObsFilter::Structured {
+                ml_app: None,
+                span_kind: None,
+            },
+            from: "2026-10-19T00:00:00Z",
+            to: "2026-10-19T00:05:00Z",
+            limit: 1,
+            cursor: None,
+            sort: None,
+        };
+        assert_eq!(
+            client(&server)
+                .search_llm_obs_spans(&params)
+                .await
+                .unwrap_err()
+                .exit_code(),
+            7
+        );
+    }
 }
 
 #[tokio::test]

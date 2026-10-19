@@ -263,7 +263,7 @@ pub struct AuditArgs {
     #[arg(long, help = "Pagination cursor from previous response")]
     pub cursor: Option<String>,
 
-    #[arg(long, help = SORT_HELP)]
+    #[arg(long, value_parser = ["timestamp", "-timestamp"], help = SORT_HELP)]
     pub sort: Option<String>,
 }
 
@@ -284,8 +284,8 @@ pub struct TeamsArgs {
 
 #[derive(Args)]
 pub struct LlmObsArgs {
-    #[arg(default_value = "*", help = "LLM Observability span query")]
-    pub query: String,
+    #[arg(conflicts_with_all = ["ml_app", "span_kind"], help = "Agent Observability query; conflicts with structured filters")]
+    pub query: Option<String>,
 
     #[arg(long, default_value = "1 hour ago", help = TIME_HELP)]
     pub from: String,
@@ -293,7 +293,7 @@ pub struct LlmObsArgs {
     #[arg(long, default_value = "now", help = TIME_HELP)]
     pub to: String,
 
-    #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=5000), help = "Results per page (max 5000)")]
+    #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=5000), help = "Results per page (CLI max 5000)")]
     pub limit: i32,
 
     #[arg(long, help = "Pagination cursor from previous response")]
@@ -305,7 +305,7 @@ pub struct LlmObsArgs {
     #[arg(long, help = "Filter by ML application name")]
     pub ml_app: Option<String>,
 
-    #[arg(long, value_parser = ["agent", "workflow", "llm", "tool", "task", "embedding", "retrieval"], help = "Filter by span kind")]
+    #[arg(long, help = "Filter by span kind (e.g. agent, workflow, llm, tool)")]
     pub span_kind: Option<String>,
 }
 
@@ -376,13 +376,13 @@ pub struct EventsArgs {
     #[arg(long, default_value = "now", help = TIME_HELP)]
     pub to: String,
 
-    #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..))]
+    #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000))]
     pub limit: i32,
 
     #[arg(long, help = "Pagination cursor from previous response")]
     pub cursor: Option<String>,
 
-    #[arg(long, help = SORT_HELP)]
+    #[arg(long, value_parser = ["timestamp", "-timestamp"], help = SORT_HELP)]
     pub sort: Option<String>,
 }
 
@@ -427,7 +427,7 @@ pub struct SpansArgs {
     #[arg(long, help = "Pagination cursor from previous response")]
     pub cursor: Option<String>,
 
-    #[arg(long, help = SORT_HELP)]
+    #[arg(long, value_parser = ["timestamp", "-timestamp"], help = SORT_HELP)]
     pub sort: Option<String>,
 
     #[arg(long, help = "Tag prefixes to include (default from config)")]
@@ -479,7 +479,7 @@ pub struct RumArgs {
     #[arg(long, help = "Pagination cursor from previous response")]
     pub cursor: Option<String>,
 
-    #[arg(long, help = SORT_HELP)]
+    #[arg(long, value_parser = ["timestamp", "-timestamp"], help = SORT_HELP)]
     pub sort: Option<String>,
 
     #[arg(long, help = "Tag prefixes to include (default from config)")]
@@ -518,7 +518,7 @@ pub struct LogsSearchArgs {
     #[arg(long, help = "Pagination cursor from previous response")]
     pub cursor: Option<String>,
 
-    #[arg(long, help = SORT_HELP)]
+    #[arg(long, value_parser = ["timestamp", "-timestamp"], help = SORT_HELP)]
     pub sort: Option<String>,
 
     #[arg(long, value_parser = ["indexes", "online-archives", "flex"], help = "Storage tier to search (default: indexes)")]
@@ -589,7 +589,7 @@ pub struct MonitorsListArgs {
     #[arg(long, default_value = "0", value_parser = clap::value_parser!(i32).range(0..), help = "Page number")]
     pub page: i32,
 
-    #[arg(long, default_value = "100", value_parser = clap::value_parser!(i32).range(1..), help = "Results per page")]
+    #[arg(long, default_value = "100", value_parser = clap::value_parser!(i32).range(1..=1000), help = "Results per page (max 1000)")]
     pub page_size: i32,
 }
 

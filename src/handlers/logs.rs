@@ -109,7 +109,7 @@ impl LogsHandler {
             .aggregate_logs(&args.query, &from, &to, compute)
             .await?;
 
-        let data = response["data"].clone();
+        let data = crate::datadog::models::response_resource(&response)?;
         let buckets_count = data
             .get("buckets")
             .and_then(|b| b.as_array())
@@ -147,7 +147,7 @@ impl LogsHandler {
             .aggregate_logs(&args.query, &from, &to, compute)
             .await?;
 
-        let data = response["data"].clone();
+        let data = crate::datadog::models::response_resource(&response)?;
         let buckets_count = data
             .get("buckets")
             .and_then(|b| b.as_array())

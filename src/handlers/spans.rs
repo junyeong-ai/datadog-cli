@@ -34,13 +34,10 @@ impl SpansHandler {
 
         let tag_filter = handler.resolve_tag_filter(args.tag_filter.as_deref(), client);
 
-        let data: Vec<Value> = response["data"]
-            .as_array()
-            .map(Vec::as_slice)
-            .unwrap_or_default()
+        let data: Vec<Value> = crate::datadog::models::response_records(&response)?
             .iter()
-            .filter_map(|span| {
-                let mut span_obj = span.as_object()?.clone();
+            .map(|span| {
+                let mut span_obj = span.clone();
 
                 if let Some(attrs) = span_obj.get_mut("attributes")
                     && let Some(attrs_obj) = attrs.as_object_mut()
@@ -89,7 +86,7 @@ impl SpansHandler {
                     }
                 }
 
-                Some(Value::Object(span_obj))
+                span_obj
             })
             .collect();
 

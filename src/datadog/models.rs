@@ -1,6 +1,100 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+fn record_array(value: &serde_json::Value) -> crate::error::Result<&[serde_json::Value]> {
+    value
+        .as_array()
+        .filter(|records| records.iter().all(serde_json::Value::is_object))
+        .map(Vec::as_slice)
+        .ok_or_else(|| {
+            crate::error::DatadogError::DecodeError(
+                "Response data must be an array of objects".into(),
+            )
+        })
+}
+
+pub(crate) fn response_records(
+    response: &serde_json::Value,
+) -> crate::error::Result<&[serde_json::Value]> {
+    if !response.is_object() {
+        return Err(crate::error::DatadogError::DecodeError(
+            "Response must be an object".into(),
+        ));
+    }
+    match response.get("data") {
+        Some(data) => record_array(data),
+        None => Ok(&[]),
+    }
+}
+
+pub(crate) fn response_resource(
+    response: &serde_json::Value,
+) -> crate::error::Result<serde_json::Value> {
+    if !response.is_object() {
+        return Err(crate::error::DatadogError::DecodeError(
+            "Response must be an object".into(),
+        ));
+    }
+    match response.get("data") {
+        Some(data) if data.is_object() => Ok(data.clone()),
+        None => Ok(serde_json::Value::Null),
+        Some(_) => Err(crate::error::DatadogError::DecodeError(
+            "Response data must be an object".into(),
+        )),
+    }
+}
+
+pub(crate) fn validate_required_records(
+    response: serde_json::Value,
+) -> crate::error::Result<serde_json::Value> {
+    let data = response.get("data").ok_or_else(|| {
+        crate::error::DatadogError::DecodeError("Response is missing required data".into())
+    })?;
+    record_array(data)?;
+    Ok(response)
+}
+
+pub(crate) fn validate_required_resource(
+    response: serde_json::Value,
+) -> crate::error::Result<serde_json::Value> {
+    if !response
+        .get("data")
+        .is_some_and(serde_json::Value::is_object)
+    {
+        return Err(crate::error::DatadogError::DecodeError(
+            "Response data must be an object".into(),
+        ));
+    }
+    Ok(response)
+}
+
+pub(crate) fn validate_llm_response(
+    response: serde_json::Value,
+) -> crate::error::Result<serde_json::Value> {
+    let response = validate_required_records(response)?;
+    let meta = &response["meta"];
+    if !meta["elapsed"].is_i64()
+        || !meta["request_id"].is_string()
+        || !meta["status"].is_string()
+        || !meta["page"].is_object()
+    {
+        return Err(crate::error::DatadogError::DecodeError(
+            "Agent Observability response is missing valid query metadata".into(),
+        ));
+    }
+    for record in response_records(&response)? {
+        if !record["id"].is_string()
+            || !record["type"].is_string()
+            || !record["attributes"].is_object()
+        {
+            return Err(crate::error::DatadogError::DecodeError(
+                "Agent Observability span requires id, type, and attributes".into(),
+            ));
+        }
+    }
+    Ok(response)
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MetricsResponse {
     pub status: String,

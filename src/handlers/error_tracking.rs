@@ -26,7 +26,7 @@ impl ErrorTrackingHandler {
             )
             .await?;
 
-        let data = response.get("data").cloned().unwrap_or_else(|| json!([]));
+        let data = json!(crate::datadog::models::response_records(&response)?);
 
         let mut meta = serde_json::Map::new();
         meta.insert("track".to_string(), json!(args.track));
@@ -42,7 +42,7 @@ impl ErrorTrackingHandler {
         let handler = ErrorTrackingHandler;
 
         let response = client.get_error_issue(issue_id).await?;
-        let data = response.get("data").cloned().unwrap_or(Value::Null);
+        let data = crate::datadog::models::response_resource(&response)?;
 
         Ok(handler.format_detail(data))
     }
