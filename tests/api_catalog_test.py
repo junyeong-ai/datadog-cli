@@ -34,6 +34,31 @@ class SchemaConversionTest(unittest.TestCase):
         self.assertEqual(converted["default"], source["default"])
         self.assertEqual(list(catalog.references(converted)), ["Item"])
 
+    def test_nullable_references_keep_annotations_at_the_property_root(self):
+        source = {"$ref": "#/components/schemas/Item", "nullable": True,
+                  "description": "An optional item", "readOnly": True,
+                  "writeOnly": False,
+                  "default": {"nullable": True, "$ref": "instance-value"}}
+        converted = catalog.schema(source)
+        self.assertEqual(converted["anyOf"], [{"$ref": "#/definitions/Item"},
+                                              {"type": "null"}])
+        for key in ("description", "readOnly", "writeOnly", "default"):
+            self.assertEqual(converted[key], source[key])
+        self.assertEqual(list(catalog.references(converted)), ["Item"])
+
+    def test_nullable_reference_constraints_do_not_overwrite_sibling_compositions(self):
+        instance = {"nullable": True, "$ref": "instance-value"}
+        source = {"$ref": "#/components/schemas/Item", "nullable": True,
+                  "anyOf": [{"enum": [instance]}, {"type": "number", "minimum": 1,
+                                                  "exclusiveMinimum": True}]}
+        converted = catalog.schema(source)
+        non_null, null = converted["anyOf"]
+        self.assertEqual(null, {"type": "null"})
+        reference, constraints = non_null["allOf"]
+        self.assertEqual(reference, {"$ref": "#/definitions/Item"})
+        self.assertEqual(constraints["anyOf"], [{"enum": [instance]},
+                                                {"type": "number", "exclusiveMinimum": 1}])
+
     def test_reference_resolution_cannot_fetch_external_resources(self):
         with self.assertRaises(ValueError):
             catalog.resolve({}, {"$ref": "https://example.test/schema"})

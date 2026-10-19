@@ -48,8 +48,7 @@ def schema(value):
         result["$ref"] = result["$ref"].replace(
             "#/components/schemas/", "#/definitions/"
         )
-    if result.pop("nullable", False) and "type" in result:
-        result["type"] = [result["type"], "null"]
+    nullable = result.pop("nullable", False)
     for exclusive, inclusive in [
         ("exclusiveMinimum", "minimum"),
         ("exclusiveMaximum", "maximum"),
@@ -58,6 +57,19 @@ def schema(value):
             enabled = result.pop(exclusive)
             if enabled:
                 result[exclusive] = result.pop(inclusive)
+    if nullable:
+        if "type" in result:
+            result["type"] = [result["type"], "null"]
+        elif "$ref" in result:
+            # Honor Datadog's nullable-reference contracts; Draft7 ignores $ref siblings.
+            annotations = {
+                key: result.pop(key)
+                for key in ("title", "description", "default", "readOnly", "writeOnly", "deprecated")
+                if key in result
+            }
+            reference = {"$ref": result.pop("$ref")}
+            non_null = {"allOf": [reference, result]} if result else reference
+            result = {**annotations, "anyOf": [non_null, {"type": "null"}]}
     return result
 
 

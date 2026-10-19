@@ -15,7 +15,7 @@ uv run --with PyYAML==6.0.3 python scripts/update_api_catalog.py
 ```
 
 OpenAPI 3.0 schemas are converted to JSON Schema Draft 7 by translating local
-references, typed `nullable`, and boolean exclusive bounds. Validation constraints,
+references, typed `nullable`, Datadog's nullable references, and boolean exclusive bounds. Nullable references use a union with null, matching documented states such as [custom rules without revisions](https://docs.datadoghq.com/api/latest/static-analysis/show-custom-rule/). Validation constraints,
 property names, enum values, and additional properties retain their API meanings.
 Request schemas omit `readOnly` properties from required fields; response schemas omit `writeOnly` properties from required fields. Other required fields and property types remain validated. This normalization visits schema positions only, including local referenced definitions, without rewriting default or enum instance data. Examples and OpenAPI-only annotations are omitted. Requests reject unknown parameter
 names; extensible body and response fields follow the published schema.

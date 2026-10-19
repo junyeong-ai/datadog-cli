@@ -715,3 +715,56 @@ async fn sentinel_response_omits_write_only_fields_without_relaxing_required_res
         ));
     }
 }
+
+#[tokio::test]
+async fn nullable_references_accept_null_without_accepting_invalid_values() {
+    for (domain, operation, endpoint, input, response, pointer) in [
+        (
+            "dashboards",
+            "v1.GetDashboard",
+            "/api/v1/dashboard/dashboard-1",
+            json!({"path":{"dashboard_id":"dashboard-1"}}),
+            json!({"title":"Overview","layout_type":"ordered","widgets":[],"default_timeframe":null}),
+            "/default_timeframe",
+        ),
+        (
+            "static-analysis",
+            "v2.GetCustomRule",
+            "/api/v2/static-analysis/custom/rulesets/ruleset-1/rules/rule-1",
+            json!({"path":{"ruleset_name":"ruleset-1","rule_name":"rule-1"}}),
+            json!({"data":{"id":"rule-1","type":"custom_rule","attributes":{"name":"rule-1","created_at":"2026-10-19T00:00:00Z","created_by":"user-1","last_revision":null,"revisions":[]}}}),
+            "/data/attributes/last_revision",
+        ),
+    ] {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path(endpoint))
+            .respond_with(ResponseTemplate::new(200).set_body_json(response.clone()))
+            .expect(1)
+            .mount(&server)
+            .await;
+        assert_eq!(
+            execute(&server, domain, operation, input.clone())
+                .await
+                .unwrap()["data"],
+            response
+        );
+        for value in [json!(42), json!({})] {
+            server.reset().await;
+            let mut invalid = response.clone();
+            *invalid.pointer_mut(pointer).unwrap() = value;
+            Mock::given(method("GET"))
+                .and(path(endpoint))
+                .respond_with(ResponseTemplate::new(200).set_body_json(invalid))
+                .expect(1)
+                .mount(&server)
+                .await;
+            assert!(matches!(
+                execute(&server, domain, operation, input.clone())
+                    .await
+                    .unwrap_err(),
+                DatadogError::DecodeError(_)
+            ));
+        }
+    }
+}
