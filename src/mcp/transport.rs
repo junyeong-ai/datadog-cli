@@ -37,6 +37,7 @@ impl SseRetryPolicy for NoReconnect {
 }
 
 struct Usage {
+    get_stream_started: bool,
     calls: u32,
     bytes: usize,
     failure: Option<DatadogError>,
@@ -72,6 +73,7 @@ impl BoundedHttp {
             client,
             uri: uri.into(),
             state: Arc::new(Mutex::new(Usage {
+                get_stream_started: false,
                 calls: 0,
                 bytes: 0,
                 failure: None,
@@ -405,6 +407,17 @@ impl StreamableHttpClient for BoundedHttp {
                 "MCP cannot override the selected credentials".into(),
             )));
         }
+        {
+            let mut state = self.state.lock().map_err(|_| {
+                StreamableHttpError::Client(io::Error::other("MCP execution state unavailable"))
+            })?;
+            if last_event_id.is_some() || state.get_stream_started {
+                return Err(StreamableHttpError::Client(io::Error::other(
+                    "MCP SSE reconnection is disabled",
+                )));
+            }
+            state.get_stream_started = true;
+        }
         let response = self
             .send(
                 Method::GET,
@@ -461,5 +474,81 @@ impl StreamableHttpClient for BoundedHttp {
             self.bytes(response).await?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{Credentials, Defaults, Network};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[tokio::test]
+    async fn background_reconnection_is_blocked_without_changing_the_original_outcome() {
+        for interrupted in [false, true] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let uri: Arc<str> = format!("http://{}/mcp", listener.local_addr().unwrap()).into();
+            let config = Config {
+                credentials: Credentials::Token("test-token".into()),
+                site: "datadoghq.com".into(),
+                defaults: Defaults::default(),
+                network: Network::default(),
+            };
+            let backend = BoundedHttp::new(
+                &config,
+                uri.to_string(),
+                Duration::from_secs(5),
+                8,
+                1024 * 1024,
+            )
+            .unwrap();
+            let reading = {
+                let backend = backend.clone();
+                let uri = uri.clone();
+                tokio::spawn(async move {
+                    let mut stream = backend
+                        .get_stream(uri, None, None, None, HashMap::new())
+                        .await
+                        .unwrap();
+                    loop {
+                        match stream.next().await {
+                            Some(Ok(_)) => {}
+                            Some(Err(_)) => break true,
+                            None => break false,
+                        }
+                    }
+                })
+            };
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let mut request = Vec::new();
+            while !request.ends_with(b"\r\n\r\n") {
+                request.push(connection.read_u8().await.unwrap());
+            }
+            assert!(request.starts_with(b"GET /mcp HTTP/1.1\r\n"));
+            let body = "retry: 0\n\n";
+            let length = if interrupted { 128 } else { body.len() };
+            connection
+                .write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n{body}").as_bytes())
+                .await
+                .unwrap();
+            connection.shutdown().await.unwrap();
+            assert_eq!(reading.await.unwrap(), interrupted);
+            let error = backend
+                .get_stream(uri, None, None, None, HashMap::new())
+                .await
+                .err()
+                .expect("background reconnection must be refused");
+            assert!(error.to_string().contains("reconnection is disabled"));
+            match backend.take_failure() {
+                Some(DatadogError::NetworkError(_)) => assert!(interrupted),
+                None => assert!(!interrupted),
+                other => panic!("unexpected stored failure: {other:?}"),
+            }
+            assert_eq!(backend.usage().unwrap().0, 1);
+            assert_eq!(
+                listener.into_std().unwrap().accept().unwrap_err().kind(),
+                io::ErrorKind::WouldBlock
+            );
+        }
     }
 }

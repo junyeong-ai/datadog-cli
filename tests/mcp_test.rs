@@ -36,6 +36,9 @@ enum Scenario {
     Expired,
     BadOutput,
     ProtocolError,
+    ResumableResponse,
+    ResumableStateless,
+    ResumableBackground,
 }
 struct Server(Scenario);
 impl Respond for Server {
@@ -59,6 +62,13 @@ impl Respond for Server {
                 result
             }
             "tools/call" => {
+                if matches!(
+                    self.0,
+                    Scenario::ResumableResponse | Scenario::ResumableStateless
+                ) {
+                    return ResponseTemplate::new(200)
+                        .set_body_raw("id: resume-me\nretry: 0\n\n", "text/event-stream");
+                }
                 if matches!(self.0, Scenario::Expired) {
                     return ResponseTemplate::new(404);
                 }
@@ -70,7 +80,12 @@ impl Respond for Server {
             other => panic!("Unexpected MCP method {other}"),
         };
         let message = json!({"jsonrpc":"2.0","id":body["id"],"result":result});
-        let response = ResponseTemplate::new(200).insert_header("mcp-session-id", "test-session");
+        let response = ResponseTemplate::new(200);
+        let response = if matches!(self.0, Scenario::ResumableStateless) {
+            response
+        } else {
+            response.insert_header("mcp-session-id", "test-session")
+        };
         if matches!(self.0, Scenario::Sse | Scenario::OversizedSse) {
             let content = if matches!(self.0, Scenario::OversizedSse) {
                 format!(
@@ -93,8 +108,13 @@ async fn server(scenario: Scenario) -> MockServer {
         .respond_with(Server(scenario))
         .mount(&server)
         .await;
+    let background = if matches!(scenario, Scenario::ResumableBackground) {
+        ResponseTemplate::new(200).set_body_raw("retry: 0\n\n", "text/event-stream")
+    } else {
+        ResponseTemplate::new(405)
+    };
     Mock::given(method("GET"))
-        .respond_with(ResponseTemplate::new(405))
+        .respond_with(background)
         .mount(&server)
         .await;
     Mock::given(method("DELETE"))
@@ -302,4 +322,45 @@ async fn expired_sessions_are_not_replayed_and_protocol_errors_remain_visible() 
         .unwrap_err();
     assert!(matches!(error, DatadogError::TimeoutError));
     assert_eq!(slow.received_requests().await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn server_retry_frames_do_not_resume_response_or_background_streams() {
+    for scenario in [
+        Scenario::ResumableResponse,
+        Scenario::ResumableStateless,
+        Scenario::ResumableBackground,
+    ] {
+        let server = server(scenario).await;
+        let result = execute(&server, json!({"limit":1}), 8, 1024 * 1024).await;
+        if !matches!(scenario, Scenario::ResumableBackground) {
+            assert!(matches!(result, Err(DatadogError::QueryError(_))));
+        } else {
+            assert!(
+                result.is_ok(),
+                "a clean optional stream is not a failed tool call: {result:?}"
+            );
+        }
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(
+            requests
+                .iter()
+                .filter(|request| request.method.as_str() == "GET")
+                .count(),
+            usize::from(!matches!(scenario, Scenario::ResumableStateless))
+        );
+        assert!(
+            requests
+                .iter()
+                .all(|request| !request.headers.contains_key("last-event-id"))
+        );
+        assert_eq!(
+            requests
+                .iter()
+                .filter_map(|request| serde_json::from_slice::<Value>(&request.body).ok())
+                .filter(|body| body["method"] == "tools/call")
+                .count(),
+            1
+        );
+    }
 }
