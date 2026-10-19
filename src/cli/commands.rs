@@ -11,6 +11,7 @@ use crate::handlers;
 
 pub async fn execute(command: &Command, client: &DatadogClient) -> Result<Value> {
     match command {
+        Command::Mcp { .. } => unreachable!("MCP commands use their explicit transport"),
         Command::Capabilities { .. } => {
             unreachable!("Capabilities are handled without credentials")
         }

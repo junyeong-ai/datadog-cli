@@ -57,3 +57,64 @@ fn discovery_and_invalid_inputs_do_not_load_credentials_or_site_configuration() 
     assert!(message.contains("violates the API schema"));
     assert!(!message.contains("sensitive-value"));
 }
+
+#[test]
+fn mcp_discovery_is_offline_and_unreviewed_tools_are_rejected_before_authentication() {
+    let binary = env!("CARGO_BIN_EXE_datadog-cli");
+    let output = Command::new(binary)
+        .args([
+            "--site",
+            "invalid-site",
+            "--auth-method",
+            "oauth",
+            "--pup-org",
+            "nonexistent",
+            "mcp",
+            "list",
+            "--toolset",
+            "dbm",
+            "--limit",
+            "1",
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let list: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(list["data"].as_array().unwrap().len(), 1);
+    let output = Command::new(binary)
+        .args([
+            "--site",
+            "invalid-site",
+            "--auth-method",
+            "oauth",
+            "--pup-org",
+            "nonexistent",
+            "--error-format",
+            "json",
+            "mcp",
+            "call",
+            "execute_code",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("individually reviewed"));
+    let output = Command::new(binary)
+        .args([
+            "--site",
+            "ddog-gov.com",
+            "--auth-method",
+            "oauth",
+            "--pup-org",
+            "nonexistent",
+            "--error-format",
+            "json",
+            "mcp",
+            "show",
+            "find_datadog_database_instances",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("not supported on this site"));
+}

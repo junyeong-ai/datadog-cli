@@ -17,3 +17,5 @@ mod auth;
 
 pub mod catalog;
 pub mod query;
+
+pub mod mcp;

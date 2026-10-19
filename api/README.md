@@ -38,3 +38,9 @@ authorize execution.
 Upstream contracts are licensed under Apache-2.0; see `LICENSE` and `NOTICE`.
 
 Cursor automation is opt-in and follows explicit request/response pointers validated against both schemas. Searches with time mappings need fixed bounds across pages. DDSQL submission never retries; completion polling uses only the returned opaque ID under the original identity and shared execution budget.
+
+## Official MCP tools
+
+`mcp-tools.json` contains individually reviewed read/analysis tools from the official tools reference; `mcp-source.json` records that reference and its digest. Names outside this policy cannot execute, even when a server advertises them as read-only. Mutations, remote actions, onboarding and arbitrary code execution are excluded. A contradictory `readOnlyHint: false` blocks execution. Input and declared structured output schemas come from the authenticated server and validate offline without external reference retrieval.
+
+The official Rust MCP SDK owns protocol/session handling. The HTTP backend fixes the selected site origin, protects credential headers, disables redirects/reconnection/session replay, and bounds total calls/bytes/time including session cleanup. Requests use MCP protocol `2025-11-25`; the server negotiates the supported response version. No sampling, roots, elicitation, local subprocesses or resource fetching are enabled. A successful handshake does not establish availability of any specialist tool.

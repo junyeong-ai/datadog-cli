@@ -6,6 +6,10 @@ Global options work before or after subcommands. JSON retains pagination metadat
 ## Contents
 
 - [`datadog-cli`](#datadog-cli)
+- [`datadog-cli mcp`](#datadog-cli-mcp)
+- [`datadog-cli mcp list`](#datadog-cli-mcp-list)
+- [`datadog-cli mcp show`](#datadog-cli-mcp-show)
+- [`datadog-cli mcp call`](#datadog-cli-mcp-call)
 - [`datadog-cli query`](#datadog-cli-query)
 - [`datadog-cli capabilities`](#datadog-cli-capabilities)
 - [`datadog-cli capabilities domains`](#datadog-cli-capabilities-domains)
@@ -57,6 +61,7 @@ High-performance Datadog CLI
 Usage: datadog-cli [OPTIONS] <COMMAND>
 
 Commands:
+  mcp             Discover and call reviewed tools on the official Datadog MCP server
   query           Execute a reviewed API query with offline schema validation
   capabilities    Discover reviewed API queries and their input schemas without authentication
   metrics         Query time series metrics
@@ -93,6 +98,73 @@ Options:
       --pup-org <PUP_ORG>              Named Pup OAuth session (otherwise global config [auth].pup_org)
   -h, --help                           Print help
   -V, --version                        Print version
+```
+
+## `datadog-cli mcp`
+
+```text
+Discover and call reviewed tools on the official Datadog MCP server
+
+Usage: datadog-cli mcp <COMMAND>
+
+Commands:
+  list  Discover reviewed MCP tools offline; server availability is not probed
+  show  Read the selected tool's current schema from the official MCP server
+  call  Call a reviewed MCP tool after validating its current input schema
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help
+```
+
+## `datadog-cli mcp list`
+
+```text
+Discover reviewed MCP tools offline; server availability is not probed
+
+Usage: datadog-cli mcp list [OPTIONS]
+
+Options:
+      --toolset <TOOLSET>
+      --search <SEARCH>    Literal case-insensitive text in tool names and descriptions
+      --offset <OFFSET>    [default: 0]
+      --limit <LIMIT>      [default: 25]
+  -h, --help               Print help
+```
+
+## `datadog-cli mcp show`
+
+```text
+Read the selected tool's current schema from the official MCP server
+
+Usage: datadog-cli mcp show [OPTIONS] <TOOL>
+
+Arguments:
+  <TOOL>
+
+Options:
+      --deadline <DEADLINE>    Authentication and MCP execution deadline in seconds [default: 60]
+      --max-calls <MAX_CALLS>  Maximum HTTP calls, including handshake, discovery and cleanup [default: 8]
+      --max-bytes <MAX_BYTES>  Maximum response bytes across the MCP session [default: 8388608]
+  -h, --help                   Print help
+```
+
+## `datadog-cli mcp call`
+
+```text
+Call a reviewed MCP tool after validating its current input schema
+
+Usage: datadog-cli mcp call [OPTIONS] <TOOL>
+
+Arguments:
+  <TOOL>
+
+Options:
+      --input <INPUT>          JSON arguments, @FILE, or - for stdin (default {})
+      --deadline <DEADLINE>    Authentication and MCP execution deadline in seconds [default: 60]
+      --max-calls <MAX_CALLS>  Maximum HTTP calls, including handshake, discovery and cleanup [default: 8]
+      --max-bytes <MAX_BYTES>  Maximum response bytes across the MCP session [default: 8388608]
+  -h, --help                   Print help
 ```
 
 ## `datadog-cli query`

@@ -185,7 +185,7 @@ impl DatadogClient {
     }
 }
 
-fn auth_headers(credentials: &Credentials) -> Result<reqwest::header::HeaderMap> {
+pub(crate) fn auth_headers(credentials: &Credentials) -> Result<reqwest::header::HeaderMap> {
     let mut headers = reqwest::header::HeaderMap::new();
     let mut insert = |name: &'static str, value: &str| -> Result<()> {
         let mut value = reqwest::header::HeaderValue::from_str(value).map_err(|_| {

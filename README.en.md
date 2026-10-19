@@ -34,6 +34,8 @@ Supports natural time expressions and JSON, JSONL, and table output. Query comma
 
 Multiple pages use `--max-pages N` only where the catalog declares a cursor contract. Time-based searches require fixed bounds. They return the original responses in `.data.pages`, with exact continuation metadata and separate processing status. `--wait` polls a DDSQL job within the same deadline, byte and call budgets; submission is never retried.
 
+Discover official MCP specialist tools offline with `mcp list --toolset profiling`, inspect the current server schema with `mcp show TOOL`, then use `mcp call TOOL --input JSON`. An explicit reviewed policy covers read/analysis tools including DBM, profiling, Kubernetes and data lineage. MCP uses the same identity/site configuration with no automatic REST/MCP substitution. Deadline, HTTP-call and response-byte budgets include handshake, discovery, execution and cleanup. Actual tool exposure and product permissions vary by organization. Vendor analysis remains in the original tool result and should be distinguished from independently verified observations.
+
 ## Installation
 
 Download Linux x86_64/ARM64, macOS Apple Silicon/Intel, and Windows x86_64 binaries from [Releases](https://github.com/junyeong-ai/datadog-cli/releases).

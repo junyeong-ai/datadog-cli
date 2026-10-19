@@ -11,7 +11,7 @@ pub enum DatadogError {
     #[error("API request failed (HTTP {status}): {message}")]
     ApiError { status: u16, message: String },
 
-    #[error("Metric query failed: {0}")]
+    #[error("Query failed: {0}")]
     QueryError(String),
 
     #[error("Interrupted")]

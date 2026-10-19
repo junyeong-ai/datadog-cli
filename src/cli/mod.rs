@@ -1,5 +1,6 @@
 mod commands;
 mod discovery;
+mod mcp;
 mod query;
 use crate::output;
 
@@ -86,6 +87,11 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
+    #[command(about = "Discover and call reviewed tools on the official Datadog MCP server")]
+    Mcp {
+        #[command(subcommand)]
+        action: mcp::McpAction,
+    },
     #[command(about = "Execute a reviewed API query with offline schema validation")]
     Query(query::QueryArgs),
     #[command(
@@ -668,6 +674,9 @@ pub enum ConfigAction {
 }
 
 pub async fn run(cli: Cli) -> Result<()> {
+    if let Command::Mcp { ref action } = cli.command {
+        return mcp::run(action, &cli).await;
+    }
     if let Command::Query(ref args) = cli.command {
         let mut input = crate::query::read_input(args.input.as_deref()).await?;
         let scope = crate::query::apply_time_range(

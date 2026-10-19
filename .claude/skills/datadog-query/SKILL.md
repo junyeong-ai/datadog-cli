@@ -1,6 +1,6 @@
 ---
 name: datadog-query
-description: Queries Datadog observability data to investigate service errors, performance, infrastructure, monitors, and incidents. Use for Datadog-backed operational investigations or requested resource lookups.
+description: Queries Datadog to investigate service errors, performance, infrastructure, CI and tests, security, on-call, costs, and AI observability. Use for Datadog-backed investigations or resource lookups, including DBM, profiling, Kubernetes, and data lineage through official MCP tools.
 allowed-tools: Bash, Read
 ---
 
@@ -10,8 +10,9 @@ Use `datadog-cli` to query existing resources. Report the observed result, time 
 
 - **Command syntax:** use `datadog-cli <command> --help` or the relevant section of [reference.md](reference.md). Read only the commands needed.
 - **API discovery:** `capabilities domains`, then `capabilities list --domain DOMAIN` and `capabilities show VERSION.OPERATION` provide reviewed contracts without authentication. Lists default to 25 entries; use literal `--search` and exact `--offset` continuation. Request `--response-schema` only when response fields are needed. Catalog support does not establish organization access.
-- **Additional products:** execute `query DOMAIN VERSION.OPERATION --input JSON` using the discovered schema. The envelope accepts `path`, `query`, `headers`, and `body`; `@FILE` and `-` read a file or stdin. `.data` retains the original API response, unlike legacy projections. JSONL emits one response without metadata. Each invocation returns one response; retain API continuation and fix time bounds across pages. CSV/binary responses require a new `--output` file. Keep the execution deadline, call, and response-byte budgets bounded.
+- **Additional products:** execute `query DOMAIN VERSION.OPERATION --input JSON` using the discovered schema. The envelope accepts `path`, `query`, `headers`, and `body`; `@FILE` and `-` read a file or stdin. `.data` retains the original API response, unlike legacy projections. JSONL emits one response without metadata. By default each invocation returns one response; reviewed cursor operations accept `--max-pages N` and return original responses in `.data.pages`. Fix absolute time bounds across pages. CSV/binary responses require a new `--output` file. Keep the execution deadline, call, and response-byte budgets bounded.
 - **Query scope and size:** use `--from`/`--to` only when discovery advertises `time_range`; native JSON time fields conflict with these flags. For other operations, retain the API's native units. `--select` projects exact JSON Pointers into a pointer-keyed object without removing API metadata. Missing paths fail. `.meta.result.processing` is independent of pagination; `unknown` is not a completeness guarantee.
+- **Specialist tools:** `mcp list --toolset TOOLSET` discovers reviewed names offline. Use `mcp show NAME` for the current server schema, then `mcp call NAME --input JSON`. These commands use the configured identity and official site endpoint. There is no automatic REST/MCP substitution; unknown tools, mutations and remote code execution are refused. Treat vendor analysis as attributed analysis, not independent proof of a root cause.
 - **Investigations and bounded pagination:** read [examples.md](examples.md) for counts, samples, correlation, formulas, and LLM spans.
 - **Setup or authentication failures:** read [authentication guidance](examples.md#authentication-and-access). Use configured credentials without printing them or changing identity automatically.
 
@@ -25,9 +26,9 @@ Use `datadog-cli` to query existing resources. Report the observed result, time 
 ## Output contracts
 
 - Use JSON for pagination and metadata; JSONL emits only records/data. Tracing and diagnostics go to stderr.
-- Inspect `.meta.api.status` and `.meta.api.warnings`. Timeouts and warnings also appear on stderr in every format, independently of logging filters. Exit code 0 does not guarantee complete results.
-- `.pagination.returned` is the page count. `.pagination.total_count: null` means the total is unknown; `.pagination.has_next_is_estimate: true` marks page-size inference. The compatibility `.total` field is unsuitable for counting matches.
-- Search commands return one page. Pass `.pagination.next_cursor` as `--cursor`; keep the time bounds fixed and stop on errors, a repeated cursor, or the chosen page budget. Offset and page-number APIs use their own flags. Error-tracking search has no pagination.
+- Inspect `.meta.api.status` and `.meta.api.warnings`; collected responses retain each API metadata object in `.meta.api.pages`. Timeouts and warnings also appear on stderr in every format, independently of logging filters. Exit code 0 does not guarantee complete results.
+- For legacy commands, `.pagination.returned` is the page count. `.pagination.total_count: null` means the total is unknown; `.pagination.has_next_is_estimate: true` marks page-size inference. The compatibility `.total` field is unsuitable for counting matches.
+- Legacy search commands return one page. Pass `.pagination.next_cursor` as `--cursor`; keep the time bounds fixed and stop on errors, a repeated cursor, or the chosen page budget. Offset and page-number APIs use their own flags. Error-tracking search has no pagination.
 - Legacy log commands expose `.service`, `.message`, and custom `.attributes`. Legacy span fields remain under `.attributes`; RUM details are also under `.attributes`. `query` retains native API nesting beneath `.data`. Actual trace/span ID keys depend on instrumentation. `--full-stack-trace` controls only error stack truncation in the legacy commands.
 - Monitor detail preserves evaluation options and recovery thresholds. Metric `.units` preserves primary/per-unit positions, nulls, and scaling; `.unit` is a summary. Scalar output preserves ordered `.data.columns`, whose names may repeat; JSONL omits the `.data` prefix.
 - Related resources requested with `--include` are at `.meta.included` where supported. `--tag-filter` filters retained tag prefixes, not records or custom attributes; empty excludes tags, `*` retains all.

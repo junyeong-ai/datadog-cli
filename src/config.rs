@@ -416,7 +416,17 @@ impl Config {
     }
 
     pub async fn load_with_options(options: ConfigOptions) -> Result<Self> {
-        ConfigPlan::load(options)?.execute().await
+        Self::load_with_site_check(options, |_| Ok(())).await
+    }
+
+    pub(crate) async fn load_with_site_check(
+        options: ConfigOptions,
+        check: impl FnOnce(&str) -> Result<()>,
+    ) -> Result<Self> {
+        let plan = ConfigPlan::load(options)?;
+        let (site, _, _) = Self::resolve_settings(&plan.file)?;
+        check(&site)?;
+        plan.execute().await
     }
 
     pub async fn load_pup(cli_site: Option<String>, org: &str) -> Result<Self> {
