@@ -1,0 +1,10 @@
+{
+  "v1.MetricMetadata": {
+    "evidence": "https://docs.datadoghq.com/api/latest/metrics/get-metric-metadata/",
+    "observation": "GetMetricMetadata for system.cpu.user returned null per_unit and statsd_interval on 2026-10-19. These fields describe optional unit denominators and StatsD collection settings.",
+    "properties": {
+      "per_unit": {"type": ["string", "null"]},
+      "statsd_interval": {"type": ["integer", "null"]}
+    }
+  }
+}

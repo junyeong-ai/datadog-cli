@@ -101,6 +101,7 @@ def main():
     args = parser.parse_args()
     source = json.loads((API / "source.json").read_text())
     decisions = json.loads((API / "policy.json").read_text())
+    overrides = json.loads((API / "overrides.json").read_text())
     operations = {}
     definitions = {}
     seen = set()
@@ -118,6 +119,11 @@ def main():
             name: schema(value)
             for name, value in document["components"]["schemas"].items()
         }
+        for name, override in overrides.items():
+            schema_version, model = name.split(".", 1)
+            if schema_version == version:
+                for field, constraints in override["properties"].items():
+                    definitions[version][model]["properties"][field].update(constraints)
         for path, methods in document["paths"].items():
             for method, operation in methods.items():
                 if method not in METHODS:

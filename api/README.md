@@ -20,6 +20,11 @@ property names, enum values, and additional properties retain their API meanings
 Examples and OpenAPI-only annotations are omitted. Requests reject unknown parameter
 names; extensible body and response fields follow the published schema.
 
+`overrides.json` records field-level contract corrections supported by an observed
+response and a documentation reference. Apply only the evidenced constraint; retain
+type validation for other values. Operation-specific documented limits and additional
+statuses belong to `policy.json`.
+
 Credential-bearing resources, remote mutations, deprecated operations, internal APIs,
 and operations on a different origin are listed with an exclusion reason. POST search
 and aggregation endpoints are individually reviewed. A GET method does not by itself

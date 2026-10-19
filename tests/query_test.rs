@@ -25,6 +25,37 @@ fn client(server: &MockServer) -> DatadogClient {
     .unwrap()
 }
 
+#[tokio::test]
+async fn optional_metric_metadata_accepts_null_without_accepting_invalid_types() {
+    let server = MockServer::start().await;
+    let input = json!({"path":{"metric_name":"system.cpu.user"}});
+    Mock::given(method("GET"))
+        .and(path("/api/v1/metrics/system.cpu.user"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            json!({"type":"gauge","unit":"percent","per_unit":null,"statsd_interval":null}),
+        ))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let result = execute(&server, "metrics", "v1.GetMetricMetadata", input.clone())
+        .await
+        .unwrap();
+    assert!(result["data"]["per_unit"].is_null());
+    server.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/metrics/system.cpu.user"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"per_unit":42})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    assert!(matches!(
+        execute(&server, "metrics", "v1.GetMetricMetadata", input)
+            .await
+            .unwrap_err(),
+        DatadogError::DecodeError(_)
+    ));
+}
+
 async fn execute(
     server: &MockServer,
     domain: &str,
