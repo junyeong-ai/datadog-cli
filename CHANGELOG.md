@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-10-19
+
+### Fixed
+
+- MCP stream reconnection is rejected before sending HTTP requests, including server-directed SSE retries and interrupted background streams. Initial connections remain supported; clean optional stream completion preserves tool results, and network failures remain errors.
+- Agent guidance identifies `pagination.returned` as the response record count.
+
 ## [0.9.0] - 2026-10-19
 
 ### Added
