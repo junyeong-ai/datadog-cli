@@ -52,35 +52,7 @@ impl MonitorsHandler {
 
         let m = client.get_monitor(monitor_id).await?;
 
-        let data = json!({
-            "id": m.id,
-            "name": m.name,
-            "type": m.monitor_type,
-            "query": m.query,
-            "message": m.message,
-            "tags": m.tags,
-            "created": m.created,
-            "modified": m.modified,
-            "overall_state": m.overall_state,
-            "priority": m.priority,
-            "options": m.options.as_ref().map(|o| {
-                let mut opts = json!({
-                    "thresholds": o.thresholds,
-                    "notify_no_data": o.notify_no_data,
-                    "notify_audit": o.notify_audit,
-                    "timeout_h": o.timeout_h
-                });
-
-                if let Some(ref silenced) = o.silenced
-                    && let Some(obj) = silenced.as_object()
-                    && !obj.is_empty()
-                {
-                    opts["silenced"] = json!(silenced);
-                }
-
-                opts
-            })
-        });
+        let data = serde_json::to_value(m)?;
 
         Ok(handler.format_detail(data))
     }

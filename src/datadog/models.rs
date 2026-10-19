@@ -63,6 +63,8 @@ pub struct Unit {
     pub scale_factor: f64,
     pub short_name: Option<String>,
     pub id: Option<i64>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 /// Cursor pagination envelope shared by the v2 search APIs
@@ -130,6 +132,8 @@ pub struct Monitor {
     pub org_id: Option<i64>,
     pub restricted_roles: Option<Vec<String>>,
     pub matching_downtimes: Option<Vec<serde_json::Value>>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -138,6 +142,8 @@ pub struct Creator {
     pub email: Option<String>,
     pub handle: Option<String>,
     pub name: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -156,6 +162,8 @@ pub struct MonitorThresholds {
     pub critical: Option<f64>,
     pub warning: Option<f64>,
     pub ok: Option<f64>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

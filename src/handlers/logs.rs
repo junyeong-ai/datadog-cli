@@ -61,6 +61,9 @@ impl LogsHandler {
                 if let Some(status) = attrs.and_then(|a| a.status.as_ref()) {
                     entry["status"] = json!(status);
                 }
+                if let Some(attributes) = attrs.and_then(|a| a.attributes.as_ref()) {
+                    entry["attributes"] = json!(attributes);
+                }
                 if let Some(tags_vec) = tags
                     && !tags_vec.is_empty()
                 {

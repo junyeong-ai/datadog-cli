@@ -58,7 +58,7 @@ impl MetricsHandler {
                 series_obj.insert("interval".to_string(), json!(interval));
             }
             if let Some(ref unit) = s.unit {
-                // Simplify unit - only include the first non-null unit
+                series_obj.insert("units".to_string(), json!(unit));
                 if let Some(first_unit) = unit.iter().find(|u| u.is_some())
                     && let Some(u) = first_unit {
                         let mut unit_obj = serde_json::Map::new();

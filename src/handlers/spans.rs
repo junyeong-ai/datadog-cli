@@ -4,8 +4,8 @@ use crate::cli::SpansArgs;
 use crate::datadog::{DatadogClient, SearchParams};
 use crate::error::Result;
 use crate::handlers::common::{
-    DEFAULT_STACK_TRACE_LINES, MAX_STRING_LENGTH, PaginationInfo, ResponseFilter,
-    ResponseFormatter, TagFilter, TimeHandler,
+    DEFAULT_STACK_TRACE_LINES, PaginationInfo, ResponseFilter, ResponseFormatter, TagFilter,
+    TimeHandler,
 };
 
 pub struct SpansHandler;
@@ -76,10 +76,6 @@ impl SpansHandler {
                     if let Some(custom) = attrs_obj.get_mut("custom")
                         && let Some(custom_obj) = custom.as_object_mut()
                     {
-                        if let Some(http) = custom_obj.get_mut("http") {
-                            handler.filter_http_verbose_fields(http);
-                        }
-
                         if let Some(error) = custom_obj.get_mut("error")
                             && let Some(error_obj) = error.as_object_mut()
                             && let Some(stack) = error_obj.get_mut("stack")
@@ -89,20 +85,6 @@ impl SpansHandler {
                             let truncated =
                                 handler.truncate_stack_trace(stack_str, DEFAULT_STACK_TRACE_LINES);
                             *stack = Value::String(truncated);
-                        }
-
-                        if let Some(messaging) = custom_obj.get_mut("messaging")
-                            && let Some(messaging_obj) = messaging.as_object_mut()
-                            && let Some(kafka) = messaging_obj.get_mut("kafka")
-                            && let Some(kafka_obj) = kafka.as_object_mut()
-                            && let Some(bootstrap) = kafka_obj.get_mut("bootstrap")
-                            && let Some(bootstrap_obj) = bootstrap.as_object_mut()
-                            && let Some(servers) = bootstrap_obj.get_mut("servers")
-                            && let Some(servers_str) = servers.as_str()
-                        {
-                            let truncated =
-                                handler.truncate_long_string(servers_str, MAX_STRING_LENGTH);
-                            *servers = Value::String(truncated);
                         }
                     }
                 }

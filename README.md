@@ -197,6 +197,9 @@ LLM Observability는 프리뷰 API에 의존합니다. 인시던트 등 제품�
 `--format`은 하위 명령 앞뒤 어디에서나 사용할 수 있습니다.
 JSON은 터미널에서 들여쓰기하고 파이프에서는 압축합니다. JSONL은 `data` 항목만 한 줄씩 출력하므로 페이지 메타데이터가 없습니다.
 표는 객체 또는 객체 배열을 표시합니다. 진단 로그는 stderr로 출력합니다.
+로그의 사용자 속성은 `.data[].attributes`에 보존하며 추적 ID의 실제 키는 계측 설정에 따라 다릅니다.
+모니터 상세는 평가 설정·복구 임계값·확장 필드를 보존합니다. Span의 HTTP·메시징 속성은 유지하며 `--full-stack-trace`는 오류 스택에만 적용합니다.
+메트릭의 `.data[].units`는 기본 단위와 분모 단위의 순서·null·배율을 보존합니다. 기존 `.unit`은 첫 번째 비어 있지 않은 단위의 요약입니다.
 
 ```bash
 datadog-cli logs search "status:error" --format jsonl | jq -r '.service'
