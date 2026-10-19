@@ -5,7 +5,7 @@ mod transport;
 
 pub use client::{LlmObsFilter, LlmObsSearchParams, MAX_METRIC_QUERIES, SearchParams};
 pub use transport::DatadogClient;
-pub(crate) use transport::{QueryBudget, QueryCall, query_headers};
+pub(crate) use transport::{ApiReply, QueryBudget, QueryCall, query_headers};
 
 pub(crate) fn validate_query_processing(
     operation: &str,

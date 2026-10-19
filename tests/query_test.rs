@@ -414,3 +414,171 @@ async fn explicit_projection_preserves_partial_query_metadata_and_rejects_missin
             .is_err()
     );
 }
+
+#[tokio::test]
+async fn cursor_collection_preserves_pages_fixed_scope_and_partial_status() {
+    let server = MockServer::start().await;
+    let input = json!({"body":{"filter":{"from":"2026-10-01T00:00:00Z","to":"2026-10-02T00:00:00Z"},"page":{"limit":1}}});
+    Mock::given(method("POST")).and(path("/api/v2/logs/events/search"))
+        .and(body_json(&input["body"]))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[{"id":"first"}],"meta":{"page":{"after":"opaque"},"status":"timeout","warnings":[{"code":"partial","detail":"limited"}]}})))
+        .expect(1).mount(&server).await;
+    let mut next = input.clone();
+    next["body"]["page"]["cursor"] = json!("opaque");
+    Mock::given(method("POST"))
+        .and(body_json(&next["body"]))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"data":[{"id":"second"}],"meta":{"status":"done"}})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let result = PreparedQuery::prepare("logs", "v2.ListLogs", &input, None)
+        .unwrap()
+        .with_collection(2, false)
+        .unwrap()
+        .execute(
+            &client(&server),
+            "datadoghq.com",
+            Duration::from_secs(5),
+            1024 * 1024,
+            2,
+        )
+        .await
+        .unwrap();
+    assert_eq!(result["data"]["pages"][1]["data"][0]["id"], "second");
+    assert_eq!(result["meta"]["result"]["processing"], "partial");
+    assert_eq!(result["meta"]["result"]["collection"], "exhausted");
+    assert_eq!(
+        result["meta"]["api"]["pages"][0]["warnings"][0]["code"],
+        "partial"
+    );
+    assert_eq!(result["meta"]["execution"]["calls"], 2);
+    assert!(
+        PreparedQuery::prepare("logs", "v2.ListLogs", &json!({}), None)
+            .unwrap()
+            .with_collection(2, false)
+            .is_err()
+    );
+    assert!(
+        PreparedQuery::prepare(
+            "logs",
+            "v2.ListLogs",
+            &json!({"body":{"filter":{"from":"now-1h","to":"now"}}}),
+            None
+        )
+        .unwrap()
+        .with_collection(2, false)
+        .is_err()
+    );
+}
+
+#[tokio::test]
+async fn cursor_page_limit_and_repeated_cursor_do_not_claim_exhaustion() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v2/containers"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"data":[],"meta":{"pagination":{"next_cursor":"same"}}})),
+        )
+        .mount(&server)
+        .await;
+    let prepared = PreparedQuery::prepare("containers", "v2.ListContainers", &json!({}), None)
+        .unwrap()
+        .with_collection(2, false)
+        .unwrap();
+    let error = prepared
+        .execute(
+            &client(&server),
+            "datadoghq.com",
+            Duration::from_secs(5),
+            1024 * 1024,
+            4,
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, DatadogError::DecodeError(_)));
+    server.reset().await;
+    Mock::given(method("GET"))
+        .and(query_param("page[cursor]", "two"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"data":[],"meta":{"pagination":{"next_cursor":"three"}}})),
+        )
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(wiremock::matchers::query_param_is_missing("page[cursor]"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"data":[],"meta":{"pagination":{"next_cursor":"two"}}})),
+        )
+        .mount(&server)
+        .await;
+    let result = prepared
+        .execute(
+            &client(&server),
+            "datadoghq.com",
+            Duration::from_secs(5),
+            1024 * 1024,
+            4,
+        )
+        .await
+        .unwrap();
+    assert_eq!(result["meta"]["result"]["collection"], "page_limit");
+    assert_eq!(result["meta"]["pagination"]["has_next"], true);
+    assert_eq!(result["meta"]["pagination"]["next_cursor"], "three");
+}
+
+#[tokio::test]
+async fn ddsql_wait_polls_without_resubmitting_and_validates_column_alignment() {
+    let server = MockServer::start().await;
+    let response = |attributes| json!({"data":{"id":"q","type":"ddsql_query_response","attributes":attributes},"meta":{"elapsed":1,"request_id":"r"}});
+    Mock::given(method("POST"))
+        .and(path("/api/v2/ddsql/query/tabular"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(response(json!({"state":"running","query_id":"opaque-job"}))),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST")).and(path("/api/v2/ddsql/query/tabular/fetch"))
+        .and(body_json(json!({"data":{"type":"ddsql_query_fetch_request","attributes":{"query_id":"opaque-job"}}})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response(json!({"state":"completed","columns":[{"name":"one","type":"BIGINT","values":[1]}]}))))
+        .expect(1).mount(&server).await;
+    let prepared=PreparedQuery::prepare("ddsql","v2.ExecuteDdsqlTabularQuery",&json!({"body":{"data":{"type":"ddsql_query_request","attributes":{"query":"SELECT 1","time":{"from_timestamp":0,"to_timestamp":1},"row_limit":1}}}}),None).unwrap().with_collection(1,true).unwrap();
+    let result = prepared
+        .execute(
+            &client(&server),
+            "datadoghq.com",
+            Duration::from_secs(5),
+            1024 * 1024,
+            2,
+        )
+        .await
+        .unwrap();
+    assert_eq!(result["meta"]["job"]["polls"], 1);
+    assert_eq!(result["meta"]["result"]["processing"], "complete");
+    assert_eq!(
+        result["data"]["data"]["attributes"]["columns"][0]["values"][0],
+        1
+    );
+    server.reset().await;
+    Mock::given(method("POST")).respond_with(ResponseTemplate::new(200).set_body_json(response(json!({"state":"completed","columns":[{"name":"a","type":"BIGINT","values":[1]},{"name":"a","type":"BIGINT","values":[]}]})))).mount(&server).await;
+    assert!(matches!(
+        prepared
+            .execute(
+                &client(&server),
+                "datadoghq.com",
+                Duration::from_secs(5),
+                1024 * 1024,
+                2
+            )
+            .await
+            .unwrap_err(),
+        DatadogError::DecodeError(_)
+    ));
+}

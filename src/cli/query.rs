@@ -35,6 +35,10 @@ pub struct QueryArgs {
         help = "Save the original API response to a new file; required for binary/CSV responses"
     )]
     pub output: Option<PathBuf>,
+    #[arg(long, default_value = "1", value_parser=clap::value_parser!(u32).range(1..=1000), conflicts_with = "output", help = "Maximum pages for operations with a reviewed cursor contract; greater than 1 returns data.pages")]
+    pub max_pages: u32,
+    #[arg(long, conflicts_with_all = ["output", "max_pages"], help = "Poll a DDSQL query to completion within the same execution budget")]
+    pub wait: bool,
     #[arg(long, default_value = "60", value_parser=clap::value_parser!(u64).range(1..=3600), help = "Authentication and API execution deadline in seconds")]
     pub deadline: u64,
     #[arg(long, default_value = "4", value_parser=clap::value_parser!(u32).range(1..=1000), help = "Maximum API attempts, including retries")]

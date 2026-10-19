@@ -112,6 +112,8 @@ Options:
       --to <TO>                End time for --from (default now); resolved with the same reference instant
       --select <SELECT>        Select an exact JSON Pointer from each API response; repeat for multiple fields
       --output <OUTPUT>        Save the original API response to a new file; required for binary/CSV responses
+      --max-pages <MAX_PAGES>  Maximum pages for operations with a reviewed cursor contract; greater than 1 returns data.pages [default: 1]
+      --wait                   Poll a DDSQL query to completion within the same execution budget
       --deadline <DEADLINE>    Authentication and API execution deadline in seconds [default: 60]
       --max-calls <MAX_CALLS>  Maximum API attempts, including retries [default: 4]
       --max-bytes <MAX_BYTES>  Maximum response bytes across API attempts [default: 8388608]

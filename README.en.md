@@ -32,6 +32,8 @@ Repeat `--select /data` with exact JSON Pointers to return a pointer-keyed proje
 A Rust CLI for querying Datadog logs, metrics, APM, RUM, and operational resources.
 Supports natural time expressions and JSON, JSONL, and table output. Query commands do not modify Datadog resources.
 
+Multiple pages use `--max-pages N` only where the catalog declares a cursor contract. Time-based searches require fixed bounds. They return the original responses in `.data.pages`, with exact continuation metadata and separate processing status. `--wait` polls a DDSQL job within the same deadline, byte and call budgets; submission is never retried.
+
 ## Installation
 
 Download Linux x86_64/ARM64, macOS Apple Silicon/Intel, and Windows x86_64 binaries from [Releases](https://github.com/junyeong-ai/datadog-cli/releases).

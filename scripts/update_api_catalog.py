@@ -215,6 +215,11 @@ def main():
             for pointer in [contract["from"], contract["to"]]:
                 if property_at(document, groups, pointer).get("type") != expected_type:
                     raise ValueError(f"Incorrect time field type: {operation['id']} {pointer}")
+        if contract := operation["pagination"]:
+            request = property_at(document, groups, contract["request"])
+            response = property_at(document, operation["responses"]["200"]["schema"], contract["response"])
+            if request.get("type") != "string" or response.get("type") != "string":
+                raise ValueError(f"Incorrect cursor contract: {operation['id']}")
         if contract := operation["processing"]:
             status = property_at(document, operation["responses"]["200"]["schema"], contract["pointer"])
             if status.get("type") != "string":

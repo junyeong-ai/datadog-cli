@@ -42,6 +42,9 @@ pub struct PreparedQuery {
     output: Option<PathBuf>,
     time_scope: Option<Value>,
     selection: Vec<String>,
+    input: Value,
+    max_pages: u32,
+    wait: bool,
 }
 
 pub async fn read_input(argument: Option<&str>) -> Result<Value> {
@@ -189,6 +192,9 @@ impl PreparedQuery {
             output,
             time_scope: None,
             selection: Vec::new(),
+            input: input.clone(),
+            max_pages: 1,
+            wait: false,
         })
     }
 
@@ -222,6 +228,44 @@ impl PreparedQuery {
         Ok(self)
     }
 
+    pub fn with_collection(mut self, max_pages: u32, wait: bool) -> Result<Self> {
+        if !(1..=1000).contains(&max_pages) {
+            return Err(DatadogError::InvalidInput(
+                "Page limit must be between 1 and 1000".into(),
+            ));
+        }
+        if max_pages > 1 {
+            if self.operation.pagination.is_none() || self.output.is_some() || wait {
+                return Err(DatadogError::InvalidInput("Multiple pages require a reviewed cursor contract and cannot use --output or --wait".into()));
+            }
+            if let Some(range) = &self.operation.time_range {
+                for pointer in [&range.from, &range.to] {
+                    let bound = self.input.pointer(pointer).ok_or_else(|| DatadogError::InvalidInput("Multiple pages require an explicit fixed time range; use --from and --to".into()))?;
+                    if matches!(range.encoding, crate::catalog::TimeEncoding::Rfc3339)
+                        && bound.as_str().is_none_or(|value| {
+                            chrono::DateTime::parse_from_rfc3339(value).is_err()
+                        })
+                    {
+                        return Err(DatadogError::InvalidInput("Multiple pages require absolute RFC3339 time bounds; use --from and --to".into()));
+                    }
+                }
+            }
+        }
+        if wait
+            && (!matches!(
+                self.operation.id.as_str(),
+                "v2.ExecuteDdsqlTabularQuery" | "v2.FetchDdsqlTabularQuery"
+            ) || self.output.is_some())
+        {
+            return Err(DatadogError::InvalidInput(
+                "--wait is supported only for DDSQL queries without --output".into(),
+            ));
+        }
+        self.max_pages = max_pages;
+        self.wait = wait;
+        Ok(self)
+    }
+
     pub async fn execute(
         &self,
         client: &DatadogClient,
@@ -243,36 +287,162 @@ impl PreparedQuery {
         }
         let start = Instant::now();
         let mut budget = QueryBudget::new(duration, max_bytes, max_calls);
-        let reply = client.execute_query(&self.call, &mut budget).await?;
-        let response = self
+        let mut current = Self::prepare(
+            &crate::catalog::domain_id(&self.operation.domains[0]),
+            &self.operation.id,
+            &self.input,
+            self.output.clone(),
+        )?;
+        let mut pages = Vec::new();
+        let mut api_pages = Vec::new();
+        let mut seen = std::collections::BTreeSet::new();
+        if let Some(contract) = &self.operation.pagination
+            && let Some(cursor) = self
+                .input
+                .pointer(&contract.request)
+                .and_then(Value::as_str)
+        {
+            seen.insert(cursor.to_string());
+        }
+        let mut any_partial = false;
+        let mut all_complete = true;
+        let mut polls = 0_u32;
+        let (reply, body, next_cursor) = loop {
+            let reply = client.execute_query(&current.call, &mut budget).await?;
+            let body = current.decode(&reply)?;
+            let processing = current.processing(&body);
+            any_partial |= processing == "partial";
+            all_complete &= processing == "complete";
+            api_pages.push(body.get("meta").cloned().unwrap_or(Value::Null));
+            if self.wait {
+                let attributes = &body["data"]["attributes"];
+                match attributes["state"].as_str() {
+                    Some("completed") => {
+                        if !attributes["columns"].is_array() {
+                            return Err(DatadogError::DecodeError(
+                                "Completed DDSQL response is missing columns".into(),
+                            ));
+                        }
+                        break (reply, body, None);
+                    }
+                    Some("running") => {
+                        let id = attributes["query_id"]
+                            .as_str()
+                            .filter(|id| !id.is_empty())
+                            .ok_or_else(|| {
+                                DatadogError::DecodeError(
+                                    "Running DDSQL response is missing query_id".into(),
+                                )
+                            })?;
+                        current = Self::prepare(
+                            "ddsql",
+                            "v2.FetchDdsqlTabularQuery",
+                            &json!({"body":{"data":{"type":"ddsql_query_fetch_request","attributes":{"query_id":id}}}}),
+                            None,
+                        )?;
+                        polls += 1;
+                        if budget.calls >= budget.max_calls {
+                            return Err(DatadogError::QueryError(
+                                "API call budget exhausted while DDSQL query is still running"
+                                    .into(),
+                            ));
+                        }
+                        tokio::time::timeout_at(
+                            budget.deadline,
+                            tokio::time::sleep(Duration::from_secs(1)),
+                        )
+                        .await
+                        .map_err(|_| DatadogError::TimeoutError)?;
+                        continue;
+                    }
+                    _ => {
+                        return Err(DatadogError::DecodeError(
+                            "Unknown DDSQL query state".into(),
+                        ));
+                    }
+                }
+            }
+            let cursor = current
+                .operation
+                .pagination
+                .as_ref()
+                .and_then(|contract| body.pointer(&contract.response))
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned);
+            if self.max_pages > 1 {
+                pages.push(self.project(&body)?);
+                if let Some(cursor) = &cursor {
+                    if !seen.insert(cursor.clone()) {
+                        return Err(DatadogError::DecodeError(
+                            "API repeated a pagination cursor".into(),
+                        ));
+                    }
+                    if pages.len() < self.max_pages as usize {
+                        let contract = self.operation.pagination.as_ref().ok_or_else(|| {
+                            DatadogError::DecodeError("Missing cursor contract".into())
+                        })?;
+                        let mut input = current.input.clone();
+                        time::set_pointer(&mut input, &contract.request, json!(cursor))?;
+                        current = Self::prepare(
+                            &crate::catalog::domain_id(&self.operation.domains[0]),
+                            &self.operation.id,
+                            &input,
+                            None,
+                        )?;
+                        continue;
+                    }
+                }
+            }
+            break (reply, body, cursor);
+        };
+        let response = current
             .operation
             .responses
             .get(&reply.status.to_string())
             .ok_or_else(|| DatadogError::DecodeError("Undeclared successful API status".into()))?;
         let media = response.media.as_deref();
-        let body = if media.is_some_and(is_json) {
-            let body: Value = serde_json::from_slice(&reply.bytes).map_err(|error| {
-                DatadogError::DecodeError(format!(
-                    "Invalid API JSON at line {}, column {}",
-                    error.line(),
-                    error.column()
-                ))
-            })?;
-            crate::datadog::validate_query_processing(&self.operation.id, &body)?;
-            if let Some(schema) = &response.schema {
-                validate_response(self.operation, schema, &body)?;
-            }
-            body
-        } else if self.output.is_some() || (media.is_none() && reply.bytes.is_empty()) {
-            Value::Null
+        let api_meta = if api_pages.len() == 1 {
+            api_pages.remove(0)
         } else {
-            return Err(DatadogError::DecodeError(
-                "Unexpected non-JSON API response".into(),
-            ));
+            json!({"pages": api_pages})
         };
-        let api_meta = body.get("meta").cloned();
-        let processing = self
-            .operation
+        let processing = if self.wait {
+            current.processing(&body)
+        } else if any_partial {
+            "partial"
+        } else if all_complete {
+            "complete"
+        } else {
+            "unknown"
+        };
+        let data = if reply.status == 304 {
+            Value::Null
+        } else if let Some(path) = &self.output {
+            write_download(path, &reply.bytes)?;
+            json!({"path":path,"bytes":reply.bytes.len(),"media":media})
+        } else if self.max_pages > 1 {
+            json!({"pages":pages})
+        } else {
+            self.project(&body)?
+        };
+        Ok(json!({
+            "data":data,
+            "meta":{
+                "api":api_meta,
+                "source":{"operation":self.operation.id,"site":site,"path":self.operation.path,"catalog_commit":Catalog::load()?.source["commit"],"preview":self.operation.preview.is_some()},
+                "http":{"status":reply.status,"headers":reply.headers},
+                "execution":{"calls":budget.calls,"received_bytes":budget.received_bytes,"elapsed_ms":start.elapsed().as_millis()},
+                "context":{"time_range":self.time_scope},
+                "projection":{"pointers":self.selection},
+                "pagination":{"returned_pages":if self.max_pages > 1 { pages.len() } else { 1 },"next_cursor":next_cursor,"has_next":self.operation.pagination.as_ref().map(|_| next_cursor.is_some()),"has_next_is_estimate":self.operation.pagination.as_ref().map(|_| false)},
+                "job":{"wait":self.wait,"polls":polls},
+                "result":{"processing":processing,"collection":if self.max_pages == 1 { "single_response" } else if next_cursor.is_some() { "page_limit" } else { "exhausted" },"not_modified":reply.status==304}
+            }
+        }))
+    }
+    fn processing(&self, body: &Value) -> &'static str {
+        self.operation
             .processing
             .as_ref()
             .and_then(|contract| {
@@ -285,38 +455,91 @@ impl PreparedQuery {
                     None
                 }
             })
-            .unwrap_or("unknown");
-        let data = if reply.status == 304 {
-            Value::Null
-        } else if let Some(path) = &self.output {
-            write_download(path, &reply.bytes)?;
-            json!({"path":path,"bytes":reply.bytes.len(),"media":media})
-        } else if self.selection.is_empty() {
-            body
+            .unwrap_or("unknown")
+    }
+
+    fn project(&self, body: &Value) -> Result<Value> {
+        if self.selection.is_empty() {
+            return Ok(body.clone());
+        }
+        let mut fields = serde_json::Map::new();
+        for pointer in &self.selection {
+            let value = body.pointer(pointer).ok_or_else(|| {
+                DatadogError::QueryError(format!(
+                    "Selected JSON Pointer {pointer:?} is absent from the API response"
+                ))
+            })?;
+            fields.insert(pointer.clone(), value.clone());
+        }
+        Ok(Value::Object(fields))
+    }
+
+    fn decode(&self, reply: &crate::datadog::ApiReply) -> Result<Value> {
+        let response = self
+            .operation
+            .responses
+            .get(&reply.status.to_string())
+            .ok_or_else(|| DatadogError::DecodeError("Undeclared successful API status".into()))?;
+        if response.media.as_deref().is_some_and(is_json) {
+            let body: Value = serde_json::from_slice(&reply.bytes).map_err(|error| {
+                DatadogError::DecodeError(format!(
+                    "Invalid API JSON at line {}, column {}",
+                    error.line(),
+                    error.column()
+                ))
+            })?;
+            crate::datadog::validate_query_processing(&self.operation.id, &body)?;
+            if let Some(schema) = &response.schema {
+                validate_response(self.operation, schema, &body)?;
+            }
+            if matches!(
+                self.operation.id.as_str(),
+                "v2.ExecuteDdsqlTabularQuery" | "v2.FetchDdsqlTabularQuery"
+            ) {
+                let attributes = &body["data"]["attributes"];
+                match attributes["state"].as_str() {
+                    Some("running")
+                        if attributes["query_id"]
+                            .as_str()
+                            .is_some_and(|id| !id.is_empty()) => {}
+                    Some("completed") if attributes["columns"].is_array() => {}
+                    _ => {
+                        return Err(DatadogError::DecodeError(
+                            "DDSQL state is missing its required query_id or columns".into(),
+                        ));
+                    }
+                }
+                if let Some(warnings) = body.pointer("/data/attributes/warnings") {
+                    crate::output::print_api_diagnostics(
+                        &json!({"meta":{"api":{"warnings":warnings}}}),
+                    )?;
+                }
+                if let Some(columns) = body
+                    .pointer("/data/attributes/columns")
+                    .and_then(Value::as_array)
+                {
+                    let expected = columns
+                        .first()
+                        .and_then(|column| column["values"].as_array())
+                        .map(Vec::len);
+                    if columns
+                        .iter()
+                        .any(|column| column["values"].as_array().map(Vec::len) != expected)
+                    {
+                        return Err(DatadogError::DecodeError(
+                            "DDSQL column arrays have inconsistent row counts".into(),
+                        ));
+                    }
+                }
+            }
+            Ok(body)
+        } else if self.output.is_some() || (response.media.is_none() && reply.bytes.is_empty()) {
+            Ok(Value::Null)
         } else {
-            let mut fields = serde_json::Map::new();
-            for pointer in &self.selection {
-                let value = body.pointer(pointer).ok_or_else(|| {
-                    DatadogError::QueryError(format!(
-                        "Selected JSON Pointer {pointer:?} is absent from the API response"
-                    ))
-                })?;
-                fields.insert(pointer.clone(), value.clone());
-            }
-            Value::Object(fields)
-        };
-        Ok(json!({
-            "data":data,
-            "meta":{
-                "api":api_meta,
-                "source":{"operation":self.operation.id,"site":site,"path":self.operation.path,"catalog_commit":Catalog::load()?.source["commit"],"preview":self.operation.preview.is_some()},
-                "http":{"status":reply.status,"headers":reply.headers},
-                "execution":{"calls":budget.calls,"received_bytes":budget.received_bytes,"elapsed_ms":start.elapsed().as_millis()},
-                "context":{"time_range":self.time_scope},
-                "projection":{"pointers":self.selection},
-                "result":{"processing":processing,"collection":"single_response","not_modified":reply.status==304}
-            }
-        }))
+            Err(DatadogError::DecodeError(
+                "Unexpected non-JSON API response".into(),
+            ))
+        }
     }
 }
 

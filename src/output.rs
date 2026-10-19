@@ -26,6 +26,11 @@ pub fn print_api_diagnostics(data: &Value) -> io::Result<()> {
 
 fn write_api_diagnostics(data: &Value, writer: &mut impl Write) -> io::Result<()> {
     let meta = &data["meta"]["api"];
+    if let Some(pages) = meta["pages"].as_array() {
+        for page in pages {
+            write_api_diagnostics(&serde_json::json!({"meta":{"api":page}}), writer)?;
+        }
+    }
     if meta["status"].as_str() == Some("timeout") {
         crate::diagnostics::write(
             writer,

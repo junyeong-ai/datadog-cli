@@ -36,3 +36,5 @@ and aggregation endpoints are individually reviewed. A GET method does not by it
 authorize execution.
 
 Upstream contracts are licensed under Apache-2.0; see `LICENSE` and `NOTICE`.
+
+Cursor automation is opt-in and follows explicit request/response pointers validated against both schemas. Searches with time mappings need fixed bounds across pages. DDSQL submission never retries; completion polling uses only the returned opaque ID under the original identity and shared execution budget.

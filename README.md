@@ -79,6 +79,8 @@ export DD_SITE="datadoghq.com"
 
 설치 경로는 `INSTALL_DIR`, 스킬 경로는 `DATADOG_CLI_SKILL_DIR`로 지정할 수 있습니다. 제거 시에도 같은 경로를 지정하세요.
 
+여러 페이지는 커서 계약을 검증한 작업에서 `--max-pages N`으로 요청합니다. 시간 기반 검색에는 고정된 범위가 필요합니다. 원본 응답은 `.data.pages`에 보존하며, 다음 커서와 서버 처리 상태를 구분합니다. `--wait`는 DDSQL 작업을 같은 시간·호출·바이트 한도 안에서 조회하며 제출 요청을 재시도하지 않습니다.
+
 ## OAuth 인증
 
 [Pup 2.0+](https://github.com/DataDog/pup)의 OAuth 로그인과 갱신을 사용할 수 있습니다. Pup을 PATH에 설치한 뒤 필요한 읽기 권한으로 이름 있는 세션을 만드세요. 다음은 로그·메트릭 조회 예시입니다.

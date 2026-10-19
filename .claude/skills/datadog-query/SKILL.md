@@ -34,3 +34,5 @@ Use `datadog-cli` to query existing resources. Report the observed result, time 
 - `llm-obs` accepts either a positional query or structured `--ml-app`/`--span-kind` filters. These modes cannot be combined; queries are passed unchanged to the preview Agent Observability API.
 
 The client bounds retries and request time. Do not add an unbounded outer retry loop. `--error-format json` emits the final runtime error as a JSON line on stderr; other diagnostics may precede it. Check the process status first. Exit codes: 3 authentication/permission, 4 API/query, 5 rate limit, 6 network/timeout, 7 response decoding, 130 interruption. CLI usage errors remain text with exit code 2.
+
+For reviewed cursor operations, `--max-pages N` returns original responses in `.data.pages`; use fixed absolute bounds. Inspect continuation metadata separately from processing status. Use `--wait` for DDSQL completion within the same budgets. Never resubmit a running job or treat a page limit as exhausted results.

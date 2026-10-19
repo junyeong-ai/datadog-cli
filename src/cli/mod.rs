@@ -685,7 +685,8 @@ pub async fn run(cli: Cli) -> Result<()> {
             args.output.clone(),
         )?
         .with_time_scope(scope)
-        .with_selection(&args.select)?;
+        .with_selection(&args.select)?
+        .with_collection(args.max_pages, args.wait)?;
         let duration = std::time::Duration::from_secs(args.deadline);
         let (result, format) = tokio::time::timeout(duration, async {
             let started = std::time::Instant::now();

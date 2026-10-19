@@ -47,6 +47,12 @@ pub struct ProcessingContract {
     pub partial: Vec<String>,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PaginationContract {
+    pub request: String,
+    pub response: String,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ExclusiveInput {
     pub field: String,
@@ -94,7 +100,7 @@ pub struct Operation {
     #[serde(default)]
     pub responses: BTreeMap<String, ResponseContract>,
     pub retry: Option<RetryPolicy>,
-    pub pagination: Option<Value>,
+    pub pagination: Option<PaginationContract>,
     pub servers: Option<Value>,
     pub time_range: Option<TimeRangeContract>,
     pub processing: Option<ProcessingContract>,
