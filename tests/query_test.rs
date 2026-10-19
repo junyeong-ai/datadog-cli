@@ -190,6 +190,50 @@ async fn response_limits_and_request_limits_are_observable_errors() {
 }
 
 #[tokio::test]
+async fn query_network_timeout_respects_execution_deadline_without_overflow() {
+    for (total_timeout_secs, response_delay, succeeds) in [
+        (u64::MAX, Duration::ZERO, true),
+        (1, Duration::from_millis(1500), false),
+    ] {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v2/containers"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!({"data":[]}))
+                    .set_delay(response_delay),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        let client = DatadogClient::with_base_url(
+            &Config {
+                credentials: Credentials::Token("test-token".into()),
+                site: "datadoghq.com".into(),
+                defaults: Defaults::default(),
+                network: Network {
+                    timeout_secs: 2,
+                    total_timeout_secs,
+                    max_retries: 0,
+                },
+            },
+            server.uri(),
+        )
+        .unwrap();
+        let result = PreparedQuery::prepare("containers", "v2.ListContainers", &json!({}), None)
+            .unwrap()
+            .execute(&client, "datadoghq.com", Duration::from_secs(3), 4096, 1)
+            .await;
+        if succeeds {
+            assert_eq!(result.unwrap()["data"]["data"], json!([]));
+        } else {
+            assert!(matches!(result, Err(DatadogError::TimeoutError)));
+        }
+        assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    }
+}
+
+#[tokio::test]
 async fn query_deadlines_include_retry_wait_and_denials_never_retry() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))

@@ -52,7 +52,9 @@ impl DatadogClient {
         call: &QueryCall,
         budget: &mut QueryBudget,
     ) -> Result<ApiReply> {
-        let deadline = budget.deadline.min(Instant::now() + self.total_timeout);
+        let now = Instant::now();
+        let remaining = budget.deadline.saturating_duration_since(now);
+        let deadline = (now + self.total_timeout.min(remaining)).min(budget.deadline);
         tokio::time::timeout_at(deadline, self.execute_query_attempts(call, budget))
             .await
             .map_err(|_| DatadogError::TimeoutError)?

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - MCP stream reconnection is rejected before sending HTTP requests, including server-directed SSE retries and interrupted background streams. Initial connections remain supported; clean optional stream completion preserves tool results, and network failures remain errors.
+- Query request deadlines cap network timeouts to the remaining execution budget before adding them to the platform clock, preventing overflow after delayed authentication.
 - Agent guidance identifies `pagination.returned` as the response record count.
 
 ## [0.9.0] - 2026-10-19
