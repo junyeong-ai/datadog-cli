@@ -171,7 +171,7 @@ download_binary() {
         return 1
     fi
 
-    echo "$binary_path"
+    return 0
 }
 
 build_from_source() {
@@ -293,7 +293,6 @@ main() {
     local target
     local version
     local skill_ref="main"
-    local binary_dir
     local display_install_dir
     local command_name
     local method
@@ -351,11 +350,8 @@ main() {
             fi
             skill_ref="v$version"
             echo "Version: $skill_ref" >&2
-            binary_path=$(download_binary "$version" "$target") || return 1
-            binary_dir="$(dirname "$binary_path")"
-            case "$(basename "$binary_dir")" in
-                datadog-cli-install.*) BINARY_TMP_DIR="$binary_dir" ;;
-            esac
+            download_binary "$version" "$target" || return 1
+            binary_path="$BINARY_TMP_DIR/$BINARY_NAME"
             ;;
         *) echo "❌ Invalid installation method" >&2; return 1 ;;
     esac

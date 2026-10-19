@@ -104,6 +104,58 @@ for path in "$TMPDIR"/datadog-cli-install.*; do
 done
 echo "Failed source build preserves the installed binary and cleans staging: passed"
 
+mkdir -p "$work_dir/blocked-download"
+cat > "$work_dir/blocked-download/curl" <<'SH'
+#!/usr/bin/env bash
+printf 'partial archive\n' > partial-download
+pwd -P > "$TEST_DOWNLOAD_STAGE"
+exec sleep 30
+SH
+chmod +x "$work_dir/blocked-download/curl"
+cp "$INSTALL_DIR/datadog-cli" "$work_dir/binary-before-interrupted-download"
+TEST_DOWNLOAD_STAGE="$work_dir/download-stage" DATADOG_CLI_VERSION=0.4.0 \
+    PATH="$work_dir/blocked-download:$PATH" \
+    python3 - "$fixture/scripts/install.sh" "$work_dir/interrupted-install.log" <<'PY'
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+
+stage_record = Path(os.environ["TEST_DOWNLOAD_STAGE"])
+with open(sys.argv[2], "w") as output:
+    installer = subprocess.Popen(
+        ["bash", sys.argv[1]], stdin=subprocess.DEVNULL,
+        stdout=output, stderr=subprocess.STDOUT, start_new_session=True,
+    )
+    try:
+        deadline = time.monotonic() + 10
+        while not stage_record.exists() or not stage_record.read_text().strip():
+            if installer.poll() is not None or time.monotonic() >= deadline:
+                raise AssertionError("Installer did not start the blocked download")
+            time.sleep(0.02)
+        os.killpg(installer.pid, signal.SIGINT)
+        if installer.wait(timeout=10) == 0:
+            raise AssertionError("Interrupted installation must fail")
+    finally:
+        if installer.poll() is None:
+            os.killpg(installer.pid, signal.SIGKILL)
+            installer.wait()
+PY
+download_stage=$(cat "$work_dir/download-stage")
+download_temp_root=$(cd "$TMPDIR" && pwd -P)
+case "$download_stage" in
+    "$download_temp_root"/datadog-cli-install.*) ;;
+    *) echo "Unexpected download staging directory: $download_stage" >&2; exit 1 ;;
+esac
+if [ -e "$download_stage" ]; then
+    echo "Interrupted installation left its download staging directory" >&2
+    exit 1
+fi
+cmp "$work_dir/binary-before-interrupted-download" "$INSTALL_DIR/datadog-cli"
+echo "Interrupted binary download preserves the installed binary and cleans staging: passed"
+
 bash "$repo_root/scripts/uninstall.sh" </dev/null > "$work_dir/uninstall.log"
 test ! -e "$INSTALL_DIR/datadog-cli"
 test -f "$DATADOG_CLI_SKILL_DIR/SKILL.md"
