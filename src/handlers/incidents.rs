@@ -31,7 +31,10 @@ impl IncidentsHandler {
             .filter(|v| !v.is_null())
             .map(|included| json!({ "included": included }));
 
-        Ok(handler.format_list(data, Some(serde_json::to_value(pagination)?), meta))
+        Ok(handler.with_api_meta(
+            handler.format_list(data, Some(serde_json::to_value(pagination)?), meta),
+            response.get("meta").cloned(),
+        ))
     }
 
     pub async fn get(client: &DatadogClient, args: &IncidentsGetArgs) -> Result<Value> {

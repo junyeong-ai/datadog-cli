@@ -209,6 +209,8 @@ jq -r '.pagination.next_cursor // empty' page.json
 ```
 
 검색 결과는 한 페이지입니다. 다음 페이지는 반환된 커서를 `--cursor`로 전달합니다.
+`pagination.returned`는 이번 응답 건수이며 `total_count`는 서버가 알려준 전체 건수입니다. 알 수 없으면 `null`입니다.
+`has_next_is_estimate`가 `true`이면 다음 페이지 여부는 페이지 크기로 추정한 값입니다. 기존 `total`은 전체 건수가 없을 때 이번 응답 건수를 유지하므로 집계에 사용하지 마세요.
 반복 조회에서는 절대 시작·종료 시간을 고정해 같은 기간을 조회하세요. API별 페이지 방식은 명령 참조를 확인하세요.
 `--tag-filter "env:,service:"`는 해당 접두어만 유지하고 `""`는 모든 태그를 제외하며 `"*"`는 모두 유지합니다.
 

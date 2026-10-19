@@ -3,7 +3,9 @@ use datadog_cli::cli::{Cli, Command, LogsAction};
 use datadog_cli::config::{Config, Credentials, Defaults, Network};
 use datadog_cli::datadog::DatadogClient;
 use datadog_cli::handlers::{
-    logs::LogsHandler, metrics::MetricsHandler, monitors::MonitorsHandler, spans::SpansHandler,
+    downtimes::DowntimesHandler, logs::LogsHandler, metrics::MetricsHandler,
+    monitors::MonitorsHandler, services::ServicesHandler, slo::SloHandler, spans::SpansHandler,
+    teams::TeamsHandler,
 };
 use serde_json::{Value, json};
 use wiremock::matchers::path;
@@ -23,6 +25,101 @@ fn client(server: &MockServer) -> DatadogClient {
         server.uri(),
     )
     .unwrap()
+}
+
+#[tokio::test]
+async fn authoritative_totals_end_full_final_pages_without_guessing() {
+    for (argv, endpoint, metadata_key, metadata) in [
+        (
+            vec!["datadog-cli", "teams", "--page-size", "1"],
+            "/api/v2/team",
+            "meta",
+            json!({"pagination":{"type":"number_size","total":1,"next_number":null}}),
+        ),
+        (
+            vec!["datadog-cli", "services", "--count", "1"],
+            "/api/v2/catalog/entity",
+            "meta",
+            json!({"count":1,"includeCount":0}),
+        ),
+        (
+            vec!["datadog-cli", "downtimes", "--count", "1"],
+            "/api/v2/downtime",
+            "meta",
+            json!({"page":{"total_filtered_count":1}}),
+        ),
+        (
+            vec!["datadog-cli", "slo", "list", "--limit", "1"],
+            "/api/v1/slo",
+            "metadata",
+            json!({"page":{"total_filtered_count":1}}),
+        ),
+    ] {
+        let server = MockServer::start().await;
+        let mut body = json!({"data":[{"id":"record-1"}]});
+        body[metadata_key] = metadata.clone();
+        respond(&server, endpoint, body).await;
+        let client = client(&server);
+        let output = match Cli::parse_from(argv).command {
+            Command::Teams(args) => TeamsHandler::list(&client, &args).await,
+            Command::Services(args) => ServicesHandler::list(&client, &args).await,
+            Command::Downtimes(args) => DowntimesHandler::list(&client, &args).await,
+            Command::Slo {
+                action: datadog_cli::cli::SloAction::List(args),
+            } => SloHandler::list(&client, &args).await,
+            _ => panic!(),
+        }
+        .unwrap();
+        assert_eq!(output["pagination"]["returned"], 1, "{endpoint}");
+        assert_eq!(output["pagination"]["total_count"], 1, "{endpoint}");
+        assert_eq!(output["pagination"]["has_next"], false, "{endpoint}");
+        assert_eq!(
+            output["pagination"]["has_next_is_estimate"], false,
+            "{endpoint}"
+        );
+        assert_eq!(output["meta"]["api"], metadata, "{endpoint}");
+    }
+}
+
+#[tokio::test]
+async fn unknown_and_invalid_totals_are_distinct() {
+    for total in [
+        None,
+        Some(json!(null)),
+        Some(json!(42)),
+        Some(json!("invalid")),
+        Some(json!(-1)),
+    ] {
+        let server = MockServer::start().await;
+        let mut body = json!({"data":[{"id":"team-1"}]});
+        if let Some(total) = &total {
+            body["meta"] = json!({"pagination":{"total":total}});
+        }
+        respond(&server, "/api/v2/team", body).await;
+        let Command::Teams(args) =
+            Cli::parse_from(["datadog-cli", "teams", "--page-size", "1"]).command
+        else {
+            panic!()
+        };
+        let result = TeamsHandler::list(&client(&server), &args).await;
+        if total
+            .as_ref()
+            .is_some_and(|v| v.is_string() || v.as_i64() == Some(-1))
+        {
+            assert_eq!(result.unwrap_err().exit_code(), 7);
+        } else {
+            let output = result.unwrap();
+            assert_eq!(output["pagination"]["returned"], 1);
+            assert_eq!(
+                output["pagination"]["total_count"],
+                total.clone().unwrap_or(Value::Null)
+            );
+            assert_eq!(
+                output["pagination"]["has_next_is_estimate"],
+                total.as_ref().is_none_or(Value::is_null)
+            );
+        }
+    }
 }
 
 async fn respond(server: &MockServer, endpoint: &str, body: Value) {

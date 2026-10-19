@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use crate::cli::ServicesArgs;
 use crate::datadog::DatadogClient;
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ResponseFormatter};
+use crate::handlers::common::{PaginationInfo, ResponseFormatter, api_count};
 
 pub struct ServicesHandler;
 
@@ -30,10 +30,11 @@ impl ServicesHandler {
         let data = response.get("data").cloned().unwrap_or_else(|| json!([]));
         let returned = data.as_array().map(|a| a.len()).unwrap_or(0);
 
-        let pagination = PaginationInfo::from_offset_without_total(
+        let pagination = PaginationInfo::from_offset_total(
             returned,
             args.start as usize,
             args.count as usize,
+            api_count(response.pointer("/meta/count"))?,
         );
 
         let mut meta = serde_json::Map::new();
@@ -42,10 +43,13 @@ impl ServicesHandler {
             meta.insert("included".to_string(), included.clone());
         }
 
-        Ok(handler.format_list(
-            data,
-            Some(serde_json::to_value(pagination)?),
-            Some(Value::Object(meta)),
+        Ok(handler.with_api_meta(
+            handler.format_list(
+                data,
+                Some(serde_json::to_value(pagination)?),
+                Some(Value::Object(meta)),
+            ),
+            response.get("meta").cloned(),
         ))
     }
 }

@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use crate::cli::TeamsArgs;
 use crate::datadog::DatadogClient;
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ResponseFormatter};
+use crate::handlers::common::{PaginationInfo, ResponseFormatter, api_count};
 
 pub struct TeamsHandler;
 
@@ -20,9 +20,17 @@ impl TeamsHandler {
         let data = response.get("data").cloned().unwrap_or_else(|| json!([]));
         let returned = data.as_array().map(|a| a.len()).unwrap_or(0);
 
-        let pagination =
-            PaginationInfo::from_page_number(returned, args.page as usize, args.page_size as usize);
+        let total = api_count(response.pointer("/meta/pagination/total"))?;
+        let pagination = PaginationInfo::from_page_number_total(
+            returned,
+            args.page as usize,
+            args.page_size as usize,
+            total,
+        );
 
-        Ok(handler.format_list(data, Some(serde_json::to_value(pagination)?), None))
+        Ok(handler.with_api_meta(
+            handler.format_list(data, Some(serde_json::to_value(pagination)?), None),
+            response.get("meta").cloned(),
+        ))
     }
 }

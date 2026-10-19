@@ -209,6 +209,8 @@ jq -r '.pagination.next_cursor // empty' page.json
 ```
 
 Search returns one page. Pass the returned cursor with `--cursor` to fetch another.
+`pagination.returned` counts records in this response; `total_count` is the server-reported total or `null` when unknown.
+`has_next_is_estimate: true` identifies continuation inferred from page size. The existing `total` retains the returned count when no total is known; do not use it for aggregation.
 Fix absolute start/end times across pages to query the same window. Consult command help for endpoint-specific pagination.
 `--tag-filter "env:,service:"` retains those prefixes; `""` excludes tags and `"*"` retains all tags.
 

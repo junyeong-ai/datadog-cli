@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use crate::cli::DowntimesArgs;
 use crate::datadog::DatadogClient;
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ResponseFormatter};
+use crate::handlers::common::{PaginationInfo, ResponseFormatter, api_count};
 
 pub struct DowntimesHandler;
 
@@ -20,12 +20,16 @@ impl DowntimesHandler {
         let data = response.get("data").cloned().unwrap_or_else(|| json!([]));
         let returned = data.as_array().map(|a| a.len()).unwrap_or(0);
 
-        let pagination = PaginationInfo::from_offset_without_total(
+        let pagination = PaginationInfo::from_offset_total(
             returned,
             args.start as usize,
             args.count as usize,
+            api_count(response.pointer("/meta/page/total_filtered_count"))?,
         );
 
-        Ok(handler.format_list(data, Some(serde_json::to_value(pagination)?), None))
+        Ok(handler.with_api_meta(
+            handler.format_list(data, Some(serde_json::to_value(pagination)?), None),
+            response.get("meta").cloned(),
+        ))
     }
 }

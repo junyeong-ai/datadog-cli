@@ -52,10 +52,16 @@ impl HostsHandler {
             host_json
         }).collect::<Vec<_>>());
 
-        let pagination = PaginationInfo::from_offset(
-            response.total_matching as usize,
+        let total = usize::try_from(response.total_matching).map_err(|_| {
+            crate::error::DatadogError::DecodeError(
+                "Host total_matching must be nonnegative".into(),
+            )
+        })?;
+        let pagination = PaginationInfo::from_offset_total(
+            response.host_list.len(),
             args.start as usize,
             args.count as usize,
+            Some(total),
         );
 
         Ok(json!({

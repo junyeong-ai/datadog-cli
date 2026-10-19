@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use crate::cli::SloListArgs;
 use crate::datadog::DatadogClient;
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ResponseFormatter};
+use crate::handlers::common::{PaginationInfo, ResponseFormatter, api_count};
 
 pub struct SloHandler;
 
@@ -25,27 +25,17 @@ impl SloHandler {
         let data = response.get("data").cloned().unwrap_or_else(|| json!([]));
         let returned = data.as_array().map(|a| a.len()).unwrap_or(0);
 
-        // v1 SLO list reports the filtered total at metadata.page.total_filtered_count.
-        let total_filtered = response
-            .get("metadata")
-            .and_then(|m| m.get("page"))
-            .and_then(|p| p.get("total_filtered_count"))
-            .and_then(|c| c.as_u64());
+        let pagination = PaginationInfo::from_offset_total(
+            returned,
+            args.offset as usize,
+            args.limit as usize,
+            api_count(response.pointer("/metadata/page/total_filtered_count"))?,
+        );
 
-        let pagination = match total_filtered {
-            Some(total) => PaginationInfo::from_offset(
-                total as usize,
-                args.offset as usize,
-                args.limit as usize,
-            ),
-            None => PaginationInfo::from_offset_without_total(
-                returned,
-                args.offset as usize,
-                args.limit as usize,
-            ),
-        };
-
-        Ok(handler.format_list(data, Some(serde_json::to_value(pagination)?), None))
+        Ok(handler.with_api_meta(
+            handler.format_list(data, Some(serde_json::to_value(pagination)?), None),
+            response.get("metadata").cloned(),
+        ))
     }
 
     pub async fn get(client: &DatadogClient, slo_id: &str) -> Result<Value> {
