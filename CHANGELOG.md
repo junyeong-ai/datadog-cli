@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-10-19
+
+### Added
+
+- Offline `capabilities` discovery and schema-validated `query` execution for 795 reviewed read and analysis operations from a pinned official Datadog OpenAPI snapshot. Excluded operations retain explicit policy reasons.
+- Official MCP integration for 258 reviewed tools, including specialist DBM, profiling, Kubernetes, data lineage, and server skill discovery. Calls validate current server schemas and use the configured identity and site.
+- Shared execution deadlines, call and response-byte budgets, reviewed time mappings, exact JSON Pointer projections, bounded cursor collection, and DDSQL completion polling. Downloads preserve original bytes without overwriting existing files.
+- Server-side log grouping through `--group-by` and `--group-limit`, plus structured final runtime errors through `--error-format json`.
+
+### Changed
+
+- Log attributes, monitor evaluation settings, metric unit arrays, span context, and host metadata retain investigation details. Existing CLI result paths remain compatible; the new `query` namespace preserves native API response nesting.
+- Rust Agent Observability callers use `LlmObsSearchParams` and `LlmObsFilter` to choose query or structured filters. The modes are mutually exclusive in the CLI and API executor.
+- Agent guidance includes product-specific investigation examples and progressively loaded command/schema discovery. Command reference syntax remains generated from Clap.
+
+### Fixed
+
+- Pagination distinguishes authoritative totals and continuations from estimates. Malformed required responses, metric processing errors, and misaligned result arrays fail explicitly.
+- HTTP 403 has a distinct machine-readable error kind while retaining exit code 3. Server warnings and timeout diagnostics remain visible across output formats and collected pages.
+- OAuth credential processes share a bounded per-site OS lock, preventing concurrent token refresh writes without changing the selected identity.
+- OpenAPI request/response-only requirements are interpreted separately, preserving valid monitor-validation requests and Microsoft Sentinel destination responses. Credential-bearing configuration endpoints are excluded from the analysis policy.
+- Verified nullable metric metadata and organization attributes match observed API responses without weakening unrelated schema validation. Network timeouts outside the platform clock range are rejected.
+
 ## [0.8.0] - 2026-10-17
 
 ### Added
