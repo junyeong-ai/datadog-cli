@@ -539,6 +539,19 @@ impl Config {
             ));
         }
 
+        let now = std::time::Instant::now();
+        if [network.timeout_secs, network.total_timeout_secs]
+            .into_iter()
+            .any(|seconds| {
+                now.checked_add(std::time::Duration::from_secs(seconds))
+                    .is_none()
+            })
+        {
+            return Err(DatadogError::InvalidInput(
+                "network timeouts exceed the platform clock range".into(),
+            ));
+        }
+
         Ok((site, defaults, network))
     }
 
@@ -1069,12 +1082,14 @@ mod tests {
     }
 
     #[test]
-    fn config_rejects_unknown_fields_invalid_formats_and_zero_timeouts() {
+    fn config_rejects_unknown_fields_invalid_formats_and_unsupported_timeouts() {
         assert!(toml::from_str::<ConfigFile>("[network]\ntimeout_sec = 30").is_err());
         for source in [
             "[defaults]\nformat = 'yaml'",
             "[network]\ntimeout_secs = 0",
             "[network]\ntotal_timeout_secs = 0",
+            "[network]\ntimeout_secs = 9223372036854775807",
+            "[network]\ntotal_timeout_secs = 9223372036854775807",
         ] {
             let mut file = file_with_keys();
             file.overlay(toml::from_str(source).unwrap());
