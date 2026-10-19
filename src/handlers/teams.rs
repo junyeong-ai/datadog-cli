@@ -21,12 +21,16 @@ impl TeamsHandler {
         let returned = data.as_array().map(|a| a.len()).unwrap_or(0);
 
         let total = api_count(response.pointer("/meta/pagination/total"))?;
-        let pagination = PaginationInfo::from_page_number_total(
+        let mut pagination = PaginationInfo::from_page_number_total(
             returned,
             args.page as usize,
             args.page_size as usize,
             total,
         );
+        if let Some(next) = response.pointer("/meta/pagination/next_number") {
+            pagination.has_next = api_count(Some(next))?.is_some();
+            pagination.has_next_is_estimate = false;
+        }
 
         Ok(handler.with_api_meta(
             handler.format_list(data, Some(serde_json::to_value(pagination)?), None),

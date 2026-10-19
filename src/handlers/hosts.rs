@@ -29,28 +29,27 @@ impl HostsHandler {
 
         let tag_filter = handler.resolve_tag_filter(args.tag_filter.as_deref(), client);
 
-        let data = json!(response.host_list.iter().map(|host| {
-            let filtered_tags = handler.filter_tags_map(host.tags_by_source.as_ref(), tag_filter);
-
-            let mut host_json = json!({
-                "name": host.name,
-                "host_name": host.host_name,
-                "up": host.up,
-                "is_muted": host.is_muted,
-                "last_reported": host.last_reported_time.map(crate::utils::format_timestamp),
-                "aws_name": host.aws_name,
-                "apps": host.apps,
-                "sources": host.sources,
-            });
-
-            // Only add tags if not empty
-            if let Some(tags) = filtered_tags
-                && !tags.is_empty() {
+        let hosts = response
+            .host_list
+            .iter()
+            .map(|host| -> Result<Value> {
+                let filtered_tags =
+                    handler.filter_tags_map(host.tags_by_source.as_ref(), tag_filter);
+                let mut host_json = serde_json::to_value(host)?;
+                if let Some(fields) = host_json.as_object_mut() {
+                    fields.remove("tags_by_source");
+                }
+                host_json["last_reported"] =
+                    json!(host.last_reported_time.map(crate::utils::format_timestamp));
+                if let Some(tags) = filtered_tags
+                    && !tags.is_empty()
+                {
                     host_json["tags"] = json!(tags);
                 }
-
-            host_json
-        }).collect::<Vec<_>>());
+                Ok(host_json)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let data = json!(hosts);
 
         let total = usize::try_from(response.total_matching).map_err(|_| {
             crate::error::DatadogError::DecodeError(

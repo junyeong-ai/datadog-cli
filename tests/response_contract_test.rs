@@ -260,6 +260,65 @@ async fn unknown_and_invalid_totals_are_distinct() {
     }
 }
 
+#[tokio::test]
+async fn explicit_team_continuation_is_authoritative_without_a_total() {
+    for next in [json!(null), json!(1)] {
+        let server = MockServer::start().await;
+        respond(
+            &server,
+            "/api/v2/team",
+            json!({"data":[{"id":"team-1"}],"meta":{"pagination":{"next_number":next}}}),
+        )
+        .await;
+        let Command::Teams(args) =
+            Cli::parse_from(["datadog-cli", "teams", "--page-size", "1"]).command
+        else {
+            panic!()
+        };
+        let result = TeamsHandler::list(&client(&server), &args).await.unwrap();
+        assert_eq!(result["pagination"]["has_next"], !next.is_null());
+        assert_eq!(result["pagination"]["has_next_is_estimate"], false);
+        assert!(result["pagination"]["total_count"].is_null());
+    }
+}
+
+#[tokio::test]
+async fn host_metadata_and_identity_survive_without_bypassing_tag_filters() {
+    for filter in ["env:", ""] {
+        let server = MockServer::start().await;
+        respond(
+            &server,
+            "/api/v1/hosts",
+            json!({
+                "total_matching":1,"total_returned":1,"host_list":[{
+                    "id":42,"name":"host-1","host_name":"host-1","up":true,"is_muted":false,
+                    "aliases":["alias-1"],"meta":{"agent_version":"fixture","platform":"linux"},
+                    "metrics":{"cpu":12.5},"tags_by_source":{"agent":["env:prod","team:api"]}
+                }]
+            }),
+        )
+        .await;
+        let Command::Hosts(args) =
+            Cli::parse_from(["datadog-cli", "hosts", "--tag-filter", filter]).command
+        else {
+            panic!()
+        };
+        let result = datadog_cli::handlers::hosts::HostsHandler::list(&client(&server), &args)
+            .await
+            .unwrap();
+        assert_eq!(result["data"][0]["id"], 42);
+        assert_eq!(result["data"][0]["aliases"], json!(["alias-1"]));
+        assert_eq!(result["data"][0]["meta"]["agent_version"], "fixture");
+        assert_eq!(result["data"][0]["metrics"]["cpu"], 12.5);
+        assert!(result["data"][0].get("tags_by_source").is_none());
+        if filter.is_empty() {
+            assert!(result["data"][0].get("tags").is_none());
+        } else {
+            assert_eq!(result["data"][0]["tags"], json!({"agent":["env:prod"]}));
+        }
+    }
+}
+
 async fn respond(server: &MockServer, endpoint: &str, body: Value) {
     Mock::given(path(endpoint))
         .respond_with(ResponseTemplate::new(200).set_body_json(body))

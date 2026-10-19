@@ -296,6 +296,8 @@ pub struct Host {
     pub host_name: String,
     pub last_reported_time: Option<i64>,
     pub sources: Option<Vec<String>>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

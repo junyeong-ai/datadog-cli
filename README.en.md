@@ -199,7 +199,7 @@ Rust `search_llm_obs_spans` accepts `LlmObsSearchParams` and `LlmObsFilter` to d
 JSON is indented on a terminal and compact in pipes. JSONL emits only `data` records, without pagination metadata.
 Tables accept an object or an array of objects. Diagnostics go to stderr.
 Log custom fields are preserved at `.data[].attributes`; actual trace ID keys depend on instrumentation.
-Monitor details preserve evaluation settings, recovery thresholds, and extension fields. Spans retain HTTP and messaging attributes; `--full-stack-trace` affects only error stacks.
+Monitor details preserve evaluation settings, recovery thresholds, and extension fields. Hosts retain IDs, aliases, and server-supplied metadata and metrics. Spans retain HTTP and messaging attributes; `--full-stack-trace` affects only error stacks.
 Metric `.data[].units` preserves primary/per-unit order, null positions, and scaling. The existing `.unit` summarizes the first non-null unit.
 
 ```bash
