@@ -69,7 +69,12 @@ fn post_searches_are_queries_and_get_actions_are_excluded() {
         "v2.CreateOnCallPage",
         "v2.GetAPIKey",
     ] {
-        assert!(catalog.query("cloud-cost-management", id).is_err());
+        let operation = catalog.operation(id).unwrap();
+        assert!(
+            catalog
+                .query(&datadog_cli::catalog::domain_id(&operation.domains[0]), id)
+                .is_err()
+        );
         assert_ne!(catalog.operation(id).unwrap().access, Access::Query);
     }
     assert!(
@@ -102,4 +107,41 @@ fn numeric_limits_and_required_bodies_follow_the_api_contract() {
     input["body"]["data"]["attributes"]["row_limit"] = json!(10001);
     let error = catalog.validate_input(query, &input).unwrap_err();
     assert!(error.to_string().contains("maximum"));
+}
+
+#[test]
+fn credential_bearing_contracts_are_excluded_before_request_validation() {
+    let catalog = Catalog::load().unwrap();
+    for id in [
+        "v1.ListAzureIntegration",
+        "v2.GetActionConnection",
+        "v1.GetAPITest",
+        "v1.GetAPITestResult",
+        "v1.GetBrowserTest",
+        "v1.GetBrowserTestResult",
+        "v1.GetTest",
+        "v1.ListTests",
+        "v1.SearchTests",
+        "v2.GetSyntheticsTestVersion",
+    ] {
+        let operation = catalog.operation(id).unwrap();
+        assert_eq!(operation.access, Access::CredentialMaterial);
+        let domain = datadog_cli::catalog::domain_id(&operation.domains[0]);
+        assert!(
+            datadog_cli::query::PreparedQuery::prepare(&domain, id, &json!({}), None)
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("credential-bearing")
+        );
+    }
+    for id in [
+        "v1.GetAPITestLatestResults",
+        "v1.GetBrowserTestLatestResults",
+        "v2.GetSyntheticsTestResult",
+        "v2.GetSyntheticsBrowserTestResult",
+        "v2.ListSyntheticsTestLatestResults",
+    ] {
+        assert!(catalog.query("synthetics", id).is_ok());
+    }
 }

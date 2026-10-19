@@ -95,10 +95,12 @@ datadog-cli query ci-visibility-pipelines v2.AggregateCIAppPipelineEvents \
 datadog-cli query ci-visibility-tests v2.SearchCIAppTestEvents \
   --from "2026-10-17T00:00:00Z" --to "2026-10-17T01:00:00Z" \
   --input '{"body":{"filter":{"query":"@test.status:fail"},"page":{"limit":10}}}'
-datadog-cli query synthetics v1.ListTests --input '{"query":{"page_size":10}}'
+datadog-cli query synthetics v2.ListSyntheticsTestLatestResults \
+  --from "2026-10-17T00:00:00Z" --to "2026-10-17T01:00:00Z" \
+  --input '{"path":{"public_id":"abc-def-ghi"}}'
 ```
 
-Select an actual test ID, inspect `capabilities show v1.GetAPITestLatestResults` or the browser/mobile result contract, then fetch the matching result type. Do not treat an API test result as a browser result or launch tests to retrieve existing evidence. A CI search reporting no valid indexes is an access/configuration failure, not zero failures.
+Replace `abc-def-ghi` with an actual test ID from the user's Datadog test link. Inspect `capabilities show v2.GetSyntheticsTestResult` or the browser/mobile result contract before fetching a result ID. Full test-configuration APIs are excluded because their response contracts can include reusable authentication secrets; latest-result lists and dedicated v2 result APIs remain available. Do not treat an API test result as a browser result or launch tests to retrieve existing evidence. A CI search reporting no valid indexes is an access/configuration failure, not zero failures.
 
 ## Infrastructure, network, security, and on-call
 

@@ -33,7 +33,7 @@ These mappings do not infer query syntax, units, or causality from telemetry tex
 Credential-bearing resources, remote mutations, deprecated operations, internal APIs,
 and operations on a different origin are listed with an exclusion reason. POST search
 and aggregation endpoints are individually reviewed. A GET method does not by itself
-authorize execution.
+authorize execution. Credential-bearing integration/action connections and full Synthetic configurations are excluded even when retrieved by GET; dedicated Synthetic execution-result and version-history endpoints remain available.
 
 Upstream contracts are licensed under Apache-2.0; see `LICENSE` and `NOTICE`.
 
