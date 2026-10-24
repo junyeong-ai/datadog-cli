@@ -226,7 +226,7 @@ Fix absolute start/end times across pages to query the same window.
 `--error-format json` emits the final runtime error as one JSON line on stderr. `.error.kind` distinguishes unavailable local credentials or OAuth provider failures (`credentials`), credentials Datadog rejected (`authentication`, HTTP 401), and missing permissions (`permission_denied`, HTTP 403); all use exit code 3. Other diagnostics such as retry logs may precede it, and CLI usage errors remain text. When stderr is closed, results and the original exit code are preserved even if warnings or the final error cannot be written.
 
 Exit codes: `0` success/closed stdout pipe, `1` input/configuration/other errors, `2` CLI usage,
-`3` authentication, `4` API, `5` rate limit, `6` network/timeout, `7` response decoding, `130` Ctrl+C.
+`3` credentials/authentication/permission, `4` API, `5` rate limit, `6` network/timeout, `7` response decoding, `130` Ctrl+C.
 
 ## Agents and development
 
