@@ -22,7 +22,9 @@ pub enum AuthProvider {
 #[derive(Parser)]
 #[command(name = "datadog-cli")]
 #[command(version)]
-#[command(about = "High-performance Datadog CLI")]
+#[command(
+    about = "Read-only Datadog queries for logs, metrics, traces, reviewed APIs, and MCP tools"
+)]
 pub struct Cli {
     #[arg(
         long,

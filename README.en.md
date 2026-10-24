@@ -1,40 +1,9 @@
 # Datadog CLI
 
-Discover reviewed API operations and their input schemas without credentials:
-
-```bash
-datadog-cli capabilities domains
-datadog-cli capabilities list --domain ci-visibility-pipelines
-datadog-cli capabilities show v2.SearchCIAppPipelineEvents
-```
-
-The catalog pins an official contract snapshot. It does not probe your organization's product access or user permissions.
-Operation lists default to 25 entries. Use `--search` for literal case-insensitive ID/summary matching and `--offset`/`--limit` for continuation.
-
-Execute a reviewed operation with `query DOMAIN VERSION.OPERATION --input JSON`.
-The request envelope uses `path`, `query`, `headers`, and `body` and is schema-validated before credential execution. Use `--input @request.json` or `--input -` for a file or stdin.
-
-```bash
-datadog-cli query containers v2.ListContainers
-datadog-cli query metrics v1.GetMetricMetadata --input '{"path":{"metric_name":"system.cpu.user"}}'
-```
-
-For `query`, `.data` is the unmodified API response, distinct from the legacy commands' projections. `.meta` retains source, HTTP status, API metadata, and execution accounting. JSONL emits one API response without CLI metadata. A single response does not establish that all matching records were collected.
-
-Defaults bound authentication/API execution to 60 seconds, four API attempts including retries, and 8 MiB of cumulative response bodies. Adjust `--deadline`, `--max-calls`, and `--max-bytes` explicitly. CSV/binary responses require `--output PATH`; existing files are never overwritten. Product access, permissions, and site availability vary by API. See [contract maintenance and policy](api/README.md). APIs returning credentials or complete authentication configurations are excluded. Webhook configuration reads are excluded because URLs can contain Basic authentication credentials. Synthetic investigations use dedicated result and history APIs.
-
-Operations advertising `time_range` in `capabilities show` accept `--from "1 hour ago" --to now`. Bounds use one reference instant and the operation's reviewed seconds, milliseconds, or RFC3339 fields. Range flags conflict with native input time fields. Other operations retain their native input structure. `.meta.context.time_range` records the normalized requested bounds.
-
-Repeat `--select /data` with exact JSON Pointers to return a pointer-keyed projection. Missing paths are errors; API metadata remains available. `.meta.result.processing` is `complete`, `partial`, or `unknown` from explicitly mapped server states, independently of pagination.
-
 [한국어](README.md) · [Command reference](.claude/skills/datadog-query/reference.md)
 
 A Rust CLI for querying Datadog logs, metrics, APM, RUM, and operational resources.
 Supports natural time expressions and JSON, JSONL, and table output. Query commands do not modify Datadog resources.
-
-Multiple pages use `--max-pages N` only where the catalog declares a cursor contract. Time-based searches require fixed bounds. They return the original responses in `.data.pages`, with exact continuation metadata and separate processing status. `--wait` polls a DDSQL job within the same deadline, byte and call budgets; submission is never retried.
-
-Discover official MCP specialist tools offline with `mcp list --toolset profiling`, inspect the current server schema with `mcp show TOOL`, then use `mcp call TOOL --input JSON`. An explicit reviewed policy covers read/analysis tools including DBM, profiling, Kubernetes and data lineage. MCP uses the same identity/site configuration with no automatic REST/MCP substitution. Deadline, HTTP-call and response-byte budgets include handshake, discovery, execution and cleanup. Actual tool exposure and product permissions vary by organization. Vendor analysis remains in the original tool result and should be distinguished from independently verified observations.
 
 ## Installation
 
@@ -64,6 +33,10 @@ cd datadog-cli
 The script installs the binary to `~/.local/bin`. Use `./scripts/uninstall.sh` to remove it. Configuration and skill removal are separate choices; selecting skill removal deletes it without a backup.
 To manage only the binary with Cargo, install with `cargo install --path . --locked --target host-tuple` and remove it with `cargo uninstall datadog-cli`. Cargo defaults to `~/.cargo/bin`. Choose one installation method to avoid competing binaries on PATH.
 
+Set `INSTALL_DIR` for the binary destination and `DATADOG_CLI_SKILL_DIR` for the skill destination. Use the same paths when uninstalling.
+
+See the [changelog](CHANGELOG.md) for changes and migration steps when upgrading.
+
 ## Getting started
 
 ```bash
@@ -84,7 +57,67 @@ export DD_SITE="datadoghq.com"
 # export DD_TOKEN="your-token"
 ```
 
-Set `INSTALL_DIR` for the binary destination and `DATADOG_CLI_SKILL_DIR` for the skill destination. Use the same paths when uninstalling.
+## Query examples
+
+```bash
+datadog-cli logs aggregate "service:api status:error" --from "6 hours ago"
+datadog-cli logs timeseries "status:error" --from "24 hours ago" --interval 1h
+datadog-cli timeseries "sum:errors{*}" "sum:hits{*}" --formula "a / b * 100"
+datadog-cli scalar "avg:system.cpu.user{*} by {host}" --aggregator avg
+datadog-cli spans "service:api error:true" --from "30 minutes ago"
+datadog-cli rum "@type:error" --from "1 hour ago"
+datadog-cli services --kind service --owner platform-team
+datadog-cli events "source:alert status:error"
+datadog-cli slo list --query checkout
+datadog-cli incidents list
+datadog-cli error-tracking search "service:api" --track trace
+datadog-cli downtimes --current-only
+datadog-cli hosts --filter "env:production"
+datadog-cli dashboards list
+datadog-cli teams --keyword platform
+datadog-cli audit "@action:login"
+datadog-cli llm-obs --ml-app chatbot --span-kind llm
+```
+
+Time inputs accept `now`, `1 hour ago`, `30m ago`, RFC3339, or Unix **seconds**. Start time must not exceed end time.
+`metrics` passes query expressions unchanged. Choose aggregation and interval in the query, such as `metrics "avg:system.cpu.user{*}.rollup(avg, 3600)"`, or set the interval for multiple queries in seconds with `timeseries --interval 3600`. Intervals do not guarantee a maximum number of returned points.
+LLM Observability uses the Agent Observability preview API. Supply a positional query or structured `--ml-app`/`--span-kind` filters; the two modes are mutually exclusive. Queries are passed unchanged.
+Rust `search_llm_obs_spans` accepts `LlmObsSearchParams` and `LlmObsFilter` to distinguish these modes. Product-specific features such as incidents require the relevant product and permissions.
+
+## API discovery and execution
+
+Discover reviewed API operations and their input schemas without credentials:
+
+```bash
+datadog-cli capabilities domains
+datadog-cli capabilities list --domain ci-visibility-pipelines
+datadog-cli capabilities show v2.SearchCIAppPipelineEvents
+```
+
+The catalog pins an official contract snapshot. It does not probe your organization's product access or user permissions.
+Operation lists default to 25 entries. Use `--search` for literal case-insensitive ID/summary matching and `--offset`/`--limit` for continuation.
+
+Execute a reviewed operation with `query DOMAIN VERSION.OPERATION --input JSON`.
+The request envelope uses `path`, `query`, `headers`, and `body` and is schema-validated before credential execution. Use `--input @request.json` or `--input -` for a file or stdin.
+
+```bash
+datadog-cli query containers v2.ListContainers
+datadog-cli query metrics v1.GetMetricMetadata --input '{"path":{"metric_name":"system.cpu.user"}}'
+```
+
+For `query`, `.data` is the unmodified API response, distinct from the dedicated commands' projections. `.meta` retains source, HTTP status, API metadata, and execution accounting. JSONL emits the API response without CLI metadata, one line per element when the response is an array. A single response does not establish that all matching records were collected.
+
+Defaults bound authentication/API execution to 60 seconds, four API attempts including retries, and 8 MiB of cumulative response bodies. Adjust `--deadline`, `--max-calls`, and `--max-bytes` explicitly. CSV/binary responses require `--output PATH`; existing files are never overwritten. Product access, permissions, and site availability vary by API. See [contract maintenance and policy](api/README.md). APIs returning credentials or complete authentication configurations are excluded. Webhook configuration reads are excluded because URLs can contain Basic authentication credentials. Synthetic investigations use dedicated result and history APIs.
+
+Operations advertising `time_range` in `capabilities show` accept `--from "1 hour ago" --to now`. Bounds use one reference instant and the operation's reviewed seconds, milliseconds, or RFC3339 fields. Range flags conflict with native input time fields. Other operations retain their native input structure. `.meta.context.time_range` records the normalized requested bounds.
+
+Repeat `--select /data` with exact JSON Pointers to return a pointer-keyed projection. Missing paths are errors; API metadata remains available. `.meta.result.processing` is `complete`, `partial`, or `unknown` from explicitly mapped server states, independently of pagination.
+
+Multiple pages use `--max-pages N` only where the catalog declares a cursor contract. Time-based searches require fixed bounds. They return the original responses in `.data.pages`, with exact continuation metadata and separate processing status. `--wait` polls a DDSQL job within the same deadline, byte and call budgets; submission is never retried.
+
+## MCP specialist tools
+
+Discover official MCP specialist tools offline with `mcp list --toolset profiling`, inspect the current server schema with `mcp show TOOL`, then use `mcp call TOOL --input JSON`. An explicit reviewed policy covers read/analysis tools including DBM, profiling, Kubernetes and data lineage. MCP uses the same identity/site configuration with no automatic REST/MCP substitution. Deadline, HTTP-call and response-byte budgets include handshake, discovery, execution and cleanup. Actual tool exposure and product permissions vary by organization. Vendor analysis remains in the original tool result and should be distinguished from independently verified observations.
 
 ## OAuth authentication
 
@@ -161,77 +194,17 @@ datadog-cli config edit   # Open that path in $EDITOR; defaults to vim
 `config init` creates the global file. `DD_TAG_FILTER` sets the default tag filter; `RUST_LOG` sets the log level.
 See the [command reference](.claude/skills/datadog-query/reference.md) for supported sites and options.
 
-## Upgrading to 0.8
-
-The global `[auth]` section selects the default authentication method. Existing configurations without `[auth]` remain compatible. Required OAuth session values are checked after merging configuration and CLI options. Rust callers should use asynchronous `Config::load_with_options(ConfigOptions)` to apply authentication settings; synchronous `Config::load` returns an error directing OAuth callers to that loader.
-Skills are replaced completely without backups; temporary copies are prepared outside skill discovery directories. Selecting skill removal also leaves no backup.
-
-## Upgrading to 0.7
-
-Dashboard list and detail output preserves optional API settings and extension fields. Detail authors are available through the original `author_handle` and `author_name` fields and the existing `author` alias; `created` and `modified` aliases remain available. Template variable `defaults` and `type`, widget `is_column_break`, and unknown settings are retained.
-Rust Dashboard models keep fields outside the required core in `extra` maps. `DashboardSummary` is a JSON Map alias; `AuthorInfo`, `TemplateVariable`, and `WidgetLayout` were removed.
-Configuration warnings and final error messages no longer abort on closed stderr pipes. The original exit code is preserved even if the final error message cannot be written.
-
-## Upgrading to 0.6
-
-RUM event details are preserved in each record's `attributes`: read `.data[].attributes.error.stack` for error stacks and `.data[].attributes.view` for page details. `--full-stack-trace` applies to that error stack.
-Server query metadata, including status, warnings, and request IDs, is preserved at `.meta.api`. Server timeouts and response warnings also appear on stderr in every output format. Partial results with nonfatal warnings retain exit code 0; do not interpret a warned aggregate as a complete count.
-Incident list and detail `--include` resources are available at `.meta.included`. Use `--format json` when scripts need metadata.
-Rust `RumAttributes` follows the API schema, with event details in its `attributes` map. The separate detail models such as `RumApplication` were removed; `CursorMeta` and `CursorPage` preserve extension fields in an `extra` map.
-
-## Upgrading to 0.5
-
-`scalar` preserves the ordered API column array at `data.columns`, including `type`, optional `name`, `values`, and unit metadata. Identical column names no longer overwrite one another.
-JSONL emits one response body containing `columns`. Table headers use `[index] name (type)` to distinguish columns.
-Extract numbers with `jq '.data.columns[] | select(.type == "number") | .values[]'`; omit the `.data` prefix for JSONL.
-Reported metric-processing errors exit with code 4; malformed response structures exit with code 7.
-The Rust client's `query_scalar` and `query_timeseries` now return validated `ScalarAttributes` and `TimeseriesAttributes` directly.
-
-## Upgrading to 0.4
-
-`metrics --max-points` and automatic rollup have been removed. `metrics` passes query expressions unchanged.
-Use `metrics "avg:system.cpu.user{*}.rollup(avg, 3600)"` to choose aggregation and interval explicitly.
-For multiple queries, use `timeseries "avg:system.cpu.user{*}" "avg:system.cpu.system{*}" --interval 3600`. Intervals are in seconds and do not guarantee a maximum number of returned points.
-
-## Upgrading to 0.3
-
-Remove obsolete `time_range`, `limit`, and `page_size` keys from `[defaults]`. Previous versions did not apply them to queries; unknown fields now fail validation. Set time ranges and counts with command options.
-Detail and aggregate JSONL emit the `data` body only. Use `--format json` in scripts that require metadata.
-
-## Query examples
-
-```bash
-datadog-cli logs aggregate "service:api status:error" --from "6 hours ago"
-datadog-cli logs timeseries "status:error" --from "24 hours ago" --interval 1h
-datadog-cli timeseries "sum:errors{*}" "sum:hits{*}" --formula "a / b * 100"
-datadog-cli scalar "avg:system.cpu.user{*} by {host}" --aggregator avg
-datadog-cli spans "service:api error:true" --from "30 minutes ago"
-datadog-cli rum "@type:error" --from "1 hour ago"
-datadog-cli services --kind service --owner platform-team
-datadog-cli events "source:alert status:error"
-datadog-cli slo list --query checkout
-datadog-cli incidents list
-datadog-cli error-tracking search "service:api" --track trace
-datadog-cli downtimes --current-only
-datadog-cli hosts --filter "env:production"
-datadog-cli dashboards list
-datadog-cli teams --keyword platform
-datadog-cli audit "@action:login"
-datadog-cli llm-obs --ml-app chatbot --span-kind llm
-```
-
-Time inputs accept `now`, `1 hour ago`, `30m ago`, RFC3339, or Unix **seconds**. Start time must not exceed end time.
-LLM Observability uses the Agent Observability preview API. Supply a positional query or structured `--ml-app`/`--span-kind` filters; the two modes are mutually exclusive. Queries are passed unchanged.
-Rust `search_llm_obs_spans` accepts `LlmObsSearchParams` and `LlmObsFilter` to distinguish these modes. Product-specific features such as incidents require the relevant product and permissions.
-
 ## Output and automation
 
-`--format` works before or after subcommands.
+`--format` works before or after API and discovery subcommands; config commands print text only.
 JSON is indented on a terminal and compact in pipes. JSONL emits only `data` records, without pagination metadata.
 Tables accept an object or an array of objects. Diagnostics go to stderr.
 Log custom fields are preserved at `.data[].attributes`; actual trace ID keys depend on instrumentation.
 Monitor details preserve evaluation settings, recovery thresholds, and extension fields. Hosts retain IDs, aliases, and server-supplied metadata and metrics. Spans retain HTTP and messaging attributes; `--full-stack-trace` affects only error stacks.
 Metric `.data[].units` preserves primary/per-unit order, null positions, and scaling. The existing `.unit` summarizes the first non-null unit.
+`scalar` preserves the ordered API column array at `.data.columns`; identical column names do not overwrite one another. Extract numbers with `jq '.data.columns[] | select(.type == "number") | .values[]'` and omit the `.data` prefix for JSONL. Table headers use `[index] name (type)` to distinguish columns.
+RUM event details are at `.data[].attributes`; incident `--include` resources are at `.meta.included`.
+Server query status, warnings, and request IDs are preserved at `.meta.api`. Server timeouts and response warnings also appear on stderr in every output format. Partial results with nonfatal warnings still exit with code 0, so do not interpret a warned aggregate as a complete count.
 
 ```bash
 datadog-cli logs search "status:error" --format jsonl | jq -r '.service'
@@ -256,7 +229,7 @@ Exit codes: `0` success/closed stdout pipe, `1` input/configuration/other errors
 
 ## Agents and development
 
-Install the query [skill](.claude/skills/datadog-query/SKILL.md) to `~/.claude/skills/datadog-query` with the installer, or copy the folder into your agent's skill directory.
+Install the query [skill](.claude/skills/datadog-query/SKILL.md) to `~/.claude/skills/datadog-query` with the installer, or copy the folder into your agent's skill directory. In Claude Code, the skill pre-approves only `datadog-cli` and `jq` commands during the turn that invokes it.
 See [AGENTS.md](AGENTS.md) for development rules and [examples.md](.claude/skills/datadog-query/examples.md) for investigation workflows.
 
 ```bash

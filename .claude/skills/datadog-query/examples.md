@@ -48,7 +48,7 @@ datadog-cli query logs v2.ListLogs \
 
 Each original response is at `.data.pages[]`. Check `.meta.pagination.next_cursor`, `.meta.result.collection`, and `.meta.result.processing` independently. `page_limit` means collection stopped with more results available; `exhausted` means the API supplied no next cursor. Neither proves that the underlying query was complete. Inspect `.meta.api.pages[]` for server warnings/status. Cursors are opaque and the client never follows server-supplied URLs.
 
-Legacy `logs search`, `spans`, and other search commands still return one page. Their continuation fields are at `.pagination`; pass the documented cursor/page/offset flag with unchanged absolute bounds.
+Dedicated `logs search`, `spans`, and other search commands return one page. Their continuation fields are at `.pagination`; pass the documented cursor/page/offset flag with unchanged absolute bounds.
 
 ## Metric formulas
 
@@ -67,7 +67,7 @@ Metric names and tags depend on your instrumentation. Check the selected metric'
 After choosing a monitor ID from `monitors list`, inspect its full options with `monitors get <id>`. Evaluation delay, missing-data behavior, grouping delays, and recovery thresholds can explain behavior that the query alone cannot.
 
 ```bash
-datadog-cli metrics "avg:system.net.bytes_rcvd{*}" --from "5 minutes ago" |
+datadog-cli metrics "avg:system.net.bytes_rcvd{*}" --from "5 minutes ago" --format json |
   jq '.data[] | {metric, units}'
 ```
 

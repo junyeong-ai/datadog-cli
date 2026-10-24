@@ -56,7 +56,7 @@ Global options work before or after subcommands. JSON retains pagination metadat
 ## `datadog-cli`
 
 ```text
-High-performance Datadog CLI
+Read-only Datadog queries for logs, metrics, traces, reviewed APIs, and MCP tools
 
 Usage: datadog-cli [OPTIONS] <COMMAND>
 

@@ -66,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - OAuth session requirements are validated after configuration resolution. Project `[auth]` is rejected, and a conflicting project OAuth site requires an explicit trusted override. `--auth-provider pup` remains supported.
+- Synchronous `Config::load` returns an error for OAuth configurations; Rust callers use asynchronous `Config::load_with_options`.
 
 ### Fixed
 
@@ -138,6 +139,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Development toolchain pinned to Rust 1.99.1; Rust 1.97 remains the minimum supported version.
 - Runtime and development dependencies updated against the October 17, 2026 registry; unused test dependencies and benchmark features removed.
 - Global and project config fields now merge before environment and CLI overrides. Explicit credentials in a higher source select the authentication method; unknown config fields and zero timeouts fail validation.
+- Obsolete `[defaults]` keys `time_range`, `limit`, and `page_size`, which queries never applied, fail validation as unknown fields. Set time ranges and counts with command options.
 - HTTP transport separated from endpoint definitions, with sensitive authentication headers, disabled redirects, one retry policy, full-jitter backoff, `Retry-After` handling, and a configurable total timeout.
 - JSONL consistently emits data without envelopes for detail and aggregate results; use JSON to retain metadata. Configuration display fully redacts credentials.
 - Tables support detail objects and propagate output errors. Configuration output/edit/path consistently use the nearest project file when present.
