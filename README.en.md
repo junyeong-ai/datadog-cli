@@ -267,4 +267,4 @@ cargo deny check
 cargo run --locked --example command_reference > .claude/skills/datadog-query/reference.md
 ```
 
-Run benchmarks with `cargo bench --bench parsing`. CI covers Linux/macOS/Windows tests, MSRV, coverage, and dependency checks.
+Run benchmarks with `cargo bench --bench parsing`. CI covers Linux/macOS/Windows tests, MSRV, workflow security audits, and dependency checks.

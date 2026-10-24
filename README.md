@@ -264,4 +264,4 @@ cargo deny check
 cargo run --locked --example command_reference > .claude/skills/datadog-query/reference.md
 ```
 
-벤치마크는 `cargo bench --bench parsing`으로 실행합니다. CI는 Linux·macOS·Windows 테스트, MSRV 검사, 커버리지와 의존성 검사를 수행합니다.
+벤치마크는 `cargo bench --bench parsing`으로 실행합니다. CI는 Linux·macOS·Windows 테스트, MSRV 검사, 워크플로우 보안 감사와 의존성 검사를 수행합니다.
