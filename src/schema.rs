@@ -29,7 +29,7 @@ pub(crate) fn violations(validator: &Validator, instance: &Value) -> Option<Stri
 fn describe(error: &ValidationError<'_>) -> String {
     let location = match error.instance_path().as_str() {
         "" => "/".to_string(),
-        location => tail(location),
+        location => tail(location).replace('\\', "\\\\"),
     };
     let expectation = match error.kind() {
         ValidationErrorKind::AdditionalProperties { unexpected }
@@ -48,7 +48,10 @@ fn names(names: &[String]) -> String {
     let mut listed = names
         .iter()
         .take(MAX_REPORTED_NAMES)
-        .map(|name| format!("'{}'", head(name)))
+        .map(|name| {
+            let name = head(name).replace('\\', "\\\\").replace('\'', "\\'");
+            format!("'{name}'")
+        })
         .collect::<Vec<_>>()
         .join(", ");
     if names.len() > MAX_REPORTED_NAMES {
@@ -159,6 +162,13 @@ mod tests {
         );
         assert!(message.contains(&format!("'{}...'", &long[..MAX_FRAGMENT_CHARS])));
         assert!(message.ends_with(" and 2 more"), "{message}");
+
+        let message = violations(
+            &validator(json!({"properties": {"id": {}}, "additionalProperties": false})),
+            &json!({"x', 'y\\n": 1}),
+        )
+        .unwrap();
+        assert_eq!(message, r"/: unexpected properties 'x\', \'y\\n'");
 
         let message = violations(
             &validator(json!({"additionalProperties": {"type": "integer"}})),
