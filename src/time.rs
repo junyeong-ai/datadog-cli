@@ -4,10 +4,11 @@ use chrono::{DateTime, Utc};
 
 use crate::error::{DatadogError, Result};
 
-/// Latest accepted Unix timestamp and offset: 9999-12-31T23:59:59Z. Larger
-/// values are almost always milliseconds pasted where seconds are expected,
-/// and the bound keeps resolved times convertible to milliseconds.
+/// Latest accepted time, 9999-12-31T23:59:59Z, in Unix seconds. Larger values
+/// are almost always milliseconds pasted where seconds are expected, and the
+/// bound keeps resolved times convertible to milliseconds.
 const MAX_UNIX_SECONDS: i64 = 253_402_300_799;
+const SUPPORTED_RANGE: &str = "Time must be between 1970-01-01T00:00:00Z and 9999-12-31T23:59:59Z";
 
 const EXPECTED_FORMS: &str = "expected now, a past offset such as 15m, 1h, 7d, now-1h or \
     '2 hours ago', RFC3339 such as 2024-01-01T00:00:00Z, or Unix seconds";
@@ -39,7 +40,10 @@ impl FromStr for TimeExpr {
                 });
         }
         if let Ok(time) = DateTime::parse_from_rfc3339(input) {
-            return Ok(Self::At(time.timestamp()));
+            return Some(time.timestamp())
+                .filter(|seconds| (0..=MAX_UNIX_SECONDS).contains(seconds))
+                .map(Self::At)
+                .ok_or_else(|| SUPPORTED_RANGE.into());
         }
         let offset = input
             .strip_prefix("now-")
@@ -52,11 +56,15 @@ impl FromStr for TimeExpr {
 }
 
 impl TimeExpr {
-    pub fn resolve(self, now: DateTime<Utc>) -> i64 {
-        match self {
+    pub fn resolve(self, now: DateTime<Utc>) -> Result<i64> {
+        let seconds = match self {
             Self::Ago(seconds) => now.timestamp().saturating_sub(seconds),
             Self::At(seconds) => seconds,
+        };
+        if seconds < 0 {
+            return Err(DatadogError::InvalidInput(SUPPORTED_RANGE.into()));
         }
+        Ok(seconds)
     }
 }
 
@@ -85,7 +93,7 @@ pub struct TimeRange {
 
 impl TimeRange {
     pub fn resolve(from: TimeExpr, to: TimeExpr, now: DateTime<Utc>) -> Result<Self> {
-        let (from, to) = (from.resolve(now), to.resolve(now));
+        let (from, to) = (from.resolve(now)?, to.resolve(now)?);
         if from > to {
             return Err(DatadogError::InvalidInput(
                 "Start time must not be after end time".into(),
@@ -120,7 +128,8 @@ mod tests {
     }
 
     fn resolve(input: &str) -> std::result::Result<i64, String> {
-        input.parse::<TimeExpr>().map(|time| time.resolve(now()))
+        let time = input.parse::<TimeExpr>()?;
+        time.resolve(now()).map_err(|error| error.to_string())
     }
 
     #[test]
@@ -184,6 +193,16 @@ mod tests {
         }
         assert!(resolve(&format!("{}s", MAX_UNIX_SECONDS + 1)).is_err());
         assert!(resolve(&format!("{}w", i64::MAX)).is_err());
+    }
+
+    #[test]
+    fn resolved_times_stay_between_the_epoch_and_year_9999() {
+        for input in ["1969-12-31T23:59:59Z", "9999-12-31T23:59:59-23:59"] {
+            assert_eq!(resolve(input), Err(SUPPORTED_RANGE.into()), "{input}");
+        }
+        assert_eq!(resolve("1970-01-01T00:00:00Z"), Ok(0));
+        assert!(resolve("400000w").unwrap_err().contains("1970-01-01"));
+        assert_eq!(resolve("1704067200s"), Ok(0));
     }
 
     #[test]

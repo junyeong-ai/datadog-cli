@@ -79,7 +79,7 @@ datadog-cli audit "@action:login"
 datadog-cli llm-obs --ml-app chatbot --span-kind llm
 ```
 
-시간은 `now`, 과거 기준 상대 시간(`15m`, `1h`, `7d`, `now-1h`, `2 hours ago`, 단위 s·m·h·d·w), RFC3339 또는 Unix **초**로 입력합니다. 상대 시간은 항상 기준 시각 이전을 뜻하며, 그 밖의 형식은 CLI 문법 오류(종료 코드 2)입니다. 시작 시간이 종료 시간보다 늦으면 자격증명을 사용하기 전에 종료 코드 1로 실패합니다.
+시간은 `now`, 과거 기준 상대 시간(`15m`, `1h`, `7d`, `now-1h`, `2 hours ago`, 단위 s·m·h·d·w), RFC3339 또는 Unix **초**로 입력합니다. 상대 시간은 항상 기준 시각 이전을 뜻하며, 그 밖의 형식은 CLI 문법 오류(종료 코드 2)입니다. 시각은 1970-01-01T00:00:00Z부터 9999-12-31T23:59:59Z까지입니다. 시작 시간이 종료 시간보다 늦거나 상대 시간이 이 범위를 벗어나면 자격증명을 사용하기 전에 종료 코드 1로 실패합니다.
 `metrics`는 쿼리를 수정 없이 전달합니다. 집계 방식과 간격은 `metrics "avg:system.cpu.user{*}.rollup(avg, 3600)"`처럼 쿼리에 지정하고, 여러 쿼리의 간격은 `timeseries --interval 3600`처럼 초 단위로 지정합니다. 간격은 반환 포인트 수의 상한을 보장하지 않습니다.
 LLM Observability는 Agent Observability 프리뷰 API에 의존합니다. 위치 인자로 쿼리를 전달하거나 `--ml-app`·`--span-kind`로 필터링할 수 있으며, 두 방식은 함께 사용할 수 없습니다. 쿼리는 수정 없이 전송합니다.
 Rust의 `search_llm_obs_spans`는 `LlmObsSearchParams`와 `LlmObsFilter`로 조회 방식을 구분합니다. 인시던트 등 제품별 기능은 계정의 제품 활성화와 권한이 필요합니다.

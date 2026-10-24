@@ -728,9 +728,7 @@ pub async fn run(cli: Cli) -> Result<()> {
         return commands::handle_config(action, &cli);
     }
 
-    if let Some(range) = cli.command.time_range() {
-        range.resolve(now)?;
-    }
+    cli.command.validate_times(now)?;
     let config = Config::load_with_options(cli.config_options()).await?;
     let client = DatadogClient::new(&config)?;
 
@@ -750,7 +748,8 @@ pub async fn run(cli: Cli) -> Result<()> {
 }
 
 impl Command {
-    fn time_range(&self) -> Option<&TimeRangeArgs> {
+    /// Resolves time arguments before configuration or credential providers run.
+    fn validate_times(&self, now: chrono::DateTime<chrono::Utc>) -> Result<()> {
         match self {
             Command::Metrics(MetricsArgs { range, .. })
             | Command::Timeseries(TimeseriesArgs { range, .. })
@@ -768,12 +767,12 @@ impl Command {
                     LogsAction::Search(LogsSearchArgs { range, .. })
                     | LogsAction::Aggregate(LogsAggregateArgs { range, .. })
                     | LogsAction::Timeseries(LogsTimeseriesArgs { range, .. }),
-            } => Some(range),
+            } => range.resolve(now).map(drop),
+            Command::Hosts(HostsArgs { from, .. }) => from.resolve(now).map(drop),
             Command::Mcp { .. }
             | Command::Query(_)
             | Command::Capabilities { .. }
             | Command::Monitors { .. }
-            | Command::Hosts(_)
             | Command::Dashboards { .. }
             | Command::Services(_)
             | Command::Slo { .. }
@@ -783,7 +782,7 @@ impl Command {
             }
             | Command::Downtimes(_)
             | Command::Teams(_)
-            | Command::Config { .. } => None,
+            | Command::Config { .. } => Ok(()),
         }
     }
 }

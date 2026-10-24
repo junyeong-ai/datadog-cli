@@ -79,7 +79,7 @@ datadog-cli audit "@action:login"
 datadog-cli llm-obs --ml-app chatbot --span-kind llm
 ```
 
-Time inputs accept `now`, past offsets (`15m`, `1h`, `7d`, `now-1h`, `2 hours ago`; units s, m, h, d, w), RFC3339, or Unix **seconds**. Offsets always point into the past; other forms are CLI usage errors (exit code 2). A start time after the end time fails with exit code 1 before credentials are used.
+Time inputs accept `now`, past offsets (`15m`, `1h`, `7d`, `now-1h`, `2 hours ago`; units s, m, h, d, w), RFC3339, or Unix **seconds**. Offsets always point into the past; other forms are CLI usage errors (exit code 2). Times range from 1970-01-01T00:00:00Z to 9999-12-31T23:59:59Z. A start time after the end time, or an offset that resolves outside that range, fails with exit code 1 before credentials are used.
 `metrics` passes query expressions unchanged. Choose aggregation and interval in the query, such as `metrics "avg:system.cpu.user{*}.rollup(avg, 3600)"`, or set the interval for multiple queries in seconds with `timeseries --interval 3600`. Intervals do not guarantee a maximum number of returned points.
 LLM Observability uses the Agent Observability preview API. Supply a positional query or structured `--ml-app`/`--span-kind` filters; the two modes are mutually exclusive. Queries are passed unchanged.
 Rust `search_llm_obs_spans` accepts `LlmObsSearchParams` and `LlmObsFilter` to distinguish these modes. Product-specific features such as incidents require the relevant product and permissions.

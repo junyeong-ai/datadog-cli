@@ -20,7 +20,7 @@ impl HostsHandler {
     ) -> Result<Value> {
         let handler = HostsHandler;
 
-        let from = args.from.resolve(now);
+        let from = args.from.resolve(now)?;
 
         let response = client
             .list_hosts(
