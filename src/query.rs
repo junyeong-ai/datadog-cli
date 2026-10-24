@@ -9,6 +9,7 @@ use serde_json::{Value, json};
 use crate::catalog::{Catalog, Operation, RetryPolicy};
 use crate::datadog::{DatadogClient, QueryBudget, QueryCall, query_headers};
 use crate::error::{DatadogError, Result};
+use crate::schema::Violations;
 
 mod time;
 pub use time::apply_time_range;
@@ -307,6 +308,7 @@ impl PreparedQuery {
         let mut any_partial = false;
         let mut all_complete = true;
         let mut polls = 0_u32;
+        let mut deviations = Violations::default();
         let (reply, body, next_cursor) = loop {
             let reply = client.execute_query(&current.call, &mut budget).await?;
             let body = current.decode(&reply)?;
@@ -323,6 +325,7 @@ impl PreparedQuery {
                                 "Completed DDSQL response is missing columns".into(),
                             ));
                         }
+                        current.record_deviations(&reply, &body, "", &mut deviations)?;
                         break (reply, body, None);
                     }
                     Some("running") => {
@@ -362,15 +365,27 @@ impl PreparedQuery {
                     }
                 }
             }
-            let cursor = current
+            let cursor = match current
                 .operation
                 .pagination
                 .as_ref()
                 .and_then(|contract| body.pointer(&contract.response))
-                .and_then(Value::as_str)
-                .filter(|value| !value.is_empty())
-                .map(str::to_owned);
+            {
+                None | Some(Value::Null) => None,
+                Some(Value::String(cursor)) => (!cursor.is_empty()).then(|| cursor.clone()),
+                Some(_) => {
+                    return Err(DatadogError::DecodeError(
+                        "API returned a non-string pagination cursor".into(),
+                    ));
+                }
+            };
             if self.max_pages > 1 {
+                current.record_deviations(
+                    &reply,
+                    &body,
+                    &format!("/pages/{}", pages.len()),
+                    &mut deviations,
+                )?;
                 pages.push(self.project(&body)?);
                 if let Some(cursor) = &cursor {
                     if !seen.insert(cursor.clone()) {
@@ -393,6 +408,9 @@ impl PreparedQuery {
                         continue;
                     }
                 }
+            }
+            if self.max_pages == 1 {
+                current.record_deviations(&reply, &body, "", &mut deviations)?;
             }
             break (reply, body, cursor);
         };
@@ -437,7 +455,7 @@ impl PreparedQuery {
                 "projection":{"pointers":self.selection},
                 "pagination":{"returned_pages":if self.max_pages > 1 { pages.len() } else { 1 },"next_cursor":next_cursor,"has_next":self.operation.pagination.as_ref().map(|_| next_cursor.is_some()),"has_next_is_estimate":self.operation.pagination.as_ref().map(|_| false)},
                 "job":{"wait":self.wait,"polls":polls},
-                "result":{"processing":processing,"collection":if self.max_pages == 1 { "single_response" } else if next_cursor.is_some() { "page_limit" } else { "exhausted" },"not_modified":reply.status==304}
+                "result":{"schema_violations":deviations.entries(),"processing":processing,"collection":if self.max_pages == 1 { "single_response" } else if next_cursor.is_some() { "page_limit" } else { "exhausted" },"not_modified":reply.status==304}
             }
         }))
     }
@@ -456,6 +474,41 @@ impl PreparedQuery {
                 }
             })
             .unwrap_or("unknown")
+    }
+
+    /// Records where a returned JSON body deviates from the bundled response
+    /// schema. The body is kept: the snapshot can trail the live API, and the
+    /// fields this client interprets are checked where they are read.
+    fn record_deviations(
+        &self,
+        reply: &crate::datadog::ApiReply,
+        body: &Value,
+        prefix: &str,
+        deviations: &mut Violations,
+    ) -> Result<()> {
+        let Some(schema) = self
+            .operation
+            .responses
+            .get(&reply.status.to_string())
+            .filter(|response| response.media.as_deref().is_some_and(is_json))
+            .and_then(|response| response.schema.as_ref())
+        else {
+            return Ok(());
+        };
+        let schema = Catalog::load()?.response_schema(self.operation, schema.clone())?;
+        let validator = jsonschema::options()
+            .with_draft(jsonschema::Draft::Draft7)
+            .offline()
+            .build(&schema)
+            .map_err(|error| {
+                DatadogError::DecodeError(format!(
+                    "Invalid bundled response schema for {} at {}",
+                    self.operation.id,
+                    error.schema_path()
+                ))
+            })?;
+        deviations.record(&validator, body, prefix);
+        Ok(())
     }
 
     fn project(&self, body: &Value) -> Result<Value> {
@@ -489,9 +542,6 @@ impl PreparedQuery {
                 ))
             })?;
             crate::datadog::validate_query_processing(&self.operation.id, &body)?;
-            if let Some(schema) = &response.schema {
-                validate_response(self.operation, schema, &body)?;
-            }
             if matches!(
                 self.operation.id.as_str(),
                 "v2.ExecuteDdsqlTabularQuery" | "v2.FetchDdsqlTabularQuery"
@@ -546,28 +596,6 @@ impl PreparedQuery {
 fn is_json(media: &str) -> bool {
     let media = media.split(';').next().unwrap_or(media).trim();
     media == "application/json" || media.ends_with("+json")
-}
-
-fn validate_response(operation: &Operation, schema: &Value, body: &Value) -> Result<()> {
-    let schema = Catalog::load()?.response_schema(operation, schema.clone())?;
-    let validator = jsonschema::options()
-        .with_draft(jsonschema::Draft::Draft7)
-        .offline()
-        .build(&schema)
-        .map_err(|error| {
-            DatadogError::DecodeError(format!(
-                "Invalid bundled response schema for {} at {}",
-                operation.id,
-                error.schema_path()
-            ))
-        })?;
-    if let Some(violations) = crate::schema::violations(&validator, body) {
-        return Err(DatadogError::DecodeError(format!(
-            "Response for {} violates the API schema: {violations}",
-            operation.id
-        )));
-    }
-    Ok(())
 }
 
 fn scalar(value: &Value) -> Result<String> {

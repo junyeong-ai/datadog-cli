@@ -20,7 +20,8 @@ property names, enum values, and additional properties retain their API meanings
 Request schemas omit `readOnly` properties from required fields; response schemas omit `writeOnly` properties from required fields. Other required fields and property types remain validated. This normalization visits schema positions only, including local referenced definitions, without rewriting default or enum instance data. Examples and OpenAPI-only annotations are omitted. Requests reject unknown parameter
 names and undeclared fields of objects that declare properties, because Datadog ignores some
 misspelled body fields; objects whose schema permits additional properties stay extensible.
-Response fields follow the published schema.
+Responses are checked against the published schema; deviations are reported in
+`meta.result.schema_violations` and on stderr while the response body is preserved.
 
 `overrides.json` records field or model corrections supported by observed responses
 or explicit official model contracts, with source references. `AnyValue` preserves

@@ -45,6 +45,22 @@ fn write_api_diagnostics(data: &Value, writer: &mut impl Write) -> io::Result<()
             )?;
         }
     }
+    if let Some(violations) = data["meta"]["result"]["schema_violations"]
+        .as_array()
+        .filter(|violations| !violations.is_empty())
+    {
+        let violations = violations
+            .iter()
+            .filter_map(Value::as_str)
+            .collect::<Vec<_>>()
+            .join("; ");
+        crate::diagnostics::write(
+            writer,
+            format_args!(
+                "Warning: the response deviates from the bundled API schema: {violations}"
+            ),
+        )?;
+    }
     Ok(())
 }
 
@@ -241,6 +257,22 @@ mod tests {
             let mut diagnostics = Vec::new();
             write_api_diagnostics(&json!({"meta":{"api":meta}}), &mut diagnostics).unwrap();
             assert_eq!(String::from_utf8(diagnostics).unwrap().lines().count(), 1);
+        }
+        for (violations, expected) in [
+            (json!([]), ""),
+            (
+                json!(["/0/id: null is not of type \"string\"", "2 more"]),
+                "Warning: the response deviates from the bundled API schema: \
+                 /0/id: null is not of type \"string\"; 2 more\n",
+            ),
+        ] {
+            let mut diagnostics = Vec::new();
+            write_api_diagnostics(
+                &json!({"meta":{"result":{"schema_violations":violations}}}),
+                &mut diagnostics,
+            )
+            .unwrap();
+            assert_eq!(String::from_utf8(diagnostics).unwrap(), expected);
         }
     }
 

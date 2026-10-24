@@ -9,27 +9,56 @@ const MAX_REPORTED_VIOLATIONS: usize = 10;
 const MAX_REPORTED_NAMES: usize = 5;
 const MAX_FRAGMENT_CHARS: usize = 128;
 
-/// Describes each violation by instance location and schema expectation.
-pub(crate) fn violations(validator: &Validator, instance: &Value) -> Option<String> {
-    let mut errors = validator.iter_errors(instance);
-    let mut reported = vec![describe(&errors.next()?)];
-    reported.extend(
-        errors
-            .by_ref()
-            .take(MAX_REPORTED_VIOLATIONS - 1)
-            .map(|error| describe(&error)),
-    );
-    let omitted = errors.count();
-    if omitted > 0 {
-        reported.push(format!("{omitted} more"));
-    }
-    Some(printable(&reported.join("; ")))
+/// Bounded, escaped descriptions of schema violations by instance location
+/// and schema expectation.
+#[derive(Default)]
+pub(crate) struct Violations {
+    reported: Vec<String>,
+    omitted: usize,
 }
 
-fn describe(error: &ValidationError<'_>) -> String {
-    let location = match error.instance_path().as_str() {
-        "" => "/".to_string(),
-        location => tail(location).replace('\\', "\\\\"),
+impl Violations {
+    /// Records the violations of `instance`, prefixing each location with the
+    /// JSON Pointer of the instance inside the reported document.
+    pub(crate) fn record(&mut self, validator: &Validator, instance: &Value, prefix: &str) {
+        for error in validator.iter_errors(instance) {
+            if self.reported.len() < MAX_REPORTED_VIOLATIONS {
+                self.reported.push(printable(&describe(&error, prefix)));
+            } else {
+                self.omitted += 1;
+            }
+        }
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.reported.is_empty()
+    }
+
+    pub(crate) fn entries(&self) -> Vec<String> {
+        let mut entries = self.reported.clone();
+        if self.omitted > 0 {
+            entries.push(format!("{} more", self.omitted));
+        }
+        entries
+    }
+}
+
+impl std::fmt::Display for Violations {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.entries().join("; "))
+    }
+}
+
+pub(crate) fn violations(validator: &Validator, instance: &Value) -> Option<String> {
+    let mut violations = Violations::default();
+    violations.record(validator, instance, "");
+    (!violations.is_empty()).then(|| violations.to_string())
+}
+
+fn describe(error: &ValidationError<'_>, prefix: &str) -> String {
+    let location = match format!("{prefix}{}", error.instance_path().as_str()) {
+        location if location.is_empty() => "/".to_string(),
+        location => tail(&location).replace('\\', "\\\\"),
     };
     let expectation = match error.kind() {
         ValidationErrorKind::AdditionalProperties { unexpected }
@@ -135,6 +164,21 @@ mod tests {
             MAX_REPORTED_VIOLATIONS
         );
         assert!(message.ends_with("; 15 more"), "{message}");
+    }
+
+    #[test]
+    fn recorded_documents_share_one_bound_and_prefix_their_locations() {
+        let validator = validator(json!({"type": "array", "items": {"type": "integer"}}));
+        let mut violations = Violations::default();
+        violations.record(&validator, &json!(["x"]), "/pages/0");
+        violations.record(&validator, &json!(vec!["x"; 12]), "/pages/1");
+        let entries = violations.entries();
+        assert_eq!(entries.len(), MAX_REPORTED_VIOLATIONS + 1);
+        assert!(entries[0].starts_with("/pages/0/0: "), "{entries:?}");
+        assert!(entries[1].starts_with("/pages/1/0: "), "{entries:?}");
+        assert_eq!(entries[MAX_REPORTED_VIOLATIONS], "3 more");
+        violations.record(&validator, &json!(1), "/pages/2");
+        assert!(violations.entries()[MAX_REPORTED_VIOLATIONS] == "4 more");
     }
 
     #[test]

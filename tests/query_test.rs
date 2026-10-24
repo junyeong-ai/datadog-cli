@@ -37,9 +37,7 @@ async fn optional_metric_metadata_accepts_null_without_accepting_invalid_types()
         .expect(1)
         .mount(&server)
         .await;
-    let result = execute(&server, "metrics", "v1.GetMetricMetadata", input.clone())
-        .await
-        .unwrap();
+    let result = conforming(&server, "metrics", "v1.GetMetricMetadata", input.clone()).await;
     assert!(result["data"]["per_unit"].is_null());
     server.reset().await;
     Mock::given(method("GET"))
@@ -48,12 +46,7 @@ async fn optional_metric_metadata_accepts_null_without_accepting_invalid_types()
         .expect(1)
         .mount(&server)
         .await;
-    assert!(matches!(
-        execute(&server, "metrics", "v1.GetMetricMetadata", input)
-            .await
-            .unwrap_err(),
-        DatadogError::DecodeError(_)
-    ));
+    deviations(&server, "metrics", "v1.GetMetricMetadata", input).await;
 }
 
 #[tokio::test]
@@ -66,9 +59,7 @@ async fn monitor_notify_by_accepts_null_without_accepting_other_types() {
         .expect(1)
         .mount(&server)
         .await;
-    let result = execute(&server, "monitors", "v1.ListMonitors", json!({}))
-        .await
-        .unwrap();
+    let result = conforming(&server, "monitors", "v1.ListMonitors", json!({})).await;
     assert!(result["data"][0]["options"]["notify_by"].is_null());
     server.reset().await;
     Mock::given(method("GET"))
@@ -77,12 +68,7 @@ async fn monitor_notify_by_accepts_null_without_accepting_other_types() {
         .expect(1)
         .mount(&server)
         .await;
-    assert!(matches!(
-        execute(&server, "monitors", "v1.ListMonitors", json!({}))
-            .await
-            .unwrap_err(),
-        DatadogError::DecodeError(_)
-    ));
+    deviations(&server, "monitors", "v1.ListMonitors", json!({})).await;
 }
 
 async fn execute(
@@ -100,6 +86,24 @@ async fn execute(
             4,
         )
         .await
+}
+
+async fn conforming(server: &MockServer, domain: &str, id: &str, input: Value) -> Value {
+    let result = execute(server, domain, id, input).await.unwrap();
+    assert_eq!(result["meta"]["result"]["schema_violations"], json!([]));
+    result
+}
+
+/// Deviating responses are returned intact with their schema violations.
+async fn deviations(server: &MockServer, domain: &str, id: &str, input: Value) -> Vec<Value> {
+    let result = execute(server, domain, id, input).await.unwrap();
+    let violations = result["meta"]["result"]["schema_violations"]
+        .as_array()
+        .unwrap()
+        .clone();
+    assert!(!violations.is_empty());
+    assert!(!result["data"].is_null());
+    violations
 }
 
 #[tokio::test]
@@ -344,7 +348,7 @@ async fn query_submissions_are_not_retried_and_api_call_budgets_bound_search_ret
 }
 
 #[tokio::test]
-async fn successful_http_does_not_hide_processing_or_schema_errors() {
+async fn successful_http_reports_processing_errors_and_schema_deviations() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/api/v2/query/scalar"))
@@ -367,12 +371,14 @@ async fn successful_http_does_not_hide_processing_or_schema_errors() {
         .expect(1)
         .mount(&server)
         .await;
-    assert!(matches!(
-        execute(&server, "containers", "v2.ListContainers", json!({}))
-            .await
-            .unwrap_err(),
-        DatadogError::DecodeError(_)
-    ));
+    let result = execute(&server, "containers", "v2.ListContainers", json!({}))
+        .await
+        .unwrap();
+    assert_eq!(result["data"], json!({"data":"invalid"}));
+    assert_eq!(
+        result["meta"]["result"]["schema_violations"],
+        json!([r#"/data: value is not of type "array""#])
+    );
 }
 
 #[tokio::test]
@@ -501,8 +507,9 @@ async fn cursor_collection_preserves_pages_fixed_scope_and_partial_status() {
     Mock::given(method("POST"))
         .and(body_json(&next["body"]))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(json!({"data":[{"id":"second"}],"meta":{"status":"done"}})),
+            ResponseTemplate::new(200).set_body_json(
+                json!({"data":[{"id":"second","type":42}],"meta":{"status":"done"}}),
+            ),
         )
         .expect(1)
         .mount(&server)
@@ -521,6 +528,16 @@ async fn cursor_collection_preserves_pages_fixed_scope_and_partial_status() {
         .await
         .unwrap();
     assert_eq!(result["data"]["pages"][1]["data"][0]["id"], "second");
+    let violations = result["meta"]["result"]["schema_violations"]
+        .as_array()
+        .unwrap();
+    assert!(!violations.is_empty());
+    assert!(violations.iter().all(|violation| {
+        violation
+            .as_str()
+            .unwrap()
+            .starts_with("/pages/1/data/0/type: ")
+    }));
     assert_eq!(result["meta"]["result"]["processing"], "partial");
     assert_eq!(result["meta"]["result"]["collection"], "exhausted");
     assert_eq!(
@@ -528,6 +545,21 @@ async fn cursor_collection_preserves_pages_fixed_scope_and_partial_status() {
         "partial"
     );
     assert_eq!(result["meta"]["execution"]["calls"], 2);
+    server.reset().await;
+    Mock::given(method("POST"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"data":[],"meta":{"page":{"after":42}}})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    assert!(matches!(
+        execute(&server, "logs", "v2.ListLogs", input.clone())
+            .await
+            .unwrap_err(),
+        DatadogError::DecodeError(_)
+    ));
     assert!(
         PreparedQuery::prepare("logs", "v2.ListLogs", &json!({}), None)
             .unwrap()
@@ -665,9 +697,7 @@ async fn current_user_organization_null_fields_preserve_relationships_and_reject
         .respond_with(ResponseTemplate::new(200).set_body_json(response.clone()))
         .mount(&server)
         .await;
-    let result = execute(&server, "users", "v2.GetCurrentUser", json!({}))
-        .await
-        .unwrap();
+    let result = conforming(&server, "users", "v2.GetCurrentUser", json!({})).await;
     assert_eq!(
         result["data"]["included"][0]["attributes"]["name"],
         "Example"
@@ -680,12 +710,7 @@ async fn current_user_organization_null_fields_preserve_relationships_and_reject
         .respond_with(ResponseTemplate::new(200).set_body_json(invalid))
         .mount(&server)
         .await;
-    assert!(matches!(
-        execute(&server, "users", "v2.GetCurrentUser", json!({}))
-            .await
-            .unwrap_err(),
-        DatadogError::DecodeError(_)
-    ));
+    deviations(&server, "users", "v2.GetCurrentUser", json!({})).await;
 }
 
 #[tokio::test]
@@ -714,9 +739,7 @@ async fn sentinel_response_omits_write_only_fields_without_relaxing_required_res
             .mount(&server)
             .await;
         assert_eq!(
-            execute(&server, "logs-custom-destinations", id, input.clone())
-                .await
-                .unwrap()["data"],
+            conforming(&server, "logs-custom-destinations", id, input.clone()).await["data"],
             response
         );
         server.reset().await;
@@ -736,12 +759,7 @@ async fn sentinel_response_omits_write_only_fields_without_relaxing_required_res
             .expect(1)
             .mount(&server)
             .await;
-        assert!(matches!(
-            execute(&server, "logs-custom-destinations", id, input)
-                .await
-                .unwrap_err(),
-            DatadogError::DecodeError(_)
-        ));
+        deviations(&server, "logs-custom-destinations", id, input).await;
     }
 }
 
@@ -781,9 +799,7 @@ async fn nullable_references_and_compositions_preserve_null_and_reject_invalid_v
             .mount(&server)
             .await;
         assert_eq!(
-            execute(&server, domain, operation, input.clone())
-                .await
-                .unwrap()["data"],
+            conforming(&server, domain, operation, input.clone()).await["data"],
             response
         );
         for value in [json!(42), json!({})] {
@@ -796,12 +812,7 @@ async fn nullable_references_and_compositions_preserve_null_and_reject_invalid_v
                 .expect(1)
                 .mount(&server)
                 .await;
-            assert!(matches!(
-                execute(&server, domain, operation, input.clone())
-                    .await
-                    .unwrap_err(),
-                DatadogError::DecodeError(_)
-            ));
+            deviations(&server, domain, operation, input.clone()).await;
         }
     }
 }
@@ -839,12 +850,13 @@ async fn nullable_enums_preserve_null_and_reject_unknown_values() {
             json!({}),
         )
         .await;
-        if value.is_null() || ["pdf", "png", "pdf_and_png"].contains(&value.as_str().unwrap_or(""))
-        {
-            assert_eq!(result.unwrap()["data"], body);
-        } else {
-            assert!(matches!(result.unwrap_err(), DatadogError::DecodeError(_)));
-        }
+        let result = result.unwrap();
+        assert_eq!(result["data"], body);
+        assert_eq!(
+            result["meta"]["result"]["schema_violations"] == json!([]),
+            value.is_null()
+                || ["pdf", "png", "pdf_and_png"].contains(&value.as_str().unwrap_or(""))
+        );
     }
 }
 
@@ -874,14 +886,13 @@ async fn dataset_records_preserve_arbitrary_json_without_relaxing_record_fields(
             .await;
         let input = json!({"path":{"project_id":"project-1","dataset_id":"dataset-1"}});
         assert_eq!(
-            execute(
+            conforming(
                 &server,
                 "agent-observability",
                 "v2.ListLLMObsDatasetRecords",
                 input.clone()
             )
-            .await
-            .unwrap()["data"],
+            .await["data"],
             response
         );
         server.reset().await;
@@ -892,16 +903,12 @@ async fn dataset_records_preserve_arbitrary_json_without_relaxing_record_fields(
             .expect(1)
             .mount(&server)
             .await;
-        assert!(matches!(
-            execute(
-                &server,
-                "agent-observability",
-                "v2.ListLLMObsDatasetRecords",
-                input
-            )
-            .await
-            .unwrap_err(),
-            DatadogError::DecodeError(_)
-        ));
+        deviations(
+            &server,
+            "agent-observability",
+            "v2.ListLLMObsDatasetRecords",
+            input,
+        )
+        .await;
     }
 }

@@ -102,7 +102,7 @@ datadog-cli query containers v2.ListContainers
 datadog-cli query metrics v1.GetMetricMetadata --input '{"path":{"metric_name":"system.cpu.user"}}'
 ```
 
-`query`의 `.data`는 변형하지 않은 API 응답이며 전용 조회 명령의 출력 경로와 다릅니다. `.meta`에는 명세 출처·HTTP 상태·API 메타데이터·실행 비용을 보존합니다. JSONL은 CLI 메타데이터 없이 API 응답을 출력하며, 최상위가 배열인 응답은 원소마다 한 줄씩 출력합니다. 단일 응답은 전체 검색 결과 수집 완료를 뜻하지 않습니다.
+`query`의 `.data`는 변형하지 않은 API 응답이며 전용 조회 명령의 출력 경로와 다릅니다. `.meta`에는 명세 출처·HTTP 상태·API 메타데이터·실행 비용을 보존합니다. 응답이 번들된 명세와 다르면 데이터는 그대로 반환하고, 위반 위치와 기대 조건을 `.meta.result.schema_violations`와 stderr 경고로 알립니다. 해당 위치의 필드는 문서와 다른 타입이거나 null일 수 있습니다. CLI가 해석하는 페이지 커서·처리 상태·DDSQL 상태가 잘못되면 종료 코드 7입니다. JSONL은 CLI 메타데이터 없이 API 응답을 출력하며, 최상위가 배열인 응답은 원소마다 한 줄씩 출력합니다. 단일 응답은 전체 검색 결과 수집 완료를 뜻하지 않습니다.
 
 기본 제한은 인증·API 실행 60초, 재시도 포함 4회 호출, 누적 응답 본문 8 MiB입니다. `--deadline`·`--max-calls`·`--max-bytes`로 조정할 수 있습니다. CSV·바이너리는 `--output PATH`가 필요하며 기존 파일을 덮어쓰지 않습니다. 제품 활성화·권한·사이트 지원은 API에 따라 다릅니다. [명세와 지원 정책](api/README.md)을 참고하세요. 자격증명이나 전체 인증 설정을 반환하는 API는 제외합니다. Webhook URL에는 Basic 인증 정보가 포함될 수 있어 전체 설정 조회도 제외합니다. Synthetic 조회는 전용 실행 결과·이력 API를 사용합니다.
 
