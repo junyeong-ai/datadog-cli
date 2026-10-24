@@ -477,8 +477,9 @@ fn apply_schema_context(schema: &mut Value, context: SchemaContext, definitions:
         required.retain(|name| name.as_str().is_none_or(|name| !omitted.contains(name)));
     }
     // Datadog ignores some undeclared request fields, so a misspelled filter
-    // would silently widen a query. Composition keywords never accompany
-    // declared request properties; tests/catalog_test.rs enforces that.
+    // would silently widen a query. Closing is sound only while no instance
+    // combines properties of sibling subschemas and no object sits under
+    // `not`; tests/catalog_test.rs enforces that for the bundled catalog.
     if matches!(context, SchemaContext::Request)
         && fields.contains_key("properties")
         && !fields.contains_key("additionalProperties")

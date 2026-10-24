@@ -1,5 +1,6 @@
 use datadog_cli::catalog::{Access, Catalog};
 use serde_json::{Value, json};
+use std::collections::BTreeSet;
 
 #[test]
 fn query_contracts_compile_offline() {
@@ -16,7 +17,7 @@ fn query_contracts_compile_offline() {
         }
         for (keyword, value) in schema.as_object().unwrap() {
             if keyword != "allOf" {
-                composed_closed_objects(value, &operation.id, &mut failures);
+                composed_closed_objects(value, &schema, &operation.id, &mut failures);
             }
         }
         for response in operation.responses.values() {
@@ -35,24 +36,62 @@ fn query_contracts_compile_offline() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-/// Closed request objects reject properties that composed subschemas declare.
-fn composed_closed_objects(schema: &Value, operation: &str, failures: &mut Vec<String>) {
+/// Closing request objects is sound only where no instance must combine
+/// properties declared by sibling subschemas, and never under `not`, where a
+/// closed object would invert the constraint.
+fn composed_closed_objects(
+    schema: &Value,
+    root: &Value,
+    operation: &str,
+    failures: &mut Vec<String>,
+) {
     match schema {
         Value::Object(fields) => {
+            let object_branches = fields
+                .get("anyOf")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter(|branch| declares_properties(branch, root, &mut BTreeSet::new()))
+                .count();
             if fields.contains_key("allOf")
                 || fields.contains_key("properties")
                     && (fields.contains_key("anyOf") || fields.contains_key("oneOf"))
+                || object_branches > 1
+                || fields
+                    .get("not")
+                    .is_some_and(|negated| declares_properties(negated, root, &mut BTreeSet::new()))
             {
                 failures.push(format!("{operation}: composed request object"));
             }
             fields
                 .values()
-                .for_each(|value| composed_closed_objects(value, operation, failures));
+                .for_each(|value| composed_closed_objects(value, root, operation, failures));
         }
         Value::Array(values) => values
             .iter()
-            .for_each(|value| composed_closed_objects(value, operation, failures)),
+            .for_each(|value| composed_closed_objects(value, root, operation, failures)),
         _ => {}
+    }
+}
+
+fn declares_properties<'a>(
+    schema: &'a Value,
+    root: &'a Value,
+    visited: &mut BTreeSet<&'a str>,
+) -> bool {
+    match schema
+        .get("$ref")
+        .and_then(Value::as_str)
+        .and_then(|reference| reference.strip_prefix("#/definitions/"))
+    {
+        Some(name) => {
+            visited.insert(name)
+                && root["definitions"]
+                    .get(name)
+                    .is_some_and(|definition| declares_properties(definition, root, visited))
+        }
+        None => schema.get("properties").is_some(),
     }
 }
 
