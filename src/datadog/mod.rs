@@ -7,37 +7,19 @@ pub use client::{LlmObsFilter, LlmObsSearchParams, MAX_METRIC_QUERIES, SearchPar
 pub use transport::DatadogClient;
 pub(crate) use transport::{ApiReply, QueryBudget, QueryCall, auth_headers, query_headers};
 
+/// Rejects failures that metric queries report inside successful responses.
+/// Other response fields reach `query` callers unchanged; their deviations
+/// from the contract are reported, not enforced.
 pub(crate) fn validate_query_processing(
     operation: &str,
     body: &serde_json::Value,
 ) -> crate::error::Result<()> {
-    use models::{FormulaResponse, MetricsResponse, ScalarAttributes, TimeseriesAttributes};
-    match operation {
-        "v1.QueryMetrics" => {
-            MetricsResponse::from_api_response(body.clone())?;
-        }
-        "v2.QueryTimeseriesData" => {
-            serde_json::from_value::<FormulaResponse>(body.clone())
-                .map_err(|error| crate::error::DatadogError::DecodeError(error.to_string()))?
-                .into_attributes::<TimeseriesAttributes>()?
-                .validate()?;
-        }
-        "v2.QueryScalarData" => {
-            serde_json::from_value::<FormulaResponse>(body.clone())
-                .map_err(|error| crate::error::DatadogError::DecodeError(error.to_string()))?
-                .into_attributes::<ScalarAttributes>()?
-                .validate()?;
-        }
-        "v2.SearchLLMObsSpans" | "v2.ListLLMObsSpans" => {
-            models::validate_llm_response(body.clone())?;
-        }
-        "v2.ListIncidents" => {
-            models::validate_required_records(body.clone())?;
-        }
-        "v2.GetIncident" => {
-            models::validate_required_resource(body.clone())?;
-        }
-        _ => {}
-    }
-    Ok(())
+    let error = match operation {
+        "v1.QueryMetrics" => models::metric_query_error(body),
+        "v2.QueryTimeseriesData" | "v2.QueryScalarData" => models::formula_query_error(body),
+        _ => None,
+    };
+    error.map_or(Ok(()), |message| {
+        Err(crate::error::DatadogError::QueryError(message))
+    })
 }

@@ -102,7 +102,7 @@ datadog-cli query containers v2.ListContainers
 datadog-cli query metrics v1.GetMetricMetadata --input '{"path":{"metric_name":"system.cpu.user"}}'
 ```
 
-`query`의 `.data`는 변형하지 않은 API 응답이며 전용 조회 명령의 출력 경로와 다릅니다. `.meta`에는 명세 출처·HTTP 상태·API 메타데이터·실행 비용을 보존합니다. 응답이 번들된 명세와 다르면 데이터는 그대로 반환하고, 위반 위치와 기대 조건을 `.meta.result.schema_violations`와 stderr 경고로 알립니다. 해당 위치의 필드는 문서와 다른 타입이거나 null일 수 있습니다. CLI가 해석하는 페이지 커서·처리 상태·DDSQL 상태가 잘못되면 종료 코드 7입니다. JSONL은 CLI 메타데이터 없이 API 응답을 출력하며, 최상위가 배열인 응답은 원소마다 한 줄씩 출력합니다. 단일 응답은 전체 검색 결과 수집 완료를 뜻하지 않습니다.
+`query`의 `.data`는 변형하지 않은 API 응답이며 전용 조회 명령의 출력 경로와 다릅니다. `.meta`에는 명세 출처·HTTP 상태·API 메타데이터·실행 비용을 보존합니다. 응답이 번들된 명세와 다르면 데이터는 그대로 반환하고, 위반 위치와 기대 조건을 `.meta.result.schema_violations`와 stderr 경고로 알립니다. 위치는 원래 API 응답 기준 JSON Pointer이며, 여러 페이지를 모으면 `/pages/N`이 N번째 응답을 가리킵니다. 해당 위치의 필드는 문서와 다른 타입이거나 null일 수 있습니다. CLI가 따라가는 페이지 커서와 DDSQL 상태가 잘못되면 종료 코드 7, 메트릭 조회가 응답 안에 보고한 처리 오류는 종료 코드 4이며, 정책에 없는 처리 상태는 `unknown`으로 보고합니다. JSONL은 CLI 메타데이터 없이 API 응답을 출력하며, 최상위가 배열인 응답은 원소마다 한 줄씩 출력합니다. 단일 응답은 전체 검색 결과 수집 완료를 뜻하지 않습니다.
 
 기본 제한은 인증·API 실행 60초, 재시도 포함 4회 호출, 누적 응답 본문 8 MiB입니다. `--deadline`·`--max-calls`·`--max-bytes`로 조정할 수 있습니다. CSV·바이너리는 `--output PATH`가 필요하며 기존 파일을 덮어쓰지 않습니다. 제품 활성화·권한·사이트 지원은 API에 따라 다릅니다. [명세와 지원 정책](api/README.md)을 참고하세요. 자격증명이나 전체 인증 설정을 반환하는 API는 제외합니다. Webhook URL에는 Basic 인증 정보가 포함될 수 있어 전체 설정 조회도 제외합니다. Synthetic 조회는 전용 실행 결과·이력 API를 사용합니다.
 
@@ -110,7 +110,7 @@ datadog-cli query metrics v1.GetMetricMetadata --input '{"path":{"metric_name":"
 
 `--select /data`처럼 JSON Pointer를 지정하면 해당 값만 포인터를 키로 하는 객체에 반환합니다. 누락된 경로는 오류이며, API 메타데이터는 유지합니다. `.meta.result.processing`은 명시적으로 확인한 서버 상태에 따라 `complete`·`partial`·`unknown`이며 페이지 수집 완료와 별개입니다.
 
-여러 페이지는 커서 계약을 검증한 작업에서 `--max-pages N`으로 요청합니다. 시간 기반 검색에는 고정된 범위가 필요합니다. 원본 응답은 `.data.pages`에 보존하며, 다음 커서와 서버 처리 상태를 구분합니다. `--wait`는 DDSQL 작업을 같은 시간·호출·바이트 한도 안에서 조회하며 제출 요청을 재시도하지 않습니다.
+여러 페이지는 커서 계약을 검증한 작업에서 `--max-pages N`으로 요청합니다. 시간 기반 검색에는 고정된 범위가 필요합니다. 원본 응답은 `.data.pages`에 보존하며, 수집 상태는 서버 처리 상태와 별도로 `.meta.result`의 `pages`·`has_next`·`next_cursor`에 보고합니다. 커서 계약이 없는 작업의 `has_next`는 `null`입니다. `--wait`는 DDSQL 작업을 같은 시간·호출·바이트 한도 안에서 조회하며 제출 요청을 재시도하지 않습니다.
 
 ## MCP 전문 도구
 
@@ -214,7 +214,7 @@ jq -r '.pagination.next_cursor // empty' page.json
 
 `logs aggregate`와 `logs timeseries`의 `--group-by`는 서버에서 로그 수 내림차순으로 최대 `--group-limit`개 그룹을 구합니다. 전체 그룹 전수 조회가 아니며 서버 경고는 결과와 함께 확인해야 합니다.
 
-목록 명령은 한 페이지를 반환하고, 모든 명령이 같은 `.pagination` 구조를 씁니다. 페이지 크기는 `--limit`입니다. 다음 페이지 값은 API 방식에 따라 `next_cursor`·`next_offset`·`next_page` 중 하나이며, 같은 이름의 `--cursor`·`--offset`·`--page`로 전달합니다. 다음 페이지가 없으면 그 값은 `null`입니다.
+목록 명령은 한 페이지를 반환하고, 모두 같은 `.pagination` 구조를 씁니다. 페이지 크기는 `--limit`입니다. 다음 페이지 값은 API 방식에 따라 `next_cursor`·`next_offset`·`next_page` 중 하나이며, 같은 이름의 `--cursor`·`--offset`·`--page`로 전달합니다. 다음 페이지가 없으면 그 값은 `null`입니다.
 `pagination.returned`는 이번 응답 건수이며 `total_count`는 서버가 알려준 전체 건수입니다. 알 수 없으면 `null`입니다.
 `has_next_is_estimate`가 `true`이면 다음 페이지 여부는 페이지 크기로 추정한 값입니다.
 반복 조회에서는 절대 시작·종료 시간을 고정해 같은 기간을 조회하세요.

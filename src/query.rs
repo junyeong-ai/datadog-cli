@@ -365,19 +365,9 @@ impl PreparedQuery {
                     }
                 }
             }
-            let cursor = match current
-                .operation
-                .pagination
-                .as_ref()
-                .and_then(|contract| body.pointer(&contract.response))
-            {
-                None | Some(Value::Null) => None,
-                Some(Value::String(cursor)) => (!cursor.is_empty()).then(|| cursor.clone()),
-                Some(_) => {
-                    return Err(DatadogError::DecodeError(
-                        "API returned a non-string pagination cursor".into(),
-                    ));
-                }
+            let cursor = match &current.operation.pagination {
+                Some(contract) => next_cursor(&body, &contract.response)?,
+                None => None,
             };
             if self.max_pages > 1 {
                 current.record_deviations(
@@ -446,7 +436,6 @@ impl PreparedQuery {
         };
         Ok(json!({
             "data":data,
-            "pagination":{"returned_pages":if self.max_pages > 1 { pages.len() } else { 1 },"next_cursor":next_cursor,"has_next":self.operation.pagination.as_ref().map(|_| next_cursor.is_some()),"has_next_is_estimate":self.operation.pagination.as_ref().map(|_| false)},
             "meta":{
                 "api":api_meta,
                 "source":{"operation":self.operation.id,"site":site,"path":self.operation.path,"catalog_commit":Catalog::load()?.source["commit"],"preview":self.operation.preview.is_some()},
@@ -455,7 +444,7 @@ impl PreparedQuery {
                 "context":{"time_range":self.time_scope},
                 "projection":{"pointers":self.selection},
                 "job":{"wait":self.wait,"polls":polls},
-                "result":{"schema_violations":deviations.entries(),"processing":processing,"collection":if self.max_pages == 1 { "single_response" } else if next_cursor.is_some() { "page_limit" } else { "exhausted" },"not_modified":reply.status==304}
+                "result":{"schema_violations":deviations.entries(),"processing":processing,"collection":if self.max_pages == 1 { "single_response" } else if next_cursor.is_some() { "page_limit" } else { "exhausted" },"pages":if self.max_pages > 1 { pages.len() } else { 1 },"has_next":self.operation.pagination.as_ref().map(|_| next_cursor.is_some()),"next_cursor":next_cursor,"not_modified":reply.status==304}
             }
         }))
     }
@@ -590,6 +579,34 @@ impl PreparedQuery {
                 "Unexpected non-JSON API response".into(),
             ))
         }
+    }
+}
+
+/// Reads the reviewed cursor; an absent or null value ends collection, and any
+/// other shape along its pointer is an error rather than a silent end.
+fn next_cursor(body: &Value, pointer: &str) -> Result<Option<String>> {
+    let mut value = body;
+    for field in pointer.split('/').skip(1) {
+        let field = field.replace("~1", "/").replace("~0", "~");
+        value = match value {
+            Value::Object(fields) => match fields.get(&field) {
+                Some(value) => value,
+                None => return Ok(None),
+            },
+            Value::Null => return Ok(None),
+            _ => {
+                return Err(DatadogError::DecodeError(
+                    "API returned a malformed pagination cursor".into(),
+                ));
+            }
+        };
+    }
+    match value {
+        Value::Null => Ok(None),
+        Value::String(cursor) => Ok((!cursor.is_empty()).then(|| cursor.clone())),
+        _ => Err(DatadogError::DecodeError(
+            "API returned a malformed pagination cursor".into(),
+        )),
     }
 }
 

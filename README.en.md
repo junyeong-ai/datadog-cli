@@ -105,7 +105,7 @@ datadog-cli query containers v2.ListContainers
 datadog-cli query metrics v1.GetMetricMetadata --input '{"path":{"metric_name":"system.cpu.user"}}'
 ```
 
-For `query`, `.data` is the unmodified API response, distinct from the dedicated commands' projections. `.meta` retains source, HTTP status, API metadata, and execution accounting. When a response deviates from the bundled contract, the data is still returned; `.meta.result.schema_violations` and a stderr warning name each location and expectation, and fields there may have other types or null. Invalid pagination cursors, processing states, or DDSQL states that the CLI interprets fail with exit code 7. JSONL emits the API response without CLI metadata, one line per element when the response is an array. A single response does not establish that all matching records were collected.
+For `query`, `.data` is the unmodified API response, distinct from the dedicated commands' projections. `.meta` retains source, HTTP status, API metadata, and execution accounting. When a response deviates from the bundled contract, the data is still returned; `.meta.result.schema_violations` and a stderr warning name each location and expectation, and fields there may have other types or null. Locations are JSON Pointers into the original API response; collected pages prefix them with `/pages/N`. Malformed pagination cursors or DDSQL states that the CLI follows fail with exit code 7, processing errors that metric queries report inside the response fail with exit code 4, and unmapped processing states are reported as `unknown`. JSONL emits the API response without CLI metadata, one line per element when the response is an array. A single response does not establish that all matching records were collected.
 
 Defaults bound authentication/API execution to 60 seconds, four API attempts including retries, and 8 MiB of cumulative response bodies. Adjust `--deadline`, `--max-calls`, and `--max-bytes` explicitly. CSV/binary responses require `--output PATH`; existing files are never overwritten. Product access, permissions, and site availability vary by API. See [contract maintenance and policy](api/README.md). APIs returning credentials or complete authentication configurations are excluded. Webhook configuration reads are excluded because URLs can contain Basic authentication credentials. Synthetic investigations use dedicated result and history APIs.
 
@@ -113,7 +113,7 @@ Operations advertising `time_range` in `capabilities show` accept `--from 1h --t
 
 Repeat `--select /data` with exact JSON Pointers to return a pointer-keyed projection. Missing paths are errors; API metadata remains available. `.meta.result.processing` is `complete`, `partial`, or `unknown` from explicitly mapped server states, independently of pagination.
 
-Multiple pages use `--max-pages N` only where the catalog declares a cursor contract. Time-based searches require fixed bounds. They return the original responses in `.data.pages`, with exact continuation metadata and separate processing status. `--wait` polls a DDSQL job within the same deadline, byte and call budgets; submission is never retried.
+Multiple pages use `--max-pages N` only where the catalog declares a cursor contract. Time-based searches require fixed bounds. They return the original responses in `.data.pages`; collection state is reported separately from server processing status as `pages`, `has_next`, and `next_cursor` in `.meta.result`. `has_next` is `null` for operations without a cursor contract. `--wait` polls a DDSQL job within the same deadline, byte and call budgets; submission is never retried.
 
 ## MCP specialist tools
 
@@ -217,7 +217,7 @@ jq -r '.pagination.next_cursor // empty' page.json
 
 `logs aggregate` and `logs timeseries` accept `--group-by` and `--group-limit` to compute the most frequent groups on the server. This is a bounded ranking, not an exhaustive list of groups; inspect API warnings alongside the result.
 
-List commands return one page, and every command uses the same `.pagination` object. `--limit` sets the page size. The continuation is one of `next_cursor`, `next_offset`, or `next_page`, depending on the API, and is passed back with the matching `--cursor`, `--offset`, or `--page`; it is `null` on the last page.
+List commands return one page, and all of them use the same `.pagination` object. `--limit` sets the page size. The continuation is one of `next_cursor`, `next_offset`, or `next_page`, depending on the API, and is passed back with the matching `--cursor`, `--offset`, or `--page`; it is `null` on the last page.
 `pagination.returned` counts records in this response; `total_count` is the server-reported total or `null` when unknown.
 `has_next_is_estimate: true` identifies continuation inferred from page size.
 Fix absolute start/end times across pages to query the same window.

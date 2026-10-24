@@ -365,6 +365,31 @@ async fn successful_http_reports_processing_errors_and_schema_deviations() {
             .unwrap_err(),
         DatadogError::QueryError(_)
     ));
+    let input = json!({"query":{"from":1,"to":2,"query":"avg:system.cpu.user{*}"}});
+    for (body, failed) in [
+        (
+            json!({"status":"ok","series":[{"metric":"system.cpu.user"}]}),
+            false,
+        ),
+        (
+            json!({"status":"error","error":"Invalid metric query"}),
+            true,
+        ),
+    ] {
+        server.reset().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/query"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(body.clone()))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let result = execute(&server, "metrics", "v1.QueryMetrics", input.clone()).await;
+        if failed {
+            assert!(matches!(result.unwrap_err(), DatadogError::QueryError(_)));
+        } else {
+            assert_eq!(result.unwrap()["data"], body);
+        }
+    }
     Mock::given(method("GET"))
         .and(path("/api/v2/containers"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":"invalid"})))
@@ -560,6 +585,20 @@ async fn cursor_collection_preserves_pages_fixed_scope_and_partial_status() {
             .unwrap_err(),
         DatadogError::DecodeError(_)
     ));
+    server.reset().await;
+    Mock::given(method("POST"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"data":[],"meta":{"page":"oops"}})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    assert!(matches!(
+        execute(&server, "logs", "v2.ListLogs", input.clone())
+            .await
+            .unwrap_err(),
+        DatadogError::DecodeError(_)
+    ));
     assert!(
         PreparedQuery::prepare("logs", "v2.ListLogs", &json!({}), None)
             .unwrap()
@@ -633,8 +672,8 @@ async fn cursor_page_limit_and_repeated_cursor_do_not_claim_exhaustion() {
         .await
         .unwrap();
     assert_eq!(result["meta"]["result"]["collection"], "page_limit");
-    assert_eq!(result["pagination"]["has_next"], true);
-    assert_eq!(result["pagination"]["next_cursor"], "three");
+    assert_eq!(result["meta"]["result"]["has_next"], true);
+    assert_eq!(result["meta"]["result"]["next_cursor"], "three");
 }
 
 #[tokio::test]

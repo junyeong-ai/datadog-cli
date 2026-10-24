@@ -110,25 +110,31 @@ pub struct MetricsResponse {
 
 impl MetricsResponse {
     pub(super) fn from_api_response(value: serde_json::Value) -> crate::error::Result<Self> {
-        #[derive(Deserialize)]
-        struct QueryStatus<'a> {
-            status: Option<&'a str>,
-            error: Option<&'a str>,
-        }
-
-        let status = QueryStatus::deserialize(&value)
-            .map_err(|error| crate::error::DatadogError::DecodeError(error.to_string()))?;
-        if let Some(error) = status.error.filter(|error| !error.is_empty()) {
-            return Err(crate::error::DatadogError::QueryError(error.into()));
-        }
-        if let Some(status) = status.status.filter(|status| *status != "ok") {
-            return Err(crate::error::DatadogError::QueryError(format!(
-                "Query status: {status}"
-            )));
+        if let Some(message) = metric_query_error(&value) {
+            return Err(crate::error::DatadogError::QueryError(message));
         }
         serde_json::from_value(value)
             .map_err(|error| crate::error::DatadogError::DecodeError(error.to_string()))
     }
+}
+
+/// The failure a v1 metric query reports inside a successful HTTP response.
+pub(super) fn metric_query_error(response: &serde_json::Value) -> Option<String> {
+    if let Some(error) = response["error"].as_str().filter(|error| !error.is_empty()) {
+        return Some(error.into());
+    }
+    response["status"]
+        .as_str()
+        .filter(|status| *status != "ok")
+        .map(|status| format!("Query status: {status}"))
+}
+
+/// The failure a v2 formula query reports inside a successful HTTP response.
+pub(super) fn formula_query_error(response: &serde_json::Value) -> Option<String> {
+    response["errors"]
+        .as_str()
+        .filter(|message| !message.is_empty())
+        .map(str::to_owned)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
