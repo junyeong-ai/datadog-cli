@@ -56,6 +56,35 @@ async fn optional_metric_metadata_accepts_null_without_accepting_invalid_types()
     ));
 }
 
+#[tokio::test]
+async fn monitor_notify_by_accepts_null_without_accepting_other_types() {
+    let server = MockServer::start().await;
+    let monitor = |notify_by: Value| json!([{"type":"metric alert","query":"avg(last_5m):avg:system.cpu.user{*} > 1","options":{"notify_by":notify_by}}]);
+    Mock::given(method("GET"))
+        .and(path("/api/v1/monitor"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(monitor(Value::Null)))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let result = execute(&server, "monitors", "v1.ListMonitors", json!({}))
+        .await
+        .unwrap();
+    assert!(result["data"][0]["options"]["notify_by"].is_null());
+    server.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/monitor"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(monitor(json!("cluster"))))
+        .expect(1)
+        .mount(&server)
+        .await;
+    assert!(matches!(
+        execute(&server, "monitors", "v1.ListMonitors", json!({}))
+            .await
+            .unwrap_err(),
+        DatadogError::DecodeError(_)
+    ));
+}
+
 async fn execute(
     server: &MockServer,
     domain: &str,

@@ -24,6 +24,18 @@
       }
     }
   },
+  "v1.MonitorOptions": {
+    "evidence": "https://github.com/DataDog/datadog-api-client-rust/blob/fca853cf6750c4c453558088fc5c4491f98dc5f1/src/datadogV1/model/model_monitor_options.rs",
+    "observation": "ListMonitors returned a monitor whose options included null notify_by on 2026-10-24. The official Rust model reads notify_by as an optional list.",
+    "properties": {
+      "notify_by": {
+        "type": [
+          "array",
+          "null"
+        ]
+      }
+    }
+  },
   "v2.OrganizationAttributes": {
     "properties": {
       "description": {
