@@ -1,5 +1,5 @@
 use datadog_cli::catalog::{Access, Catalog};
-use serde_json::json;
+use serde_json::{Value, json};
 
 #[test]
 fn query_contracts_compile_offline() {
@@ -13,6 +13,11 @@ fn query_contracts_compile_offline() {
         let schema = catalog.input_schema(operation).unwrap();
         if let Err(error) = jsonschema::options().offline().build(&schema) {
             failures.push(format!("{}: {error}", operation.id));
+        }
+        for (keyword, value) in schema.as_object().unwrap() {
+            if keyword != "allOf" {
+                composed_closed_objects(value, &operation.id, &mut failures);
+            }
         }
         for response in operation.responses.values() {
             if let Some(schema) = &response.schema {
@@ -28,6 +33,27 @@ fn query_contracts_compile_offline() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Closed request objects reject properties that composed subschemas declare.
+fn composed_closed_objects(schema: &Value, operation: &str, failures: &mut Vec<String>) {
+    match schema {
+        Value::Object(fields) => {
+            if fields.contains_key("allOf")
+                || fields.contains_key("properties")
+                    && (fields.contains_key("anyOf") || fields.contains_key("oneOf"))
+            {
+                failures.push(format!("{operation}: composed request object"));
+            }
+            fields
+                .values()
+                .for_each(|value| composed_closed_objects(value, operation, failures));
+        }
+        Value::Array(values) => values
+            .iter()
+            .for_each(|value| composed_closed_objects(value, operation, failures)),
+        _ => {}
+    }
 }
 
 #[test]

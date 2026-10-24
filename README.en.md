@@ -98,7 +98,7 @@ The catalog pins an official contract snapshot. It does not probe your organizat
 Operation lists default to 25 entries. Use `--search` for literal case-insensitive ID/summary matching and `--offset`/`--limit` for continuation.
 
 Execute a reviewed operation with `query DOMAIN VERSION.OPERATION --input JSON`.
-The request envelope uses `path`, `query`, `headers`, and `body` and is schema-validated before credential execution. Use `--input @request.json` or `--input -` for a file or stdin.
+The request envelope uses `path`, `query`, `headers`, and `body` and is schema-validated before credential execution. Objects that declare properties reject undeclared fields, so a misspelled field cannot silently widen a query. Use `--input @request.json` or `--input -` for a file or stdin.
 
 ```bash
 datadog-cli query containers v2.ListContainers

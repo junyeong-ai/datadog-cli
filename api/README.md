@@ -18,7 +18,9 @@ OpenAPI 3.0 schemas are converted to JSON Schema Draft 7 by translating local
 references, typed `nullable`, Datadog's nullable references, and boolean exclusive bounds. Nullable enums include null; references and compositions use a union with null, matching documented states such as [custom rules without revisions](https://docs.datadoghq.com/api/latest/static-analysis/show-custom-rule/). Validation constraints,
 property names, enum values, and additional properties retain their API meanings.
 Request schemas omit `readOnly` properties from required fields; response schemas omit `writeOnly` properties from required fields. Other required fields and property types remain validated. This normalization visits schema positions only, including local referenced definitions, without rewriting default or enum instance data. Examples and OpenAPI-only annotations are omitted. Requests reject unknown parameter
-names; extensible body and response fields follow the published schema.
+names and undeclared fields of objects that declare properties, because Datadog ignores some
+misspelled body fields; objects whose schema permits additional properties stay extensible.
+Response fields follow the published schema.
 
 `overrides.json` records field or model corrections supported by observed responses
 or explicit official model contracts, with source references. `AnyValue` preserves

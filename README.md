@@ -95,7 +95,7 @@ datadog-cli capabilities list --domain ci-visibility-pipelines
 datadog-cli capabilities show v2.SearchCIAppPipelineEvents
 ```
 
-검토된 API는 `query DOMAIN VERSION.OPERATION --input JSON`으로 실행합니다. 입력의 `path`·`query`·`headers`·`body`는 해당 공식 API 구조를 따르며, 인증 실행 전에 스키마를 검증합니다. `--input @request.json` 또는 `--input -`로 파일·표준 입력을 사용할 수 있습니다.
+검토된 API는 `query DOMAIN VERSION.OPERATION --input JSON`으로 실행합니다. 입력의 `path`·`query`·`headers`·`body`는 해당 공식 API 구조를 따르며, 인증 실행 전에 스키마를 검증합니다. 속성을 선언한 객체는 선언되지 않은 필드를 거부하므로, 필드 이름의 오타가 필터 없는 조회로 이어지지 않습니다. `--input @request.json` 또는 `--input -`로 파일·표준 입력을 사용할 수 있습니다.
 
 ```bash
 datadog-cli query containers v2.ListContainers

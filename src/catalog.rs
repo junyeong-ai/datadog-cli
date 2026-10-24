@@ -483,6 +483,16 @@ fn apply_schema_context(schema: &mut Value, context: SchemaContext, definitions:
     if let Some(required) = fields.get_mut("required").and_then(Value::as_array_mut) {
         required.retain(|name| name.as_str().is_none_or(|name| !omitted.contains(name)));
     }
+    // Datadog ignores some undeclared request fields, so a misspelled filter
+    // would silently widen a query. Composition keywords never accompany
+    // declared request properties; tests/catalog_test.rs enforces that.
+    if matches!(context, SchemaContext::Request)
+        && fields.contains_key("properties")
+        && !fields.contains_key("additionalProperties")
+        && !fields.contains_key("patternProperties")
+    {
+        fields.insert("additionalProperties".into(), Value::Bool(false));
+    }
     for keyword in ["properties", "patternProperties", "definitions", "$defs"] {
         if let Some(values) = fields.get_mut(keyword).and_then(Value::as_object_mut) {
             for value in values.values_mut() {
@@ -553,5 +563,28 @@ mod schema_context_tests {
         assert_eq!(response["required"], json!(["id", "required"]));
         assert_eq!(request["properties"], original["properties"]);
         assert_eq!(response["properties"], original["properties"]);
+    }
+
+    #[test]
+    fn requests_reject_undeclared_properties_unless_the_schema_allows_them() {
+        let original = json!({"type":"object","properties":{
+            "filter":{"type":"object","properties":{"query":{"type":"string"}}},
+            "tags":{"type":"object","additionalProperties":{"type":"string"}},
+            "open":{"type":"object","properties":{},"additionalProperties":true},
+            "custom":{"type":"object","patternProperties":{"^x-":{}},"properties":{}}
+        }});
+        let mut request = original.clone();
+        apply_schema_context(&mut request, SchemaContext::Request, &json!({}));
+        assert_eq!(request["additionalProperties"], false);
+        assert_eq!(
+            request["properties"]["filter"]["additionalProperties"],
+            false
+        );
+        for name in ["tags", "open", "custom"] {
+            assert_eq!(request["properties"][name], original["properties"][name]);
+        }
+        let mut response = original.clone();
+        apply_schema_context(&mut response, SchemaContext::Response, &json!({}));
+        assert_eq!(response, original);
     }
 }
