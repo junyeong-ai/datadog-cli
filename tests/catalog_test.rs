@@ -207,3 +207,36 @@ fn monitor_validation_does_not_require_response_only_fields() {
             .is_err()
     );
 }
+
+#[test]
+fn domain_counts_are_disjoint_and_hide_query_free_domains_by_default() {
+    let catalog = Catalog::load().unwrap();
+    let all = catalog.domains(true)["data"].as_array().unwrap().clone();
+    let reviewed = catalog.domains(false)["data"].as_array().unwrap().clone();
+    let operations = catalog.operations.values();
+    let total = |key: &str| {
+        all.iter()
+            .map(|domain| domain[key].as_u64().unwrap())
+            .sum::<u64>()
+    };
+    assert_eq!(
+        total("queries") + total("excluded"),
+        operations
+            .map(|operation| operation.domains.len() as u64)
+            .sum::<u64>()
+    );
+    assert!(
+        reviewed
+            .iter()
+            .all(|domain| domain["queries"].as_u64() > Some(0))
+    );
+    assert_eq!(
+        reviewed.len(),
+        all.iter().filter(|domain| domain["queries"] != 0).count()
+    );
+    for domain in &all {
+        let mut keys = domain.as_object().unwrap().keys().collect::<Vec<_>>();
+        keys.sort();
+        assert_eq!(keys, ["excluded", "id", "preview_queries", "queries"]);
+    }
+}

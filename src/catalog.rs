@@ -186,30 +186,24 @@ impl Catalog {
     }
 
     pub fn domains(&self, include_excluded: bool) -> Value {
-        let mut domains = BTreeMap::<String, Value>::new();
+        let mut domains = BTreeMap::<String, [usize; 3]>::new();
         for operation in self.operations.values() {
-            if !include_excluded && operation.access != Access::Query {
-                continue;
-            }
             for name in &operation.domains {
-                let entry = domains.entry(domain_id(name)).or_insert_with(
-                    || json!({"name":name,"operations":0,"queries":0,"preview_queries":0}),
-                );
-                entry["operations"] = json!(entry["operations"].as_u64().unwrap_or(0) + 1);
+                let [queries, preview_queries, excluded] =
+                    domains.entry(domain_id(name)).or_default();
                 if operation.access == Access::Query {
-                    entry["queries"] = json!(entry["queries"].as_u64().unwrap_or(0) + 1);
-                    if operation.preview.is_some() {
-                        entry["preview_queries"] =
-                            json!(entry["preview_queries"].as_u64().unwrap_or(0) + 1);
-                    }
+                    *queries += 1;
+                    *preview_queries += usize::from(operation.preview.is_some());
+                } else {
+                    *excluded += 1;
                 }
             }
         }
         let data = domains
             .into_iter()
-            .map(|(id, mut value)| {
-                value["id"] = json!(id);
-                value
+            .filter(|(_, [queries, ..])| include_excluded || *queries > 0)
+            .map(|(id, [queries, preview_queries, excluded])| {
+                json!({"id":id,"queries":queries,"preview_queries":preview_queries,"excluded":excluded})
             })
             .collect::<Vec<_>>();
         json!({"data":data,"meta":{"catalog_source":self.source,"availability":"Not probed; product and user permissions are required."}})
