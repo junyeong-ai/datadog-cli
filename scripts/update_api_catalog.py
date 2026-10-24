@@ -141,17 +141,15 @@ def main():
         if hashlib.sha256(raw).hexdigest() != source[version]["sha256"]:
             raise ValueError(f"{version} source digest does not match {API / 'source.json'}")
         document = yaml.safe_load(raw)
-        definitions[version] = {
-            name: schema(value)
-            for name, value in document["components"]["schemas"].items()
-        }
+        components = document["components"]["schemas"]
         for name, override in overrides.items():
             schema_version, model = name.split(".", 1)
             if schema_version == version:
                 if "schema" in override:
-                    definitions[version][model] = override["schema"]
+                    components[model] = override["schema"]
                 for field, constraints in override.get("properties", {}).items():
-                    definitions[version][model]["properties"][field].update(constraints)
+                    components[model]["properties"][field].update(constraints)
+        definitions[version] = {name: schema(value) for name, value in components.items()}
         for path, methods in document["paths"].items():
             for method, operation in methods.items():
                 if method not in METHODS:

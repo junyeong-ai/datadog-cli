@@ -11,16 +11,10 @@
     "observation": "GetMetricMetadata for system.cpu.user returned null per_unit and statsd_interval on 2026-10-19. These fields describe optional unit denominators and StatsD collection settings.",
     "properties": {
       "per_unit": {
-        "type": [
-          "string",
-          "null"
-        ]
+        "nullable": true
       },
       "statsd_interval": {
-        "type": [
-          "integer",
-          "null"
-        ]
+        "nullable": true
       }
     }
   },
@@ -29,29 +23,62 @@
     "observation": "ListMonitors returned a monitor whose options included null notify_by on 2026-10-24. The official Rust model reads notify_by as an optional list.",
     "properties": {
       "notify_by": {
-        "type": [
-          "array",
-          "null"
-        ]
+        "nullable": true
       }
     }
   },
   "v2.OrganizationAttributes": {
     "properties": {
       "description": {
-        "type": [
-          "string",
-          "null"
-        ]
+        "nullable": true
       },
       "url": {
-        "type": [
-          "string",
-          "null"
-        ]
+        "nullable": true
       }
     },
     "evidence": "https://docs.datadoghq.com/api/latest/users/#get-current-user-information",
     "observation": "2026-10-19: authenticated current-user response included an organization with null description and url."
+  },
+  "v1.HostMetrics": {
+    "evidence": "https://docs.datadoghq.com/api/latest/hosts/get-all-hosts-for-your-organization/",
+    "observation": "ListHosts returned null cpu, iowait, and load metrics for some hosts on 2026-10-24.",
+    "properties": {
+      "cpu": {
+        "nullable": true
+      },
+      "iowait": {
+        "nullable": true
+      },
+      "load": {
+        "nullable": true
+      }
+    }
+  },
+  "v1.LogsIndex": {
+    "evidence": "https://docs.datadoghq.com/api/latest/logs-indexes/get-all-indexes/",
+    "observation": "ListLogIndexes returned null daily_limit, daily_limit_reset, and daily_limit_warning_threshold_percentage for every index on 2026-10-24.",
+    "properties": {
+      "daily_limit": {
+        "nullable": true
+      },
+      "daily_limit_reset": {
+        "nullable": true
+      },
+      "daily_limit_warning_threshold_percentage": {
+        "nullable": true
+      }
+    }
+  },
+  "v2.TeamsResponseMetaPagination": {
+    "evidence": "https://docs.datadoghq.com/api/latest/teams/get-all-teams/",
+    "observation": "ListTeams returned null next_offset and prev_offset for a single page of results on 2026-10-24.",
+    "properties": {
+      "next_offset": {
+        "nullable": true
+      },
+      "prev_offset": {
+        "nullable": true
+      }
+    }
   }
 }

@@ -24,7 +24,9 @@ Responses are checked against the published schema; deviations are reported in
 `meta.result.schema_violations` and on stderr while the response body is preserved.
 
 `overrides.json` records field or model corrections supported by observed responses
-or explicit official model contracts, with source references. `AnyValue` preserves
+or explicit official model contracts, with source references. Corrections are OpenAPI
+keywords, such as `nullable`, applied before conversion so they follow the same
+translation as published fields. `AnyValue` preserves
 arbitrary JSON as documented by the official SDK despite its contradictory OpenAPI
 object constraint. Apply only the evidenced constraint; retain
 type validation for other values. Operation-specific documented limits and additional

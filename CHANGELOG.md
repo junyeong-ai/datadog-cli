@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Query request objects that declare properties reject undeclared fields, and `capabilities show` input schemas state this with `additionalProperties: false`. Datadog ignored some misspelled fields, such as `filter.qurey` in `v2.ListLogs`, and returned unfiltered results with exit code 0.
 - Query responses that deviate from the bundled contract are returned with `meta.result.schema_violations` and a stderr warning instead of failing with exit code 7. On 2026-10-24, `v2.ListTeams`, `v1.ListHosts`, and `v1.ListLogIndexes` returned null in documented numeric fields and failed entirely. Pagination cursors that are not strings still fail with exit code 7.
 
+### Fixed
+
+- Host metrics (`cpu`, `iowait`, `load`), log index daily limit settings, and team list `next_offset`/`prev_offset` accept the null values returned by the API.
+
 ## [0.9.5] - 2026-10-24
 
 ### Changed
