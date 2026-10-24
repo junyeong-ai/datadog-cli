@@ -57,7 +57,7 @@ zizmor .github
 
 Use unit tests for merge/parse policies and Wiremock tests for observable HTTP behavior. Avoid process-wide environment changes in tests; use pure layer inputs or isolated child processes. Check request counts and returned errors rather than timing randomized backoff. Real network tests must not require production credentials.
 
-The release profile aborts on panic: validate boundary inputs and avoid unchecked arithmetic on user or API data. Benchmark performance changes with `cargo bench --bench parsing`; do not make unsupported performance claims.
+The release profile aborts on panic: validate boundary inputs and avoid unchecked arithmetic on user or API data. Do not claim performance changes without a measurement.
 
 ## Documentation and dependencies
 
