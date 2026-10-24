@@ -845,6 +845,10 @@ async fn response_body_timeouts_are_retried_and_remain_timeout_errors() {
     let requests = tokio::spawn(async move {
         for _ in 0..2 {
             let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = Vec::new();
+            while !request.ends_with(b"\r\n\r\n") {
+                request.push(stream.read_u8().await.unwrap());
+            }
             stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{\"data\":").await.unwrap();
             let mut buffer = [0; 1024];
             while matches!(stream.read(&mut buffer).await, Ok(size) if size > 0) {}
