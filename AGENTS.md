@@ -52,6 +52,7 @@ python3 -m unittest discover -s tests -p '*_test.py'
 shellcheck scripts/install.sh scripts/uninstall.sh tests/install_test.sh
 bash tests/install_test.sh
 actionlint
+zizmor .github
 ```
 
 Use unit tests for merge/parse policies and Wiremock tests for observable HTTP behavior. Avoid process-wide environment changes in tests; use pure layer inputs or isolated child processes. Check request counts and returned errors rather than timing randomized backoff. Real network tests must not require production credentials.

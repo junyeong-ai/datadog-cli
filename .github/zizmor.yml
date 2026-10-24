@@ -1,0 +1,9 @@
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        # SLSA provenance verification identifies the builder by its release tag.
+        slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml: ref-pin
+  dependabot-cooldown:
+    # Dependency updates are adopted as soon as they are released.
+    disable: true
