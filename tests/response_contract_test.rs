@@ -496,9 +496,7 @@ async fn permission_denials_have_a_distinct_machine_readable_kind() {
         let error = client(&server).get_monitor(1).await.unwrap_err();
         assert_eq!(error.exit_code(), 3);
         assert_eq!(error.diagnostic()["error"]["kind"], kind);
-        if status == 403 {
-            assert_eq!(error.diagnostic()["error"]["http_status"], 403);
-        }
+        assert_eq!(error.diagnostic()["error"]["http_status"], status);
     }
 }
 

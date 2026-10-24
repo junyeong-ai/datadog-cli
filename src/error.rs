@@ -17,8 +17,11 @@ pub enum DatadogError {
     #[error("Interrupted")]
     Interrupted,
 
-    #[error("Authentication failed: {0}")]
-    AuthError(String),
+    #[error("Credentials unavailable: {0}")]
+    CredentialError(String),
+
+    #[error("Authentication failed (HTTP 401): {0}")]
+    Unauthorized(String),
 
     #[error("Permission denied (HTTP 403): {0}")]
     PermissionDenied(String),
@@ -50,7 +53,9 @@ impl DatadogError {
     /// usage errors; codes 3-7 distinguish failure classes for scripting.
     pub fn exit_code(&self) -> i32 {
         match self {
-            DatadogError::AuthError(_) | DatadogError::PermissionDenied(_) => 3,
+            DatadogError::CredentialError(_)
+            | DatadogError::Unauthorized(_)
+            | DatadogError::PermissionDenied(_) => 3,
             DatadogError::ApiError { .. } | DatadogError::QueryError(_) => 4,
             DatadogError::Interrupted => 130,
             DatadogError::RateLimitError { .. } => 5,
@@ -65,7 +70,8 @@ impl DatadogError {
     pub fn diagnostic(&self) -> serde_json::Value {
         let (kind, status) = match self {
             Self::ApiError { status, .. } => ("api", Some(*status)),
-            Self::AuthError(_) => ("authentication", None),
+            Self::CredentialError(_) => ("credentials", None),
+            Self::Unauthorized(_) => ("authentication", Some(401)),
             Self::PermissionDenied(_) => ("permission_denied", Some(403)),
             Self::QueryError(_) => ("query", None),
             Self::Interrupted => ("interrupted", None),
@@ -110,11 +116,33 @@ mod tests {
     }
 
     #[test]
-    fn test_auth_error_display() {
-        let error = DatadogError::AuthError("Invalid credentials".to_string());
-        let error_msg = format!("{}", error);
-        assert!(error_msg.contains("Authentication failed"));
-        assert!(error_msg.contains("Invalid credentials"));
+    fn credential_failures_and_rejected_credentials_have_distinct_kinds() {
+        for (error, kind, status) in [
+            (
+                DatadogError::CredentialError("missing".into()),
+                "credentials",
+                None,
+            ),
+            (
+                DatadogError::Unauthorized("denied".into()),
+                "authentication",
+                Some(401),
+            ),
+            (
+                DatadogError::PermissionDenied("denied".into()),
+                "permission_denied",
+                Some(403),
+            ),
+        ] {
+            assert_eq!(error.exit_code(), 3);
+            let diagnostic = error.diagnostic();
+            assert_eq!(diagnostic["error"]["kind"], kind);
+            assert_eq!(diagnostic["error"]["http_status"].as_u64(), status);
+        }
+        assert_eq!(
+            DatadogError::Unauthorized("denied".into()).to_string(),
+            "Authentication failed (HTTP 401): denied"
+        );
     }
 
     #[test]

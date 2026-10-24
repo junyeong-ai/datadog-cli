@@ -456,7 +456,7 @@ impl Config {
                 .token
                 .filter(|token| !token.is_empty())
                 .ok_or_else(|| {
-                    DatadogError::AuthError(
+                    DatadogError::CredentialError(
                         "Token authentication requires DD_TOKEN or token in a config file".into(),
                     )
                 })?;
@@ -483,11 +483,11 @@ impl Config {
                             "API key authentication requires DD_API_KEY and DD_APP_KEY, or \
                              api_key and app_key in a config file"
                         } else {
-                            "credentials required: export DD_TOKEN or both DD_API_KEY and \
+                            "no credentials are configured: export DD_TOKEN or both DD_API_KEY and \
                              DD_APP_KEY, set them in a config file, or configure OAuth; \
                              `datadog-cli config show` reports the selected method"
                         };
-                        return Err(DatadogError::AuthError(message.into()));
+                        return Err(DatadogError::CredentialError(message.into()));
                     }
                 }
             }

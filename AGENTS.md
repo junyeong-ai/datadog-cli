@@ -39,7 +39,7 @@ Verify endpoint contracts against https://docs.datadoghq.com/api/latest/ before 
 
 Keep existing flags, exit codes, and JSON field paths compatible unless the task requires a documented change. Search commands return one page; JSONL does not include pagination metadata. Confirm output structure before writing jq examples.
 
-Distinguish permission denial from authentication failure without changing exit code 3 or switching credentials. `--error-format json` applies to the final runtime error on stderr; CLI usage errors and earlier diagnostics have separate output contracts.
+Distinguish unavailable credentials, rejected credentials (HTTP 401), and permission denial (HTTP 403) by error kind without changing exit code 3 or switching credentials. `--error-format json` applies to the final runtime error on stderr; CLI usage errors and earlier diagnostics have separate output contracts.
 
 ## Validation
 

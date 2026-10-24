@@ -108,7 +108,8 @@ mod tests {
             assert_eq!(next_delay(&server_error(status), 0, 3, None), None);
         }
         for error in [
-            DatadogError::AuthError("denied".into()),
+            DatadogError::CredentialError("missing".into()),
+            DatadogError::Unauthorized("denied".into()),
             DatadogError::PermissionDenied("denied".into()),
         ] {
             assert_eq!(next_delay(&error, 0, 3, None), None);

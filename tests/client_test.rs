@@ -127,7 +127,7 @@ async fn unauthorized_fails_immediately_without_retry() {
     let started = Instant::now();
     let error = client.get_monitor(42).await.unwrap_err();
 
-    assert!(matches!(error, DatadogError::AuthError(_)));
+    assert!(matches!(error, DatadogError::Unauthorized(_)));
     assert!(started.elapsed() < Duration::from_secs(1));
 }
 

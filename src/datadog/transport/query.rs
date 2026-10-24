@@ -104,7 +104,7 @@ impl DatadogClient {
                         Ok(bytes) => {
                             let message = String::from_utf8_lossy(&bytes).into_owned();
                             Err(match status.as_u16() {
-                                401 => DatadogError::AuthError(message),
+                                401 => DatadogError::Unauthorized(message),
                                 403 => DatadogError::PermissionDenied(message),
                                 429 => DatadogError::RateLimitError {
                                     reset_secs: headers

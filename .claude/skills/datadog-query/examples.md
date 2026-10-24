@@ -164,7 +164,8 @@ OAuth uses global `[auth].pup_org` and Pup 2.0+ on PATH. Pup owns storage and re
 ### Failures
 
 - `permission_denied` / HTTP 403 means the current identity or scopes lack access. Check product availability, user permissions, and the endpoint's scope. Repeating login alone does not establish access. Downtime reads require `monitors_downtime`, which a generic read-only scope selection may omit.
-- `authentication` means credentials or the OAuth provider failed. Confirm the selected site/session. Provider failure returns exit code 3 without switching to another key, token, or session.
+- `authentication` / HTTP 401 means Datadog rejected the credentials, for example an expired token or revoked key. Confirm the selected site/session before asking the user to renew them.
+- `credentials` means no usable credentials were available locally: the selected method has no configured values, or the OAuth provider failed. `datadog-cli config show` reports the selected method. Provider failure returns exit code 3 without switching to another key, token, or session.
 - Do not switch identities or start a new consent flow unless requested by the user. For requested login/setup, inspect `pup auth login --help`, select the existing site and an explicit named session, and request the scopes needed for the chosen commands. Review the actual consent permissions.
 - MCP additionally requires organization MCP Access, the user role permission `mcp_read`, and the underlying resource permissions. A successful handshake with an empty tool list does not identify which of these is missing. Inspect the official MCP access settings and current toolset exposure; do not silently switch credentials.
 - Product/index configuration and preview API availability can prevent an otherwise authenticated query. Report the API error rather than turning it into an empty result.

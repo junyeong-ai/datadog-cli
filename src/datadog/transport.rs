@@ -175,7 +175,7 @@ impl DatadogClient {
         })?;
 
         match status {
-            StatusCode::UNAUTHORIZED => Err(DatadogError::AuthError(message)),
+            StatusCode::UNAUTHORIZED => Err(DatadogError::Unauthorized(message)),
             StatusCode::FORBIDDEN => Err(DatadogError::PermissionDenied(message)),
             _ => Err(DatadogError::ApiError {
                 status: status.as_u16(),

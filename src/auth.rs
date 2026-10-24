@@ -31,17 +31,20 @@ pub(crate) async fn pup_token(site: &str, org: &str) -> Result<String> {
         .env_remove("DD_API_KEY")
         .env_remove("DD_APP_KEY");
     let lock_path = crate::config::Config::global_config_path()
-        .ok_or_else(|| DatadogError::AuthError("Cannot determine the OAuth lock directory".into()))?
+        .ok_or_else(|| {
+            DatadogError::CredentialError("Cannot determine the OAuth lock directory".into())
+        })?
         .with_file_name(format!(".pup-{site}.lock"));
     token_from_command_locked(command, &lock_path, PROVIDER_TIMEOUT).await
 }
 
 async fn provider_lock(path: &Path) -> Result<File> {
     let parent = path.parent().ok_or_else(|| {
-        DatadogError::AuthError("Cannot determine the OAuth lock directory".into())
+        DatadogError::CredentialError("Cannot determine the OAuth lock directory".into())
     })?;
-    std::fs::create_dir_all(parent)
-        .map_err(|_| DatadogError::AuthError("Cannot create the OAuth lock directory".into()))?;
+    std::fs::create_dir_all(parent).map_err(|_| {
+        DatadogError::CredentialError("Cannot create the OAuth lock directory".into())
+    })?;
     let mut options = File::options();
     options.read(true).write(true).create(true).truncate(false);
     #[cfg(unix)]
@@ -51,13 +54,13 @@ async fn provider_lock(path: &Path) -> Result<File> {
     }
     let file = options
         .open(path)
-        .map_err(|_| DatadogError::AuthError("Cannot open the OAuth provider lock".into()))?;
+        .map_err(|_| DatadogError::CredentialError("Cannot open the OAuth provider lock".into()))?;
     loop {
         match file.try_lock() {
             Ok(()) => return Ok(file),
             Err(TryLockError::WouldBlock) => tokio::time::sleep(Duration::from_millis(25)).await,
             Err(TryLockError::Error(_)) => {
-                return Err(DatadogError::AuthError(
+                return Err(DatadogError::CredentialError(
                     "Cannot lock the OAuth provider".into(),
                 ));
             }
@@ -74,13 +77,13 @@ async fn token_from_command_locked(
     let _guard = tokio::time::timeout(timeout, provider_lock(path))
         .await
         .map_err(|_| {
-            DatadogError::AuthError("Pup authentication exceeded its time limit".into())
+            DatadogError::CredentialError("Pup authentication exceeded its time limit".into())
         })??;
     let remaining = timeout
         .checked_sub(started.elapsed())
         .filter(|remaining| !remaining.is_zero())
         .ok_or_else(|| {
-            DatadogError::AuthError("Pup authentication exceeded its time limit".into())
+            DatadogError::CredentialError("Pup authentication exceeded its time limit".into())
         })?;
     token_from_command(command, remaining).await
 }
@@ -93,14 +96,14 @@ async fn token_from_command(mut command: Command, timeout: Duration) -> Result<S
         .kill_on_drop(true)
         .spawn()
         .map_err(|_| {
-            DatadogError::AuthError(
+            DatadogError::CredentialError(
                 "Pup 2.0+ must be installed on PATH for --auth-provider pup".into(),
             )
         })?;
     let result = tokio::time::timeout(timeout, read_token(&mut child))
         .await
         .unwrap_or_else(|_| {
-            Err(DatadogError::AuthError(
+            Err(DatadogError::CredentialError(
                 "Pup authentication exceeded its time limit".into(),
             ))
         });
@@ -115,24 +118,24 @@ async fn read_token(child: &mut Child) -> Result<String> {
     let stdout = child
         .stdout
         .take()
-        .ok_or_else(|| DatadogError::AuthError("Cannot read Pup credentials".into()))?;
+        .ok_or_else(|| DatadogError::CredentialError("Cannot read Pup credentials".into()))?;
     let mut output = Vec::new();
     stdout
         .take(MAX_TOKEN_BYTES + 1)
         .read_to_end(&mut output)
         .await
-        .map_err(|_| DatadogError::AuthError("Cannot read Pup credentials".into()))?;
+        .map_err(|_| DatadogError::CredentialError("Cannot read Pup credentials".into()))?;
     if output.len() as u64 > MAX_TOKEN_BYTES {
-        return Err(DatadogError::AuthError(
+        return Err(DatadogError::CredentialError(
             "Pup returned an oversized credential response".into(),
         ));
     }
     let status = child
         .wait()
         .await
-        .map_err(|_| DatadogError::AuthError("Cannot wait for Pup authentication".into()))?;
+        .map_err(|_| DatadogError::CredentialError("Cannot wait for Pup authentication".into()))?;
     if !status.success() {
-        return Err(DatadogError::AuthError(
+        return Err(DatadogError::CredentialError(
             "Pup authentication failed; log in to the selected site and named session with pup auth login"
                 .into(),
         ));
@@ -149,7 +152,9 @@ async fn read_token(child: &mut Child) -> Result<String> {
                 })
         })
         .ok_or_else(|| {
-            DatadogError::AuthError("Pup did not return a single nonempty bearer token".into())
+            DatadogError::CredentialError(
+                "Pup did not return a single nonempty bearer token".into(),
+            )
         })?;
     Ok(token.to_owned())
 }
