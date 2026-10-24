@@ -171,8 +171,14 @@ impl Catalog {
             .iter()
             .any(|name| domain_id(name) == domain)
         {
+            let domains = operation
+                .domains
+                .iter()
+                .map(|name| format!("{:?}", domain_id(name)))
+                .collect::<Vec<_>>();
             return Err(DatadogError::InvalidInput(format!(
-                "Operation {id} does not belong to domain {domain:?}"
+                "Operation {id} does not belong to domain {domain:?}; its domains: {}",
+                domains.join(", ")
             )));
         }
         Ok(operation)

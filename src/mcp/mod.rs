@@ -56,9 +56,16 @@ pub fn list(
     if let Some(toolset) = toolset
         && !tools.values().any(|tool| tool.toolset == toolset)
     {
-        return Err(DatadogError::InvalidInput(
-            "Unknown reviewed MCP toolset".into(),
-        ));
+        let reviewed = tools
+            .values()
+            .map(|tool| tool.toolset.as_str())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        return Err(DatadogError::InvalidInput(format!(
+            "Unknown reviewed MCP toolset {toolset:?}; reviewed toolsets: {}",
+            reviewed.join(", ")
+        )));
     }
     let search = search.map(str::to_ascii_lowercase);
     let items = tools

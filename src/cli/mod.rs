@@ -283,7 +283,7 @@ pub struct AuditArgs {
     #[arg(long, default_value = "now", help = TIME_HELP)]
     pub to: String,
 
-    #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000))]
+    #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000), help = "Results per page (max 1000)")]
     pub limit: i32,
 
     #[arg(long, help = "Pagination cursor from previous response")]
@@ -402,7 +402,7 @@ pub struct EventsArgs {
     #[arg(long, default_value = "now", help = TIME_HELP)]
     pub to: String,
 
-    #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000))]
+    #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000), help = "Results per page (max 1000)")]
     pub limit: i32,
 
     #[arg(long, help = "Pagination cursor from previous response")]
@@ -447,7 +447,7 @@ pub struct SpansArgs {
     #[arg(long, default_value = "now", help = TIME_HELP)]
     pub to: String,
 
-    #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000))]
+    #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000), help = "Results per page (max 1000)")]
     pub limit: i32,
 
     #[arg(long, help = "Pagination cursor from previous response")]
@@ -499,7 +499,7 @@ pub struct RumArgs {
     #[arg(long, default_value = "now", help = TIME_HELP)]
     pub to: String,
 
-    #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000))]
+    #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000), help = "Results per page (max 1000)")]
     pub limit: i32,
 
     #[arg(long, help = "Pagination cursor from previous response")]
@@ -538,7 +538,7 @@ pub struct LogsSearchArgs {
     #[arg(long, default_value = "now", help = TIME_HELP)]
     pub to: String,
 
-    #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000))]
+    #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000), help = "Results per page (max 1000)")]
     pub limit: i32,
 
     #[arg(long, help = "Pagination cursor from previous response")]
@@ -727,6 +727,11 @@ pub async fn run(cli: Cli) -> Result<()> {
         return output::print(&data, &format).map_err(Into::into);
     }
     if let Command::Config { ref action } = cli.command {
+        if cli.format.is_some() {
+            return Err(crate::error::DatadogError::InvalidInput(
+                "Config commands print text; --format applies to API and discovery commands".into(),
+            ));
+        }
         if !matches!(action, ConfigAction::Show)
             && (cli.auth_provider.is_some() || cli.auth_method.is_some() || cli.pup_org.is_some())
         {

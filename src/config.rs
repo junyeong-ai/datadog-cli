@@ -481,9 +481,9 @@ impl Config {
                     (Some(api_key), Some(app_key)) => Credentials::Keys { api_key, app_key },
                     _ => {
                         return Err(DatadogError::AuthError(
-                            "credentials required: set a bearer token (--token, \
-                             DD_TOKEN env, or `token` in config) or both api_key and app_key \
-                             (--api-key/--app-key, DD_API_KEY/DD_APP_KEY env, or config file)"
+                            "credentials required: export DD_TOKEN or both DD_API_KEY and \
+                             DD_APP_KEY, set them in the global config file, or configure \
+                             OAuth; `datadog-cli config show` reports the selected method"
                                 .into(),
                         ));
                     }

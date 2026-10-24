@@ -86,6 +86,13 @@ fn mcp_discovery_is_offline_and_unreviewed_tools_are_rejected_before_authenticat
     let list: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(list["data"].as_array().unwrap().len(), 1);
     let output = Command::new(binary)
+        .args(["mcp", "list", "--toolset", "unknown"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("reviewed toolsets: "));
+    assert!(String::from_utf8_lossy(&output.stderr).contains(", dbm, "));
+    let output = Command::new(binary)
         .args([
             "--site",
             "invalid-site",
@@ -121,4 +128,15 @@ fn mcp_discovery_is_offline_and_unreviewed_tools_are_rejected_before_authenticat
         .unwrap();
     assert_eq!(output.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&output.stderr).contains("not supported on this site"));
+}
+
+#[test]
+fn config_commands_reject_output_formats_they_cannot_produce() {
+    let output = Command::new(env!("CARGO_BIN_EXE_datadog-cli"))
+        .args(["config", "show", "--format", "json"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Config commands print text"));
 }

@@ -22,9 +22,9 @@ pub enum CapabilitiesAction {
             help = "Literal case-insensitive text in the operation ID or summary"
         )]
         search: Option<String>,
-        #[arg(long, default_value = "0")]
+        #[arg(long, default_value = "0", help = "Pagination offset")]
         offset: usize,
-        #[arg(long, default_value="25", value_parser=clap::value_parser!(u32).range(1..=200))]
+        #[arg(long, default_value="25", value_parser=clap::value_parser!(u32).range(1..=200), help = "Results per page (max 200)")]
         limit: u32,
     },
     #[command(about = "Describe an operation, including its offline JSON input schema")]

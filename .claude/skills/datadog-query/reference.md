@@ -125,10 +125,10 @@ Discover reviewed MCP tools offline; server availability is not probed
 Usage: datadog-cli mcp list [OPTIONS]
 
 Options:
-      --toolset <TOOLSET>
+      --toolset <TOOLSET>  Reviewed toolset name, for example dbm
       --search <SEARCH>    Literal case-insensitive text in tool names and descriptions
-      --offset <OFFSET>    [default: 0]
-      --limit <LIMIT>      [default: 25]
+      --offset <OFFSET>    Pagination offset [default: 0]
+      --limit <LIMIT>      Results per page (max 200) [default: 25]
   -h, --help               Print help
 ```
 
@@ -232,8 +232,8 @@ Options:
       --domain <DOMAIN>  Exact domain ID from capabilities domains
       --all              Include excluded operations and their reasons
       --search <SEARCH>  Literal case-insensitive text in the operation ID or summary
-      --offset <OFFSET>  [default: 0]
-      --limit <LIMIT>    [default: 25]
+      --offset <OFFSET>  Pagination offset [default: 0]
+      --limit <LIMIT>    Results per page (max 200) [default: 25]
   -h, --help             Print help
 ```
 
@@ -334,7 +334,7 @@ Arguments:
 Options:
       --from <FROM>                  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
       --to <TO>                      Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
-      --limit <LIMIT>                [default: 10]
+      --limit <LIMIT>                Results per page (max 1000) [default: 10]
       --cursor <CURSOR>              Pagination cursor from previous response
       --sort <SORT>                  Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
       --storage-tier <STORAGE_TIER>  Storage tier to search (default: indexes) [possible values: indexes, online-archives, flex]
@@ -439,7 +439,7 @@ Arguments:
 Options:
       --from <FROM>      Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
       --to <TO>          Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
-      --limit <LIMIT>    [default: 10]
+      --limit <LIMIT>    Results per page (max 1000) [default: 10]
       --cursor <CURSOR>  Pagination cursor from previous response
       --sort <SORT>      Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
   -h, --help             Print help
@@ -521,7 +521,7 @@ Arguments:
 Options:
       --from <FROM>              Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
       --to <TO>                  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
-      --limit <LIMIT>            [default: 10]
+      --limit <LIMIT>            Results per page (max 1000) [default: 10]
       --cursor <CURSOR>          Pagination cursor from previous response
       --sort <SORT>              Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
       --tag-filter <TAG_FILTER>  Tag prefixes to include (default from config)
@@ -559,7 +559,7 @@ Arguments:
 Options:
       --from <FROM>              Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
       --to <TO>                  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
-      --limit <LIMIT>            [default: 10]
+      --limit <LIMIT>            Results per page (max 1000) [default: 10]
       --cursor <CURSOR>          Pagination cursor from previous response
       --sort <SORT>              Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
       --tag-filter <TAG_FILTER>  Tag prefixes to include (default from config)
@@ -732,7 +732,7 @@ Arguments:
 Options:
       --from <FROM>      Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
       --to <TO>          Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
-      --limit <LIMIT>    [default: 10]
+      --limit <LIMIT>    Results per page (max 1000) [default: 10]
       --cursor <CURSOR>  Pagination cursor from previous response
       --sort <SORT>      Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
   -h, --help             Print help

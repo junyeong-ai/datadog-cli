@@ -14,16 +14,16 @@ pub struct McpLimits {
 pub enum McpAction {
     #[command(about = "Discover reviewed MCP tools offline; server availability is not probed")]
     List {
-        #[arg(long)]
+        #[arg(long, help = "Reviewed toolset name, for example dbm")]
         toolset: Option<String>,
         #[arg(
             long,
             help = "Literal case-insensitive text in tool names and descriptions"
         )]
         search: Option<String>,
-        #[arg(long, default_value = "0")]
+        #[arg(long, default_value = "0", help = "Pagination offset")]
         offset: usize,
-        #[arg(long,default_value="25",value_parser=clap::value_parser!(u32).range(1..=200))]
+        #[arg(long,default_value="25",value_parser=clap::value_parser!(u32).range(1..=200),help="Results per page (max 200)")]
         limit: u32,
     },
     #[command(about = "Read the selected tool's current schema from the official MCP server")]

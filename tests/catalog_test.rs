@@ -77,10 +77,13 @@ fn post_searches_are_queries_and_get_actions_are_excluded() {
         );
         assert_ne!(catalog.operation(id).unwrap().access, Access::Query);
     }
+    let error = catalog
+        .query("metrics", "v2.SearchCIAppPipelineEvents")
+        .unwrap_err();
     assert!(
-        catalog
-            .query("metrics", "v2.SearchCIAppPipelineEvents")
-            .is_err()
+        error
+            .to_string()
+            .contains("its domains: \"ci-visibility-pipelines\"")
     );
 }
 
