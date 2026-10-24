@@ -14,6 +14,7 @@ pub use error::{DatadogError, Result};
 pub(crate) mod output;
 
 mod auth;
+mod schema;
 
 pub mod catalog;
 pub mod query;

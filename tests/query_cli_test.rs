@@ -54,7 +54,11 @@ fn discovery_and_invalid_inputs_do_not_load_credentials_or_site_configuration() 
     let diagnostic: serde_json::Value = serde_json::from_slice(&output.stderr).unwrap();
     assert_eq!(diagnostic["error"]["kind"], "invalid_input");
     let message = diagnostic["error"]["message"].as_str().unwrap();
-    assert!(message.contains("violates the API schema"));
+    assert!(
+        message.contains(
+            "violates the API schema: /query/page[size]: value is not of type \"integer\""
+        )
+    );
     assert!(!message.contains("sensitive-value"));
 }
 

@@ -392,12 +392,10 @@ impl Catalog {
                     error.schema_path()
                 ))
             })?;
-        if let Some(error) = validator.iter_errors(input).next() {
+        if let Some(violations) = crate::schema::violations(&validator, input) {
             return Err(DatadogError::InvalidInput(format!(
-                "Input for {} violates the API schema at {} (constraint {})",
-                operation.id,
-                error.instance_path(),
-                error.schema_path()
+                "Input for {} violates the API schema: {violations}",
+                operation.id
             )));
         }
         Ok(())

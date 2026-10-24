@@ -322,11 +322,9 @@ fn validate_arguments(schema: &Value, input: &Value) -> Result<()> {
         .should_validate_formats(true)
         .build(schema)
         .map_err(|_| DatadogError::DecodeError("Unsupported MCP input schema".into()))?;
-    if let Some(error) = validator.iter_errors(input).next() {
+    if let Some(violations) = crate::schema::violations(&validator, input) {
         return Err(DatadogError::InvalidInput(format!(
-            "MCP arguments violate the tool schema at {} (constraint {})",
-            error.instance_path(),
-            error.schema_path()
+            "MCP arguments violate the tool schema: {violations}"
         )));
     }
     Ok(())
@@ -337,11 +335,9 @@ fn validate_result(schema: &Value, result: &Value) -> Result<()> {
         .offline()
         .build(schema)
         .map_err(|_| DatadogError::DecodeError("Unsupported MCP output schema".into()))?;
-    if let Some(error) = validator.iter_errors(result).next() {
+    if let Some(violations) = crate::schema::violations(&validator, result) {
         return Err(DatadogError::DecodeError(format!(
-            "MCP output violates the tool schema at {} (constraint {})",
-            error.instance_path(),
-            error.schema_path()
+            "MCP output violates the tool schema: {violations}"
         )));
     }
     Ok(())
