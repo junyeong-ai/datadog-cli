@@ -151,7 +151,7 @@ fn main() {
     let global_directory = root.path().join(".config/datadog-cli");
     fs::create_dir_all(&global_directory).unwrap();
     let global_config = global_directory.join("config.toml");
-    fs::write(&global_config, "site='datadoghq.eu'\ntoken='unused-global-secret'\n[auth]\nmethod='oauth'\npup_org='team work 한글;$literal'\n").unwrap();
+    fs::write(&global_config, "site='datadoghq.eu'\ntoken='unused-global-secret'\n[auth]\nmethod='oauth'\npup_org='team work 한글;$literal'\n[network]\nmax_retries=0\n").unwrap();
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -159,42 +159,18 @@ fn main() {
     }
     for (case, arguments, expected_exit, expected_provider) in [
         ("failed", vec!["config", "show"], 0, false),
-        (
-            "success",
-            vec!["metrics", "q", "--from", "definitely-invalid"],
-            1,
-            true,
-        ),
+        ("success", vec!["metrics", "q"], 6, true),
+        ("failed", vec!["metrics", "q"], 3, true),
         (
             "failed",
-            vec!["metrics", "q", "--from", "definitely-invalid"],
-            3,
-            true,
-        ),
-        (
-            "failed",
-            vec![
-                "--auth-method",
-                "api-keys",
-                "metrics",
-                "q",
-                "--from",
-                "definitely-invalid",
-            ],
-            1,
+            vec!["--auth-method", "api-keys", "metrics", "q"],
+            6,
             false,
         ),
         (
             "failed",
-            vec![
-                "--auth-method",
-                "token",
-                "metrics",
-                "q",
-                "--from",
-                "definitely-invalid",
-            ],
-            1,
+            vec!["--auth-method", "token", "metrics", "q"],
+            6,
             false,
         ),
     ] {
@@ -210,6 +186,12 @@ fn main() {
             .env("DD_APP_KEY", "ambient-app")
             .env("TEST_PUP_RECORD", &record)
             .env("TEST_PUP_CASE", case)
+            .env("HTTPS_PROXY", "http://127.0.0.1:9")
+            .env("https_proxy", "http://127.0.0.1:9")
+            .env_remove("ALL_PROXY")
+            .env_remove("all_proxy")
+            .env_remove("NO_PROXY")
+            .env_remove("no_proxy")
             .output()
             .unwrap();
         assert_eq!(

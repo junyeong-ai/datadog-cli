@@ -3,13 +3,14 @@ use serde_json::{Value, json};
 
 use crate::catalog::{Catalog, TimeEncoding};
 use crate::error::{DatadogError, Result};
+use crate::time::{TimeExpr, TimeRange};
 
 pub fn apply_time_range(
     input: &mut Value,
     domain: &str,
     id: &str,
-    from: Option<&str>,
-    to: Option<&str>,
+    from: Option<TimeExpr>,
+    to: Option<TimeExpr>,
     now: DateTime<Utc>,
 ) -> Result<Option<Value>> {
     let Some(from) = from else {
@@ -29,19 +30,9 @@ pub fn apply_time_range(
             "Range flags conflict with time fields in --input".into(),
         ));
     }
-    let from = crate::utils::parse_time_at(from, now)?;
-    let to = crate::utils::parse_time_at(to.unwrap_or("now"), now)?;
-    if from > to {
-        return Err(DatadogError::InvalidInput(
-            "Start time must not be after end time".into(),
-        ));
-    }
-    let from_date = DateTime::from_timestamp(from, 0)
-        .ok_or_else(|| DatadogError::InvalidInput("Invalid range start".into()))?
-        .to_rfc3339();
-    let to_date = DateTime::from_timestamp(to, 0)
-        .ok_or_else(|| DatadogError::InvalidInput("Invalid range end".into()))?
-        .to_rfc3339();
+    let range = TimeRange::resolve(from, to.unwrap_or(TimeExpr::Ago(0)), now)?;
+    let (from, to) = (range.from, range.to);
+    let (from_date, to_date) = range.rfc3339()?;
     let (encoded_from, encoded_to) = match contract.encoding {
         TimeEncoding::UnixSeconds => (json!(from), json!(to)),
         TimeEncoding::UnixMilliseconds => {

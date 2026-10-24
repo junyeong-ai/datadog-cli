@@ -1,5 +1,4 @@
 use crate::error::{DatadogError, Result};
-use crate::utils::parse_time_at;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -151,34 +150,6 @@ pub(crate) fn api_count(value: Option<&Value>) -> Result<Option<usize>> {
         .transpose()
 }
 
-pub trait TimeHandler {
-    fn parse_time_range(&self, from: &str, to: &str) -> Result<(i64, i64)> {
-        let now = chrono::Utc::now();
-        let from = parse_time_at(from, now)?;
-        let to = parse_time_at(to, now)?;
-        if from > to {
-            return Err(DatadogError::InvalidInput(
-                "Start time must not be after end time".into(),
-            ));
-        }
-        Ok((from, to))
-    }
-
-    fn timestamp_to_iso8601(&self, timestamp: i64) -> Result<String> {
-        chrono::DateTime::from_timestamp(timestamp, 0)
-            .map(|dt| dt.to_rfc3339())
-            .ok_or_else(|| DatadogError::InvalidInput("Invalid timestamp".to_string()))
-    }
-
-    fn parse_time_range_iso8601(&self, from: &str, to: &str) -> Result<(String, String)> {
-        let (from_ts, to_ts) = self.parse_time_range(from, to)?;
-        Ok((
-            self.timestamp_to_iso8601(from_ts)?,
-            self.timestamp_to_iso8601(to_ts)?,
-        ))
-    }
-}
-
 pub trait TagFilter {
     /// The effective filter: explicit argument, then the config default
     /// carried by the client, then `"*"` (keep everything).
@@ -301,29 +272,8 @@ mod tests {
     use serde_json::json;
 
     struct TestHandler;
-    impl TimeHandler for TestHandler {}
     impl ResponseFormatter for TestHandler {}
     impl TagFilter for TestHandler {}
-
-    #[test]
-    fn test_time_handler_parse_time_range() {
-        let handler = TestHandler;
-        let (from, to) = handler
-            .parse_time_range("1609459200", "1609462800")
-            .unwrap();
-        assert_eq!(from, 1609459200);
-        assert_eq!(to, 1609462800);
-    }
-
-    #[test]
-    fn test_time_handler_parse_time_range_iso8601() {
-        let handler = TestHandler;
-        let (from, to) = handler
-            .parse_time_range_iso8601("1609459200", "1609462800")
-            .unwrap();
-        assert!(from.starts_with("2021-01-01T00:00:00"));
-        assert!(to.starts_with("2021-01-01T01:00:00"));
-    }
 
     #[test]
     fn test_from_offset_without_total_full_page() {
@@ -401,13 +351,6 @@ mod tests {
         let response = handler.format_detail(data.clone());
         assert_eq!(response["data"], data);
     }
-    #[test]
-    fn time_ranges_reject_reversed_boundaries() {
-        assert!(TestHandler.parse_time_range("2", "1").is_err());
-        let (from, to) = TestHandler.parse_time_range("now", "now").unwrap();
-        assert_eq!(from, to);
-    }
-
     #[test]
     fn empty_tag_prefixes_do_not_match_every_tag() {
         let tags = vec!["env:prod".into(), "service:api".into()];

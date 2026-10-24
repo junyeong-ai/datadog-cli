@@ -65,7 +65,7 @@ async fn llm_query_and_structured_filters_are_distinct_request_modes() {
         let Command::LlmObs(args) = Cli::parse_from(argv).command else {
             panic!()
         };
-        LlmObsHandler::search(&client(&server), &args)
+        LlmObsHandler::search(&client(&server), &args, chrono::Utc::now())
             .await
             .unwrap();
         let requests = server.received_requests().await.unwrap();
@@ -303,9 +303,13 @@ async fn host_metadata_and_identity_survive_without_bypassing_tag_filters() {
         else {
             panic!()
         };
-        let result = datadog_cli::handlers::hosts::HostsHandler::list(&client(&server), &args)
-            .await
-            .unwrap();
+        let result = datadog_cli::handlers::hosts::HostsHandler::list(
+            &client(&server),
+            &args,
+            chrono::Utc::now(),
+        )
+        .await
+        .unwrap();
         assert_eq!(result["data"][0]["id"], 42);
         assert_eq!(result["data"][0]["aliases"], json!(["alias-1"]));
         assert_eq!(result["data"][0]["meta"]["agent_version"], "fixture");
@@ -350,7 +354,9 @@ async fn log_custom_attributes_preserve_correlation_and_business_context() {
     else {
         panic!()
     };
-    let output = LogsHandler::search(&client(&server), &args).await.unwrap();
+    let output = LogsHandler::search(&client(&server), &args, chrono::Utc::now())
+        .await
+        .unwrap();
     assert_eq!(output["data"][0]["attributes"], attributes);
     assert_eq!(output["data"][0]["service"], "api");
     assert_eq!(output["data"][0]["tags"], json!(["env:prod"]));
@@ -385,8 +391,12 @@ async fn log_groups_are_ranked_on_the_server_and_keep_query_diagnostics() {
         };
         let client = client(&server);
         let result = match action {
-            LogsAction::Aggregate(args) => LogsHandler::aggregate(&client, &args).await,
-            LogsAction::Timeseries(args) => LogsHandler::timeseries(&client, &args).await,
+            LogsAction::Aggregate(args) => {
+                LogsHandler::aggregate(&client, &args, chrono::Utc::now()).await
+            }
+            LogsAction::Timeseries(args) => {
+                LogsHandler::timeseries(&client, &args, chrono::Utc::now()).await
+            }
             _ => panic!(),
         }
         .unwrap();
@@ -512,7 +522,7 @@ async fn metric_units_preserve_denominators_scaling_and_null_positions() {
         else {
             panic!()
         };
-        let output = MetricsHandler::query(&client(&server), &args)
+        let output = MetricsHandler::query(&client(&server), &args, chrono::Utc::now())
             .await
             .unwrap();
         for (index, original) in units.as_array().unwrap().iter().enumerate() {
@@ -555,7 +565,9 @@ async fn spans_preserve_http_and_messaging_details_with_both_stack_modes() {
         let Command::Spans(args) = Cli::parse_from(argv).command else {
             panic!()
         };
-        let output = SpansHandler::list(&client(&server), &args).await.unwrap();
+        let output = SpansHandler::list(&client(&server), &args, chrono::Utc::now())
+            .await
+            .unwrap();
         let mut expected = custom.clone();
         if !full {
             expected["error"]["stack"] =

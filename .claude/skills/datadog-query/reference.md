@@ -263,8 +263,8 @@ Arguments:
   <QUERY>
 
 Options:
-      --from <FROM>  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
-      --to <TO>      Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --from <FROM>  now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
+      --to <TO>      now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: now]
   -h, --help         Print help
 ```
 
@@ -280,8 +280,8 @@ Arguments:
 
 Options:
       --formula <FORMULA>    Formula over query names (e.g. "a / b * 100"); repeatable
-      --from <FROM>          Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
-      --to <TO>              Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --from <FROM>          now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
+      --to <TO>              now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: now]
       --interval <INTERVAL>  Rollup interval in seconds
   -h, --help                 Print help
 ```
@@ -299,8 +299,8 @@ Arguments:
 Options:
       --formula <FORMULA>        Formula over query names (e.g. "a / b * 100"); repeatable
       --aggregator <AGGREGATOR>  Aggregator applied over the time window [default: avg] [possible values: avg, min, max, sum, last, percentile, mean, l2norm, area]
-      --from <FROM>              Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
-      --to <TO>                  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --from <FROM>              now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
+      --to <TO>                  now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: now]
   -h, --help                     Print help
 ```
 
@@ -332,8 +332,8 @@ Arguments:
   [QUERY]  [default: *]
 
 Options:
-      --from <FROM>                  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
-      --to <TO>                      Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --from <FROM>                  now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
+      --to <TO>                      now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: now]
       --limit <LIMIT>                Results per page (max 1000) [default: 10]
       --cursor <CURSOR>              Pagination cursor from previous response
       --sort <SORT>                  Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
@@ -353,8 +353,8 @@ Arguments:
   [QUERY]  [default: *]
 
 Options:
-      --from <FROM>                Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
-      --to <TO>                    Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --from <FROM>                now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
+      --to <TO>                    now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: now]
       --group-by <GROUP_BY>        Group by a facet; buckets are ordered by descending log count
       --group-limit <GROUP_LIMIT>  Maximum groups to return (default 10, max 10000)
   -h, --help                       Print help
@@ -371,8 +371,8 @@ Arguments:
   [QUERY]  [default: *]
 
 Options:
-      --from <FROM>                Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
-      --to <TO>                    Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --from <FROM>                now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
+      --to <TO>                    now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: now]
       --interval <INTERVAL>        Rollup interval (e.g., 5m, 1h, 1d) [default: 1h]
       --aggregation <AGGREGATION>  Aggregation type (count, avg, sum, min, max) [default: count]
       --metric <METRIC>            Metric field for aggregation
@@ -437,8 +437,8 @@ Arguments:
   [QUERY]  Event search query (e.g. "source:alert status:error") [default: *]
 
 Options:
-      --from <FROM>      Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
-      --to <TO>          Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --from <FROM>      now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
+      --to <TO>          now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: now]
       --limit <LIMIT>    Results per page (max 1000) [default: 10]
       --cursor <CURSOR>  Pagination cursor from previous response
       --sort <SORT>      Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
@@ -454,7 +454,7 @@ Usage: datadog-cli hosts [OPTIONS]
 
 Options:
       --filter <FILTER>          Filter hosts by name, alias, or tag
-      --from <FROM>              Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
+      --from <FROM>              now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
       --sort-field <SORT_FIELD>  Sort field (e.g., cpu, iowait, load)
       --sort-dir <SORT_DIR>      Sort direction (asc, desc)
       --start <START>            Pagination offset [default: 0]
@@ -519,8 +519,8 @@ Arguments:
   [QUERY]  [default: *]
 
 Options:
-      --from <FROM>              Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
-      --to <TO>                  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --from <FROM>              now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
+      --to <TO>                  now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: now]
       --limit <LIMIT>            Results per page (max 1000) [default: 10]
       --cursor <CURSOR>          Pagination cursor from previous response
       --sort <SORT>              Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
@@ -557,8 +557,8 @@ Arguments:
   [QUERY]  [default: *]
 
 Options:
-      --from <FROM>              Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
-      --to <TO>                  Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --from <FROM>              now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
+      --to <TO>                  now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: now]
       --limit <LIMIT>            Results per page (max 1000) [default: 10]
       --cursor <CURSOR>          Pagination cursor from previous response
       --sort <SORT>              Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
@@ -685,8 +685,8 @@ Arguments:
 
 Options:
       --track <TRACK>      Error track to search [default: trace] [possible values: trace, logs, rum]
-      --from <FROM>        Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
-      --to <TO>            Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --from <FROM>        now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
+      --to <TO>            now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: now]
       --include <INCLUDE>  Include related data [possible values: issue, issue.assignee, issue.case, issue.team_owners]
   -h, --help               Print help
 ```
@@ -730,8 +730,8 @@ Arguments:
   [QUERY]  Audit event search query [default: *]
 
 Options:
-      --from <FROM>      Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
-      --to <TO>          Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --from <FROM>      now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
+      --to <TO>          now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: now]
       --limit <LIMIT>    Results per page (max 1000) [default: 10]
       --cursor <CURSOR>  Pagination cursor from previous response
       --sort <SORT>      Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
@@ -764,8 +764,8 @@ Arguments:
   [QUERY]  Agent Observability query; conflicts with structured filters
 
 Options:
-      --from <FROM>            Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: "1 hour ago"]
-      --to <TO>                Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp [default: now]
+      --from <FROM>            now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
+      --to <TO>                now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: now]
       --limit <LIMIT>          Results per page (CLI max 5000) [default: 10]
       --cursor <CURSOR>        Pagination cursor from previous response
       --sort <SORT>            Sort order (use --sort="-timestamp" for descending)

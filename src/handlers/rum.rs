@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 
 use crate::cli::RumArgs;
@@ -5,21 +6,23 @@ use crate::datadog::{DatadogClient, SearchParams};
 use crate::error::Result;
 use crate::handlers::common::{
     DEFAULT_STACK_TRACE_LINES, PaginationInfo, ResponseFilter, ResponseFormatter, TagFilter,
-    TimeHandler,
 };
 
 pub struct RumHandler;
 
-impl TimeHandler for RumHandler {}
 impl TagFilter for RumHandler {}
 impl ResponseFilter for RumHandler {}
 impl ResponseFormatter for RumHandler {}
 
 impl RumHandler {
-    pub async fn search_events(client: &DatadogClient, args: &RumArgs) -> Result<Value> {
+    pub async fn search_events(
+        client: &DatadogClient,
+        args: &RumArgs,
+        now: DateTime<Utc>,
+    ) -> Result<Value> {
         let handler = RumHandler;
 
-        let (from_iso, to_iso) = handler.parse_time_range_iso8601(&args.from, &args.to)?;
+        let (from_iso, to_iso) = args.range.resolve(now)?.rfc3339()?;
 
         let response = client
             .search_rum_events(&SearchParams {

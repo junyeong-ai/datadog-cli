@@ -14,7 +14,8 @@ Rust 2024 CLI. `rust-toolchain.toml` pins development Rust; `Cargo.toml` declare
 - `src/catalog.rs` and `api/`: offline discovery and schema validation of explicitly reviewed official API contracts. Pin upstream commit and document hashes. Every operation needs a policy decision; never infer read safety from names or HTTP methods. Capabilities commands must not load configuration or invoke credential providers.
 - `src/query.rs` and `src/datadog/transport/query.rs`: prepare reviewed requests before credential execution; preserve original API bodies, schema-check responses, and share explicit call, byte, and deadline budgets. Query submissions with uncertain idempotency must not retry. File responses require an explicit new destination and must be persisted without clobbering existing files.
   Time mappings and processing states come from reviewed policy entries. Projection uses explicit JSON Pointers and must preserve API diagnostics. Never mark an unknown state complete or conflate query processing with page collection.
-- `src/handlers/`: endpoint-specific transformation and pagination. `common.rs` owns shared time, tag, pagination, and output-envelope behavior.
+- `src/time.rs`: the time argument grammar. Offsets point into the past; reject unlisted forms instead of interpreting them. Resolve a command's times against one reference instant and check ranges before credential execution.
+- `src/handlers/`: endpoint-specific transformation and pagination. `common.rs` owns shared tag, pagination, and output-envelope behavior.
 - `src/diagnostics.rs`: shared fallible stderr writes. Ignore diagnostic BrokenPipe, propagate other warning I/O errors, and preserve the original exit code when a final error cannot be printed.
 - `src/output.rs`: JSON/JSONL/table writers. Stdout contains results; tracing writes to stderr. Propagate I/O errors so closed pipelines exit quietly.
 

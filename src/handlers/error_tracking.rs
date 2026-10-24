@@ -1,27 +1,31 @@
+use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 
 use crate::cli::ErrorTrackingSearchArgs;
 use crate::datadog::DatadogClient;
 use crate::error::Result;
-use crate::handlers::common::{ResponseFormatter, TimeHandler};
+use crate::handlers::common::ResponseFormatter;
 
 pub struct ErrorTrackingHandler;
 
-impl TimeHandler for ErrorTrackingHandler {}
 impl ResponseFormatter for ErrorTrackingHandler {}
 
 impl ErrorTrackingHandler {
-    pub async fn search(client: &DatadogClient, args: &ErrorTrackingSearchArgs) -> Result<Value> {
+    pub async fn search(
+        client: &DatadogClient,
+        args: &ErrorTrackingSearchArgs,
+        now: DateTime<Utc>,
+    ) -> Result<Value> {
         let handler = ErrorTrackingHandler;
 
-        let (from_ts, to_ts) = handler.parse_time_range(&args.from, &args.to)?;
+        let range = args.range.resolve(now)?;
 
         let response = client
             .search_error_issues(
                 &args.query,
                 &args.track,
-                from_ts * 1000,
-                to_ts * 1000,
+                range.from * 1000,
+                range.to * 1000,
                 args.include.as_deref(),
             )
             .await?;

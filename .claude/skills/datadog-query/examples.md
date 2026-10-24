@@ -54,7 +54,7 @@ Dedicated `logs search`, `spans`, and other search commands return one page. The
 
 ```bash
 datadog-cli timeseries "sum:trace.http.request.errors{service:api}" \
-  "sum:trace.http.request.hits{service:api}" --formula "a / b * 100" --from "1 hour ago"
+  "sum:trace.http.request.hits{service:api}" --formula "a / b * 100" --from 1h
 datadog-cli scalar "avg:system.cpu.user{env:prod} by {host}" --aggregator avg
 ```
 
@@ -67,7 +67,7 @@ Metric names and tags depend on your instrumentation. Check the selected metric'
 After choosing a monitor ID from `monitors list`, inspect its full options with `monitors get <id>`. Evaluation delay, missing-data behavior, grouping delays, and recovery thresholds can explain behavior that the query alone cannot.
 
 ```bash
-datadog-cli metrics "avg:system.net.bytes_rcvd{*}" --from "5 minutes ago" --format json |
+datadog-cli metrics "avg:system.net.bytes_rcvd{*}" --from 5m --format json |
   jq '.data[] | {metric, units}'
 ```
 
@@ -78,8 +78,8 @@ Interpret both positions of `units` and the scale factor; a primary byte unit wi
 Choose one filter mode. Structured filters are useful when the app and span kind are known; a query is passed as written when the investigation needs query syntax.
 
 ```bash
-datadog-cli llm-obs --ml-app chatbot --span-kind llm --from "5 minutes ago" --limit 10
-datadog-cli llm-obs '@ml_app:chatbot AND @meta.span.kind:llm' --from "5 minutes ago" --limit 10
+datadog-cli llm-obs --ml-app chatbot --span-kind llm --from 5m --limit 10
+datadog-cli llm-obs '@ml_app:chatbot AND @meta.span.kind:llm' --from 5m --limit 10
 ```
 
 The API is a preview. Missing product indexes are an API failure, not evidence that the application has no spans.

@@ -1,20 +1,24 @@
+use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 
 use crate::cli::LlmObsArgs;
 use crate::datadog::{DatadogClient, LlmObsFilter, LlmObsSearchParams};
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ResponseFormatter, TimeHandler};
+use crate::handlers::common::{PaginationInfo, ResponseFormatter};
 
 pub struct LlmObsHandler;
 
-impl TimeHandler for LlmObsHandler {}
 impl ResponseFormatter for LlmObsHandler {}
 
 impl LlmObsHandler {
-    pub async fn search(client: &DatadogClient, args: &LlmObsArgs) -> Result<Value> {
+    pub async fn search(
+        client: &DatadogClient,
+        args: &LlmObsArgs,
+        now: DateTime<Utc>,
+    ) -> Result<Value> {
         let handler = LlmObsHandler;
 
-        let (from_iso, to_iso) = handler.parse_time_range_iso8601(&args.from, &args.to)?;
+        let (from_iso, to_iso) = args.range.resolve(now)?.rfc3339()?;
 
         let response = client
             .search_llm_obs_spans(&LlmObsSearchParams {

@@ -3,7 +3,7 @@
 [English](README.en.md) · [명령 참조](.claude/skills/datadog-query/reference.md)
 
 Datadog의 로그, 메트릭, APM, RUM과 운영 리소스를 조회하는 Rust CLI입니다.
-자연어 시간 입력과 JSON·JSONL·표 출력을 지원합니다. 조회 명령은 Datadog 리소스를 변경하지 않습니다.
+`1h`·`now-1h` 같은 상대 시간과 RFC3339 입력, JSON·JSONL·표 출력을 지원합니다. 조회 명령은 Datadog 리소스를 변경하지 않습니다.
 
 ## 설치
 
@@ -42,7 +42,7 @@ Cargo로 바이너리만 관리하려면 `cargo install --path . --locked --targ
 ```bash
 datadog-cli config init
 datadog-cli config edit
-datadog-cli logs search "service:api status:error" --from "1 hour ago"
+datadog-cli logs search "service:api status:error" --from 1h
 datadog-cli metrics "avg:system.cpu.user{*}"
 datadog-cli monitors list
 ```
@@ -60,12 +60,12 @@ export DD_SITE="datadoghq.com"
 ## 조회 예제
 
 ```bash
-datadog-cli logs aggregate "service:api status:error" --from "6 hours ago"
-datadog-cli logs timeseries "status:error" --from "24 hours ago" --interval 1h
+datadog-cli logs aggregate "service:api status:error" --from 6h
+datadog-cli logs timeseries "status:error" --from 24h --interval 1h
 datadog-cli timeseries "sum:errors{*}" "sum:hits{*}" --formula "a / b * 100"
 datadog-cli scalar "avg:system.cpu.user{*} by {host}" --aggregator avg
-datadog-cli spans "service:api error:true" --from "30 minutes ago"
-datadog-cli rum "@type:error" --from "1 hour ago"
+datadog-cli spans "service:api error:true" --from 30m
+datadog-cli rum "@type:error" --from 1h
 datadog-cli services --kind service --owner platform-team
 datadog-cli events "source:alert status:error"
 datadog-cli slo list --query checkout
@@ -79,7 +79,7 @@ datadog-cli audit "@action:login"
 datadog-cli llm-obs --ml-app chatbot --span-kind llm
 ```
 
-시간은 `now`, `1 hour ago`, `30m ago`, RFC3339 또는 Unix **초**로 입력합니다. 시작 시간은 종료 시간보다 늦을 수 없습니다.
+시간은 `now`, 과거 기준 상대 시간(`15m`, `1h`, `7d`, `now-1h`, `2 hours ago`, 단위 s·m·h·d·w), RFC3339 또는 Unix **초**로 입력합니다. 상대 시간은 항상 기준 시각 이전을 뜻하며, 그 밖의 형식은 CLI 문법 오류(종료 코드 2)입니다. 시작 시간이 종료 시간보다 늦으면 자격증명을 사용하기 전에 종료 코드 1로 실패합니다.
 `metrics`는 쿼리를 수정 없이 전달합니다. 집계 방식과 간격은 `metrics "avg:system.cpu.user{*}.rollup(avg, 3600)"`처럼 쿼리에 지정하고, 여러 쿼리의 간격은 `timeseries --interval 3600`처럼 초 단위로 지정합니다. 간격은 반환 포인트 수의 상한을 보장하지 않습니다.
 LLM Observability는 Agent Observability 프리뷰 API에 의존합니다. 위치 인자로 쿼리를 전달하거나 `--ml-app`·`--span-kind`로 필터링할 수 있으며, 두 방식은 함께 사용할 수 없습니다. 쿼리는 수정 없이 전송합니다.
 Rust의 `search_llm_obs_spans`는 `LlmObsSearchParams`와 `LlmObsFilter`로 조회 방식을 구분합니다. 인시던트 등 제품별 기능은 계정의 제품 활성화와 권한이 필요합니다.
@@ -106,7 +106,7 @@ datadog-cli query metrics v1.GetMetricMetadata --input '{"path":{"metric_name":"
 
 기본 제한은 인증·API 실행 60초, 재시도 포함 4회 호출, 누적 응답 본문 8 MiB입니다. `--deadline`·`--max-calls`·`--max-bytes`로 조정할 수 있습니다. CSV·바이너리는 `--output PATH`가 필요하며 기존 파일을 덮어쓰지 않습니다. 제품 활성화·권한·사이트 지원은 API에 따라 다릅니다. [명세와 지원 정책](api/README.md)을 참고하세요. 자격증명이나 전체 인증 설정을 반환하는 API는 제외합니다. Webhook URL에는 Basic 인증 정보가 포함될 수 있어 전체 설정 조회도 제외합니다. Synthetic 조회는 전용 실행 결과·이력 API를 사용합니다.
 
-`capabilities show`에 `time_range`가 있는 작업은 `--from "1 hour ago" --to now`를 지원합니다. 하나의 기준 시각으로 계산한 뒤 해당 API의 초·밀리초·RFC3339 필드에 넣으며, 입력 JSON의 시간 필드와 함께 지정하면 오류입니다. 그 외 작업은 공식 입력 구조를 그대로 사용합니다. `.meta.context.time_range`는 정규화한 요청 시간 범위입니다.
+`capabilities show`에 `time_range`가 있는 작업은 `--from 1h --to now`를 지원합니다. 하나의 기준 시각으로 계산한 뒤 해당 API의 초·밀리초·RFC3339 필드에 넣으며, 입력 JSON의 시간 필드와 함께 지정하면 오류입니다. 그 외 작업은 공식 입력 구조를 그대로 사용합니다. `.meta.context.time_range`는 정규화한 요청 시간 범위입니다.
 
 `--select /data`처럼 JSON Pointer를 지정하면 해당 값만 포인터를 키로 하는 객체에 반환합니다. 누락된 경로는 오류이며, API 메타데이터는 유지합니다. `.meta.result.processing`은 명시적으로 확인한 서버 상태에 따라 `complete`·`partial`·`unknown`이며 페이지 수집 완료와 별개입니다.
 

@@ -3,6 +3,7 @@ pub mod config;
 pub mod datadog;
 pub mod error;
 pub mod handlers;
+pub mod time;
 pub mod utils;
 
 mod diagnostics;

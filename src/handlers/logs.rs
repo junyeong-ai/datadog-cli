@@ -1,22 +1,27 @@
+use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 
 use crate::cli::{LogsAggregateArgs, LogsSearchArgs, LogsTimeseriesArgs};
 use crate::datadog::models::LogsCompute;
 use crate::datadog::{DatadogClient, SearchParams};
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ResponseFormatter, TagFilter, TimeHandler};
+use crate::handlers::common::{PaginationInfo, ResponseFormatter, TagFilter};
+use crate::time::TimeRange;
 
 pub struct LogsHandler;
 
-impl TimeHandler for LogsHandler {}
 impl TagFilter for LogsHandler {}
 impl ResponseFormatter for LogsHandler {}
 
 impl LogsHandler {
-    pub async fn search(client: &DatadogClient, args: &LogsSearchArgs) -> Result<Value> {
+    pub async fn search(
+        client: &DatadogClient,
+        args: &LogsSearchArgs,
+        now: DateTime<Utc>,
+    ) -> Result<Value> {
         let handler = LogsHandler;
 
-        let (from_iso, to_iso) = handler.parse_time_range_iso8601(&args.from, &args.to)?;
+        let (from_iso, to_iso) = args.range.resolve(now)?.rfc3339()?;
 
         let response = client
             .search_logs(
@@ -91,10 +96,17 @@ impl LogsHandler {
         ))
     }
 
-    pub async fn aggregate(client: &DatadogClient, args: &LogsAggregateArgs) -> Result<Value> {
+    pub async fn aggregate(
+        client: &DatadogClient,
+        args: &LogsAggregateArgs,
+        now: DateTime<Utc>,
+    ) -> Result<Value> {
         let handler = LogsHandler;
 
-        let (from_ts, to_ts) = handler.parse_time_range(&args.from, &args.to)?;
+        let TimeRange {
+            from: from_ts,
+            to: to_ts,
+        } = args.range.resolve(now)?;
         let from = (from_ts * 1000).to_string();
         let to = (to_ts * 1000).to_string();
 
@@ -140,10 +152,17 @@ impl LogsHandler {
         ))
     }
 
-    pub async fn timeseries(client: &DatadogClient, args: &LogsTimeseriesArgs) -> Result<Value> {
+    pub async fn timeseries(
+        client: &DatadogClient,
+        args: &LogsTimeseriesArgs,
+        now: DateTime<Utc>,
+    ) -> Result<Value> {
         let handler = LogsHandler;
 
-        let (from_ts, to_ts) = handler.parse_time_range(&args.from, &args.to)?;
+        let TimeRange {
+            from: from_ts,
+            to: to_ts,
+        } = args.range.resolve(now)?;
         let from = (from_ts * 1000).to_string();
         let to = (to_ts * 1000).to_string();
 

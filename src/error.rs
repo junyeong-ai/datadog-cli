@@ -23,9 +23,6 @@ pub enum DatadogError {
     #[error("Permission denied (HTTP 403): {0}")]
     PermissionDenied(String),
 
-    #[error("Invalid date format: {0}")]
-    DateParseError(String),
-
     #[error("Network error: {0}")]
     NetworkError(reqwest::Error),
 
@@ -59,8 +56,7 @@ impl DatadogError {
             DatadogError::RateLimitError { .. } => 5,
             DatadogError::NetworkError(_) | DatadogError::TimeoutError => 6,
             DatadogError::DecodeError(_) => 7,
-            DatadogError::DateParseError(_)
-            | DatadogError::InvalidInput(_)
+            DatadogError::InvalidInput(_)
             | DatadogError::JsonError(_)
             | DatadogError::IoError(_) => 1,
         }
@@ -73,7 +69,6 @@ impl DatadogError {
             Self::PermissionDenied(_) => ("permission_denied", Some(403)),
             Self::QueryError(_) => ("query", None),
             Self::Interrupted => ("interrupted", None),
-            Self::DateParseError(_) => ("invalid_time", None),
             Self::NetworkError(_) => ("network", None),
             Self::DecodeError(_) => ("decode", None),
             Self::JsonError(_) => ("json", None),
@@ -120,13 +115,6 @@ mod tests {
         let error_msg = format!("{}", error);
         assert!(error_msg.contains("Authentication failed"));
         assert!(error_msg.contains("Invalid credentials"));
-    }
-
-    #[test]
-    fn test_date_parse_error_display() {
-        let error = DatadogError::DateParseError("Bad format".to_string());
-        let error_msg = format!("{}", error);
-        assert!(error_msg.contains("Invalid date format"));
     }
 
     #[test]

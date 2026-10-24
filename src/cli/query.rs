@@ -17,13 +17,13 @@ pub struct QueryArgs {
         long,
         help = "Start time using this operation's reviewed time mapping; conflicts with native input time fields"
     )]
-    pub from: Option<String>,
+    pub from: Option<crate::time::TimeExpr>,
     #[arg(
         long,
         requires = "from",
         help = "End time for --from (default now); resolved with the same reference instant"
     )]
-    pub to: Option<String>,
+    pub to: Option<crate::time::TimeExpr>,
     #[arg(
         long,
         conflicts_with = "output",

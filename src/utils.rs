@@ -1,52 +1,3 @@
-use crate::error::{DatadogError, Result};
-use chrono::{DateTime, Utc};
-use interim::{Dialect, parse_date_string};
-
-/// Latest accepted Unix timestamp: 9999-12-31T23:59:59Z. Anything larger is
-/// almost always a millisecond timestamp pasted where seconds are expected,
-/// and bounding here keeps second→millisecond conversions overflow-free.
-const MAX_UNIX_TIMESTAMP: i64 = 253_402_300_799;
-
-pub fn parse_time(input: &str) -> Result<i64> {
-    parse_time_at(input, Utc::now())
-}
-
-pub(crate) fn parse_time_at(input: &str, now: DateTime<Utc>) -> Result<i64> {
-    let input = input.trim();
-    if input.trim().to_lowercase() == "now" {
-        return Ok(now.timestamp());
-    }
-
-    if let Ok(timestamp) = input.parse::<i64>() {
-        if !(-MAX_UNIX_TIMESTAMP..=MAX_UNIX_TIMESTAMP).contains(&timestamp) {
-            return Err(DatadogError::DateParseError(format!(
-                "Timestamp out of range: '{}' (expected Unix seconds; is this milliseconds?)",
-                input
-            )));
-        }
-        return Ok(timestamp);
-    }
-
-    if let Ok(dt) = parse_date_string(input, now, Dialect::Us) {
-        return Ok(dt.timestamp());
-    }
-
-    if let Ok(dt) = DateTime::parse_from_rfc3339(input) {
-        return Ok(dt.timestamp());
-    }
-
-    Err(DatadogError::DateParseError(format!(
-        "Unable to parse time: '{}'",
-        input
-    )))
-}
-
-pub fn format_timestamp(timestamp: i64) -> String {
-    DateTime::from_timestamp(timestamp, 0)
-        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string())
-        .unwrap_or_else(|| format!("Invalid timestamp: {}", timestamp))
-}
-
 pub fn truncate_stack_trace(stack: &str, max_lines: usize) -> String {
     let lines: Vec<&str> = stack.lines().collect();
 
@@ -67,67 +18,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_time_now() {
-        let result = parse_time("now");
-        assert!(result.is_ok());
-        let timestamp = result.unwrap();
-        assert!(timestamp > 0);
-    }
-
-    #[test]
-    fn test_parse_time_unix_timestamp() {
-        let result = parse_time("1704067200");
-        assert_eq!(result.unwrap(), 1704067200);
-    }
-
-    #[test]
-    fn test_parse_time_natural_language() {
-        let result = parse_time("1 hour ago");
-        assert!(result.is_ok());
-        let now = Utc::now().timestamp();
-        let parsed = result.unwrap();
-        assert!(parsed < now);
-        assert!(parsed > now - 7200);
-    }
-
-    #[test]
-    fn test_parse_time_iso8601() {
-        let result = parse_time("2024-01-01T00:00:00Z");
-        assert_eq!(result.unwrap(), 1704067200);
-    }
-
-    #[test]
-    fn test_parse_time_invalid() {
-        let result = parse_time("invalid time string");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_parse_time_rejects_millisecond_timestamps() {
-        let result = parse_time("1704067200000");
-        assert!(result.is_err());
-        assert!(format!("{}", result.unwrap_err()).contains("milliseconds"));
-    }
-
-    #[test]
-    fn test_parse_time_accepts_boundary_timestamp() {
-        assert_eq!(parse_time("253402300799").unwrap(), 253402300799);
-    }
-
-    #[test]
-    fn test_format_timestamp() {
-        let formatted = format_timestamp(1704067200);
-        assert!(formatted.contains("2024-01-01"));
-        assert!(formatted.contains("00:00:00 UTC"));
-    }
-
-    #[test]
-    fn test_format_invalid_timestamp() {
-        let formatted = format_timestamp(i64::MAX);
-        assert!(formatted.contains("Invalid timestamp"));
-    }
-
-    #[test]
     fn test_truncate_stack_trace_short() {
         let stack = "Line 1\nLine 2\nLine 3";
         let result = truncate_stack_trace(stack, 5);
@@ -143,12 +33,5 @@ mod tests {
         assert!(result.contains("Line 3"));
         assert!(result.contains("... (3 more lines)"));
         assert!(!result.contains("Line 4"));
-    }
-    #[test]
-    fn timestamps_reject_integer_extremes_without_panicking() {
-        for input in [i64::MIN.to_string(), i64::MAX.to_string()] {
-            assert!(parse_time(&input).is_err());
-        }
-        assert_eq!(parse_time(" 1704067200 ").unwrap(), 1704067200);
     }
 }

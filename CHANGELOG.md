@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Time arguments use one grammar: `now`, past offsets (`15m`, `1h`, `7d`, `now-1h`, `2 hours ago`; units s, m, h, d, w), RFC3339, or Unix seconds. Offsets always point into the past, and `--from` defaults to `1h`. Other forms, including weekday names, months, and future offsets, are rejected as CLI usage errors with exit code 2 instead of being interpreted. Previously `1h` resolved to one hour in the future and `monday` to the next Monday.
+- Reversed time ranges fail with exit code 1 before configuration or credential providers run. The `invalid_time` error kind is removed.
+
 ## [0.9.5] - 2026-10-24
 
 ### Changed

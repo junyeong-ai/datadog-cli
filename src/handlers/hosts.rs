@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 
 use crate::cli::HostsArgs;
@@ -11,10 +12,14 @@ impl TagFilter for HostsHandler {}
 impl ResponseFormatter for HostsHandler {}
 
 impl HostsHandler {
-    pub async fn list(client: &DatadogClient, args: &HostsArgs) -> Result<Value> {
+    pub async fn list(
+        client: &DatadogClient,
+        args: &HostsArgs,
+        now: DateTime<Utc>,
+    ) -> Result<Value> {
         let handler = HostsHandler;
 
-        let from = crate::utils::parse_time(&args.from)?;
+        let from = args.from.resolve(now);
 
         let response = client
             .list_hosts(
@@ -40,7 +45,7 @@ impl HostsHandler {
                     fields.remove("tags_by_source");
                 }
                 host_json["last_reported"] =
-                    json!(host.last_reported_time.map(crate::utils::format_timestamp));
+                    json!(host.last_reported_time.map(crate::time::format_timestamp));
                 if let Some(tags) = filtered_tags
                     && !tags.is_empty()
                 {

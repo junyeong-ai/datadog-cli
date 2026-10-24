@@ -9,9 +9,10 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use crate::config::{AuthMethod, Config, ConfigOptions};
 use crate::datadog::{DatadogClient, MAX_METRIC_QUERIES};
 use crate::error::Result;
+use crate::time::{TimeExpr, TimeRange};
 
 const TIME_HELP: &str =
-    "Time format: 'now', '1 hour ago', '2024-01-01T00:00:00Z', or Unix timestamp";
+    "now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds";
 const SORT_HELP: &str = "Sort order (use --sort=\"-timestamp\" for descending)";
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -182,6 +183,21 @@ pub enum Command {
     },
 }
 
+#[derive(Args)]
+pub struct TimeRangeArgs {
+    #[arg(long, default_value = "1h", help = TIME_HELP)]
+    pub from: TimeExpr,
+
+    #[arg(long, default_value = "now", help = TIME_HELP)]
+    pub to: TimeExpr,
+}
+
+impl TimeRangeArgs {
+    pub fn resolve(&self, now: chrono::DateTime<chrono::Utc>) -> Result<TimeRange> {
+        TimeRange::resolve(self.from, self.to, now)
+    }
+}
+
 #[derive(Subcommand)]
 pub enum SloAction {
     #[command(about = "List SLOs")]
@@ -252,11 +268,8 @@ pub struct ErrorTrackingSearchArgs {
     #[arg(long, default_value = "trace", value_parser = ["trace", "logs", "rum"], help = "Error track to search")]
     pub track: String,
 
-    #[arg(long, default_value = "1 hour ago", help = TIME_HELP)]
-    pub from: String,
-
-    #[arg(long, default_value = "now", help = TIME_HELP)]
-    pub to: String,
+    #[command(flatten)]
+    pub range: TimeRangeArgs,
 
     #[arg(long, value_parser = ["issue", "issue.assignee", "issue.case", "issue.team_owners"], help = "Include related data")]
     pub include: Option<String>,
@@ -279,11 +292,8 @@ pub struct AuditArgs {
     #[arg(default_value = "*", help = "Audit event search query")]
     pub query: String,
 
-    #[arg(long, default_value = "1 hour ago", help = TIME_HELP)]
-    pub from: String,
-
-    #[arg(long, default_value = "now", help = TIME_HELP)]
-    pub to: String,
+    #[command(flatten)]
+    pub range: TimeRangeArgs,
 
     #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000), help = "Results per page (max 1000)")]
     pub limit: i32,
@@ -315,11 +325,8 @@ pub struct LlmObsArgs {
     #[arg(conflicts_with_all = ["ml_app", "span_kind"], help = "Agent Observability query; conflicts with structured filters")]
     pub query: Option<String>,
 
-    #[arg(long, default_value = "1 hour ago", help = TIME_HELP)]
-    pub from: String,
-
-    #[arg(long, default_value = "now", help = TIME_HELP)]
-    pub to: String,
+    #[command(flatten)]
+    pub range: TimeRangeArgs,
 
     #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=5000), help = "Results per page (CLI max 5000)")]
     pub limit: i32,
@@ -341,11 +348,8 @@ pub struct LlmObsArgs {
 pub struct MetricsArgs {
     pub query: String,
 
-    #[arg(long, default_value = "1 hour ago", help = TIME_HELP)]
-    pub from: String,
-
-    #[arg(long, default_value = "now", help = TIME_HELP)]
-    pub to: String,
+    #[command(flatten)]
+    pub range: TimeRangeArgs,
 }
 
 #[derive(Args)]
@@ -359,11 +363,8 @@ pub struct TimeseriesArgs {
     )]
     pub formula: Vec<String>,
 
-    #[arg(long, default_value = "1 hour ago", help = TIME_HELP)]
-    pub from: String,
-
-    #[arg(long, default_value = "now", help = TIME_HELP)]
-    pub to: String,
+    #[command(flatten)]
+    pub range: TimeRangeArgs,
 
     #[arg(long, value_parser = clap::value_parser!(i64).range(1..=i64::MAX / 1000), help = "Rollup interval in seconds")]
     pub interval: Option<i64>,
@@ -383,11 +384,8 @@ pub struct ScalarArgs {
     #[arg(long, default_value = "avg", value_parser = ["avg", "min", "max", "sum", "last", "percentile", "mean", "l2norm", "area"], help = "Aggregator applied over the time window")]
     pub aggregator: String,
 
-    #[arg(long, default_value = "1 hour ago", help = TIME_HELP)]
-    pub from: String,
-
-    #[arg(long, default_value = "now", help = TIME_HELP)]
-    pub to: String,
+    #[command(flatten)]
+    pub range: TimeRangeArgs,
 }
 
 #[derive(Args)]
@@ -398,11 +396,8 @@ pub struct EventsArgs {
     )]
     pub query: String,
 
-    #[arg(long, default_value = "1 hour ago", help = TIME_HELP)]
-    pub from: String,
-
-    #[arg(long, default_value = "now", help = TIME_HELP)]
-    pub to: String,
+    #[command(flatten)]
+    pub range: TimeRangeArgs,
 
     #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000), help = "Results per page (max 1000)")]
     pub limit: i32,
@@ -419,8 +414,8 @@ pub struct HostsArgs {
     #[arg(long, help = "Filter hosts by name, alias, or tag")]
     pub filter: Option<String>,
 
-    #[arg(long, default_value = "1 hour ago", help = TIME_HELP)]
-    pub from: String,
+    #[arg(long, default_value = "1h", help = TIME_HELP)]
+    pub from: TimeExpr,
 
     #[arg(long, help = "Sort field (e.g., cpu, iowait, load)")]
     pub sort_field: Option<String>,
@@ -443,11 +438,8 @@ pub struct SpansArgs {
     #[arg(default_value = "*")]
     pub query: String,
 
-    #[arg(long, default_value = "1 hour ago", help = TIME_HELP)]
-    pub from: String,
-
-    #[arg(long, default_value = "now", help = TIME_HELP)]
-    pub to: String,
+    #[command(flatten)]
+    pub range: TimeRangeArgs,
 
     #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000), help = "Results per page (max 1000)")]
     pub limit: i32,
@@ -495,11 +487,8 @@ pub struct RumArgs {
     #[arg(default_value = "*")]
     pub query: String,
 
-    #[arg(long, default_value = "1 hour ago", help = TIME_HELP)]
-    pub from: String,
-
-    #[arg(long, default_value = "now", help = TIME_HELP)]
-    pub to: String,
+    #[command(flatten)]
+    pub range: TimeRangeArgs,
 
     #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000), help = "Results per page (max 1000)")]
     pub limit: i32,
@@ -534,11 +523,8 @@ pub struct LogsSearchArgs {
     #[arg(default_value = "*")]
     pub query: String,
 
-    #[arg(long, default_value = "1 hour ago", help = TIME_HELP)]
-    pub from: String,
-
-    #[arg(long, default_value = "now", help = TIME_HELP)]
-    pub to: String,
+    #[command(flatten)]
+    pub range: TimeRangeArgs,
 
     #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000), help = "Results per page (max 1000)")]
     pub limit: i32,
@@ -570,11 +556,8 @@ pub struct LogsAggregateArgs {
     #[arg(default_value = "*")]
     pub query: String,
 
-    #[arg(long, default_value = "1 hour ago", help = TIME_HELP)]
-    pub from: String,
-
-    #[arg(long, default_value = "now", help = TIME_HELP)]
-    pub to: String,
+    #[command(flatten)]
+    pub range: TimeRangeArgs,
 
     #[command(flatten)]
     pub grouping: LogsGroupByArgs,
@@ -585,11 +568,8 @@ pub struct LogsTimeseriesArgs {
     #[arg(default_value = "*")]
     pub query: String,
 
-    #[arg(long, default_value = "1 hour ago", help = TIME_HELP)]
-    pub from: String,
-
-    #[arg(long, default_value = "now", help = TIME_HELP)]
-    pub to: String,
+    #[command(flatten)]
+    pub range: TimeRangeArgs,
 
     #[arg(
         long,
@@ -676,6 +656,7 @@ pub enum ConfigAction {
 }
 
 pub async fn run(cli: Cli) -> Result<()> {
+    let now = chrono::Utc::now();
     if let Command::Mcp { ref action } = cli.command {
         return mcp::run(action, &cli).await;
     }
@@ -685,9 +666,9 @@ pub async fn run(cli: Cli) -> Result<()> {
             &mut input,
             &args.domain,
             &args.operation,
-            args.from.as_deref(),
-            args.to.as_deref(),
-            chrono::Utc::now(),
+            args.from,
+            args.to,
+            now,
         )?;
         let prepared = crate::query::PreparedQuery::prepare(
             &args.domain,
@@ -744,6 +725,9 @@ pub async fn run(cli: Cli) -> Result<()> {
         return commands::handle_config(action, &cli);
     }
 
+    if let Some(range) = cli.command.time_range() {
+        range.resolve(now)?;
+    }
     let config = Config::load_with_options(cli.config_options()).await?;
     let client = DatadogClient::new(&config)?;
 
@@ -751,7 +735,7 @@ pub async fn run(cli: Cli) -> Result<()> {
     let format =
         output::Format::from_str(format_str).map_err(crate::error::DatadogError::InvalidInput)?;
 
-    let result = commands::execute(&cli.command, &client).await?;
+    let result = commands::execute(&cli.command, &client, now).await?;
     output::print_api_diagnostics(&result)?;
     if matches!(cli.command, Command::Scalar(_)) {
         output::print_scalar(&result, &format)?;
@@ -760,6 +744,45 @@ pub async fn run(cli: Cli) -> Result<()> {
     }
 
     Ok(())
+}
+
+impl Command {
+    fn time_range(&self) -> Option<&TimeRangeArgs> {
+        match self {
+            Command::Metrics(MetricsArgs { range, .. })
+            | Command::Timeseries(TimeseriesArgs { range, .. })
+            | Command::Scalar(ScalarArgs { range, .. })
+            | Command::Events(EventsArgs { range, .. })
+            | Command::Spans(SpansArgs { range, .. })
+            | Command::Rum(RumArgs { range, .. })
+            | Command::Audit(AuditArgs { range, .. })
+            | Command::LlmObs(LlmObsArgs { range, .. })
+            | Command::ErrorTracking {
+                action: ErrorTrackingAction::Search(ErrorTrackingSearchArgs { range, .. }),
+            }
+            | Command::Logs {
+                action:
+                    LogsAction::Search(LogsSearchArgs { range, .. })
+                    | LogsAction::Aggregate(LogsAggregateArgs { range, .. })
+                    | LogsAction::Timeseries(LogsTimeseriesArgs { range, .. }),
+            } => Some(range),
+            Command::Mcp { .. }
+            | Command::Query(_)
+            | Command::Capabilities { .. }
+            | Command::Monitors { .. }
+            | Command::Hosts(_)
+            | Command::Dashboards { .. }
+            | Command::Services(_)
+            | Command::Slo { .. }
+            | Command::Incidents { .. }
+            | Command::ErrorTracking {
+                action: ErrorTrackingAction::Get { .. },
+            }
+            | Command::Downtimes(_)
+            | Command::Teams(_)
+            | Command::Config { .. } => None,
+        }
+    }
 }
 
 impl Cli {

@@ -1,6 +1,7 @@
 use chrono::DateTime;
 use datadog_cli::catalog::Catalog;
 use datadog_cli::query::{PreparedQuery, apply_time_range};
+use datadog_cli::time::TimeExpr;
 use serde_json::json;
 
 #[test]
@@ -13,7 +14,7 @@ fn one_reference_instant_is_encoded_only_at_reviewed_time_fields() {
         &mut seconds,
         "cloud-network-monitoring",
         "v2.GetAggregatedDns",
-        Some("1 hour ago"),
+        Some(TimeExpr::Ago(3600)),
         None,
         now,
     )
@@ -27,8 +28,8 @@ fn one_reference_instant_is_encoded_only_at_reviewed_time_fields() {
         &mut milliseconds,
         "metrics",
         "v2.QueryTimeseriesData",
-        Some("1 hour ago"),
-        Some("now"),
+        Some(TimeExpr::Ago(3600)),
+        Some(TimeExpr::Ago(0)),
         now,
     )
     .unwrap();
@@ -46,7 +47,7 @@ fn one_reference_instant_is_encoded_only_at_reviewed_time_fields() {
         &mut iso,
         "ci-visibility-pipelines",
         "v2.SearchCIAppPipelineEvents",
-        Some("1 hour ago"),
+        Some(TimeExpr::Ago(3600)),
         None,
         now,
     )
@@ -73,7 +74,7 @@ fn range_flags_reject_conflicts_unsupported_mappings_and_reversed_bounds() {
             &mut input,
             "cloud-network-monitoring",
             "v2.GetAggregatedDns",
-            Some("1 hour ago"),
+            Some(TimeExpr::Ago(3600)),
             None,
             now
         )
@@ -84,7 +85,7 @@ fn range_flags_reject_conflicts_unsupported_mappings_and_reversed_bounds() {
             &mut json!({}),
             "teams",
             "v2.ListTeams",
-            Some("1 hour ago"),
+            Some(TimeExpr::Ago(3600)),
             None,
             now
         )
@@ -95,8 +96,8 @@ fn range_flags_reject_conflicts_unsupported_mappings_and_reversed_bounds() {
             &mut json!({}),
             "cloud-network-monitoring",
             "v2.GetAggregatedDns",
-            Some("now"),
-            Some("1 hour ago"),
+            Some(TimeExpr::Ago(0)),
+            Some(TimeExpr::Ago(3600)),
             now
         )
         .is_err()
@@ -107,7 +108,7 @@ fn range_flags_reject_conflicts_unsupported_mappings_and_reversed_bounds() {
             "cloud-network-monitoring",
             "v2.GetAggregatedDns",
             None,
-            Some("now"),
+            Some(TimeExpr::Ago(0)),
             now
         )
         .is_err()

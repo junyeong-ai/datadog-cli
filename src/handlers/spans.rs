@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 
 use crate::cli::SpansArgs;
@@ -5,21 +6,23 @@ use crate::datadog::{DatadogClient, SearchParams};
 use crate::error::Result;
 use crate::handlers::common::{
     DEFAULT_STACK_TRACE_LINES, PaginationInfo, ResponseFilter, ResponseFormatter, TagFilter,
-    TimeHandler,
 };
 
 pub struct SpansHandler;
 
-impl TimeHandler for SpansHandler {}
 impl TagFilter for SpansHandler {}
 impl ResponseFilter for SpansHandler {}
 impl ResponseFormatter for SpansHandler {}
 
 impl SpansHandler {
-    pub async fn list(client: &DatadogClient, args: &SpansArgs) -> Result<Value> {
+    pub async fn list(
+        client: &DatadogClient,
+        args: &SpansArgs,
+        now: DateTime<Utc>,
+    ) -> Result<Value> {
         let handler = SpansHandler;
 
-        let (from, to) = handler.parse_time_range_iso8601(&args.from, &args.to)?;
+        let (from, to) = args.range.resolve(now)?.rfc3339()?;
 
         let response = client
             .search_spans(&SearchParams {

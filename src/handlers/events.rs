@@ -1,20 +1,24 @@
+use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 
 use crate::cli::EventsArgs;
 use crate::datadog::{DatadogClient, SearchParams};
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ResponseFormatter, TimeHandler};
+use crate::handlers::common::{PaginationInfo, ResponseFormatter};
 
 pub struct EventsHandler;
 
-impl TimeHandler for EventsHandler {}
 impl ResponseFormatter for EventsHandler {}
 
 impl EventsHandler {
-    pub async fn search(client: &DatadogClient, args: &EventsArgs) -> Result<Value> {
+    pub async fn search(
+        client: &DatadogClient,
+        args: &EventsArgs,
+        now: DateTime<Utc>,
+    ) -> Result<Value> {
         let handler = EventsHandler;
 
-        let (from_iso, to_iso) = handler.parse_time_range_iso8601(&args.from, &args.to)?;
+        let (from_iso, to_iso) = args.range.resolve(now)?.rfc3339()?;
 
         let response = client
             .search_events(&SearchParams {

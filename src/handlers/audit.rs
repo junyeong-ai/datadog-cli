@@ -1,20 +1,24 @@
+use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 
 use crate::cli::AuditArgs;
 use crate::datadog::{DatadogClient, SearchParams};
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ResponseFormatter, TimeHandler};
+use crate::handlers::common::{PaginationInfo, ResponseFormatter};
 
 pub struct AuditHandler;
 
-impl TimeHandler for AuditHandler {}
 impl ResponseFormatter for AuditHandler {}
 
 impl AuditHandler {
-    pub async fn search(client: &DatadogClient, args: &AuditArgs) -> Result<Value> {
+    pub async fn search(
+        client: &DatadogClient,
+        args: &AuditArgs,
+        now: DateTime<Utc>,
+    ) -> Result<Value> {
         let handler = AuditHandler;
 
-        let (from_iso, to_iso) = handler.parse_time_range_iso8601(&args.from, &args.to)?;
+        let (from_iso, to_iso) = args.range.resolve(now)?.rfc3339()?;
 
         let response = client
             .search_audit_events(&SearchParams {
