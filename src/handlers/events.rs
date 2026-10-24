@@ -4,7 +4,8 @@ use serde_json::{Value, json};
 use crate::cli::EventsArgs;
 use crate::datadog::{DatadogClient, SearchParams};
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ResponseFormatter};
+use crate::handlers::common::ResponseFormatter;
+use crate::pagination::PaginationInfo;
 
 pub struct EventsHandler;
 
@@ -62,8 +63,7 @@ impl EventsHandler {
             .and_then(|m| m.page.as_ref())
             .and_then(|p| p.after.clone());
 
-        let pagination =
-            PaginationInfo::from_cursor(events.len(), args.limit as usize, next_cursor);
+        let pagination = PaginationInfo::from_cursor(events.len(), next_cursor);
 
         Ok(handler.with_api_meta(
             json!({

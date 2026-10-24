@@ -267,8 +267,8 @@ fn mcp_policy_and_sites_are_explicit_and_discovery_is_bounded() {
     assert!(datadog_cli::mcp::endpoint("datadoghq.com", "dbm&arbitrary=1").is_err());
     let list = datadog_cli::mcp::list(Some("profiling"), None, 0, 2).unwrap();
     assert_eq!(list["data"].as_array().unwrap().len(), 2);
-    assert_eq!(list["meta"]["pagination"]["next_offset"], 2);
-    assert_eq!(list["meta"]["pagination"]["total_count"], 12);
+    assert_eq!(list["pagination"]["next_offset"], 2);
+    assert_eq!(list["pagination"]["total_count"], 12);
 }
 
 #[tokio::test]

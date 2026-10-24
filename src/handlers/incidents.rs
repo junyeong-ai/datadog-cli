@@ -3,7 +3,8 @@ use serde_json::{Value, json};
 use crate::cli::{IncidentsGetArgs, IncidentsListArgs};
 use crate::datadog::DatadogClient;
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ResponseFormatter};
+use crate::handlers::common::ResponseFormatter;
+use crate::pagination::PaginationInfo;
 
 pub struct IncidentsHandler;
 
@@ -14,17 +15,14 @@ impl IncidentsHandler {
         let handler = IncidentsHandler;
 
         let response = client
-            .list_incidents(args.count, args.start, args.include.as_deref())
+            .list_incidents(args.limit, args.offset, args.include.as_deref())
             .await?;
 
         let data = json!(crate::datadog::models::response_records(&response)?);
         let returned = data.as_array().map(|a| a.len()).unwrap_or(0);
 
-        let pagination = PaginationInfo::from_offset_without_total(
-            returned,
-            args.start as usize,
-            args.count as usize,
-        );
+        let pagination =
+            PaginationInfo::from_offset(returned, args.offset as usize, args.limit as usize, None);
 
         let meta = response
             .get("included")

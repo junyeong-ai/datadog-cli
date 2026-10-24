@@ -20,6 +20,7 @@ use serde_json::{Value, json};
 use crate::{
     config::Config,
     error::{DatadogError, Result},
+    pagination::PaginationInfo,
 };
 mod transport;
 
@@ -80,9 +81,9 @@ pub fn list(
         .collect::<Vec<_>>();
     let total = items.len();
     let data=items.into_iter().skip(offset).take(limit).map(|(name,tool)|json!({"name":name,"toolset":tool.toolset,"description":tool.description})).collect::<Vec<_>>();
-    let next = offset.saturating_add(data.len());
+    let pagination = PaginationInfo::from_offset(data.len(), offset, limit, Some(total));
     Ok(
-        json!({"data":data,"meta":{"source":serde_json::from_str::<Value>(include_str!("../../api/mcp-source.json"))?,"pagination":{"total_count":total,"returned":data.len(),"has_next":next<total,"next_offset":if next<total {Some(next)}else{None},"has_next_is_estimate":false}}}),
+        json!({"data":data,"pagination":pagination,"meta":{"source":serde_json::from_str::<Value>(include_str!("../../api/mcp-source.json"))?}}),
     )
 }
 

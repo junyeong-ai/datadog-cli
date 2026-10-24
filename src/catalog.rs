@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::error::{DatadogError, Result};
+use crate::pagination::PaginationInfo;
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -266,10 +267,8 @@ impl Catalog {
             .take(limit)
             .map(|operation| self.summary(operation))
             .collect::<Vec<_>>();
-        let next = offset.saturating_add(data.len());
-        Ok(
-            json!({"data":data,"pagination":{"returned":data.len(),"total_count":total,"next_offset":(next<total).then_some(next),"has_next":next<total,"has_next_is_estimate":false},"meta":{"catalog_source":self.source}}),
-        )
+        let pagination = PaginationInfo::from_offset(data.len(), offset, limit, Some(total));
+        Ok(json!({"data":data,"pagination":pagination,"meta":{"catalog_source":self.source}}))
     }
 
     fn summary(&self, operation: &Operation) -> Value {

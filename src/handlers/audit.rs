@@ -4,7 +4,8 @@ use serde_json::{Value, json};
 use crate::cli::AuditArgs;
 use crate::datadog::{DatadogClient, SearchParams};
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ResponseFormatter};
+use crate::handlers::common::ResponseFormatter;
+use crate::pagination::PaginationInfo;
 
 pub struct AuditHandler;
 
@@ -41,7 +42,7 @@ impl AuditHandler {
             .and_then(|a| a.as_str())
             .map(String::from);
 
-        let pagination = PaginationInfo::from_cursor(returned, args.limit as usize, next_cursor);
+        let pagination = PaginationInfo::from_cursor(returned, next_cursor);
 
         Ok(handler.with_api_meta(
             json!({

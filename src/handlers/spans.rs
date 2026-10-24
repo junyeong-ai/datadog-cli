@@ -5,8 +5,9 @@ use crate::cli::SpansArgs;
 use crate::datadog::{DatadogClient, SearchParams};
 use crate::error::Result;
 use crate::handlers::common::{
-    DEFAULT_STACK_TRACE_LINES, PaginationInfo, ResponseFilter, ResponseFormatter, TagFilter,
+    DEFAULT_STACK_TRACE_LINES, ResponseFilter, ResponseFormatter, TagFilter,
 };
+use crate::pagination::PaginationInfo;
 
 pub struct SpansHandler;
 
@@ -92,7 +93,7 @@ impl SpansHandler {
             .and_then(|a| a.as_str())
             .map(String::from);
 
-        let pagination = PaginationInfo::from_cursor(data.len(), args.limit as usize, next_cursor);
+        let pagination = PaginationInfo::from_cursor(data.len(), next_cursor);
 
         Ok(handler.with_api_meta(
             json!({

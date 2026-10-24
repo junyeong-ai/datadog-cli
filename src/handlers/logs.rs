@@ -5,7 +5,8 @@ use crate::cli::{LogsAggregateArgs, LogsSearchArgs, LogsTimeseriesArgs};
 use crate::datadog::models::LogsCompute;
 use crate::datadog::{DatadogClient, SearchParams};
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ResponseFormatter, TagFilter};
+use crate::handlers::common::{ResponseFormatter, TagFilter};
+use crate::pagination::PaginationInfo;
 use crate::time::TimeRange;
 
 pub struct LogsHandler;
@@ -85,7 +86,7 @@ impl LogsHandler {
             .and_then(|m| m.page.as_ref())
             .and_then(|p| p.after.clone());
 
-        let pagination = PaginationInfo::from_cursor(logs.len(), args.limit as usize, next_cursor);
+        let pagination = PaginationInfo::from_cursor(logs.len(), next_cursor);
 
         Ok(handler.with_api_meta(
             json!({

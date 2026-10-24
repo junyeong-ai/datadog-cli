@@ -92,15 +92,13 @@ async fn llm_query_and_structured_filters_are_distinct_request_modes() {
             "llm",
         ],
         vec!["datadog-cli", "events", "--limit", "1001"],
-        vec!["datadog-cli", "monitors", "list", "--page-size", "1001"],
+        vec!["datadog-cli", "monitors", "list", "--limit", "1001"],
         vec!["datadog-cli", "events", "--sort", "banana"],
     ] {
         assert!(Cli::try_parse_from(args).is_err());
     }
     assert!(Cli::try_parse_from(["datadog-cli", "events", "--limit", "1000"]).is_ok());
-    assert!(
-        Cli::try_parse_from(["datadog-cli", "monitors", "list", "--page-size", "1000"]).is_ok()
-    );
+    assert!(Cli::try_parse_from(["datadog-cli", "monitors", "list", "--limit", "1000"]).is_ok());
 }
 
 #[tokio::test]
@@ -169,19 +167,19 @@ async fn malformed_required_responses_fail_instead_of_becoming_empty_results() {
 async fn authoritative_totals_end_full_final_pages_without_guessing() {
     for (argv, endpoint, metadata_key, metadata) in [
         (
-            vec!["datadog-cli", "teams", "--page-size", "1"],
+            vec!["datadog-cli", "teams", "--limit", "1"],
             "/api/v2/team",
             "meta",
             json!({"pagination":{"type":"number_size","total":1,"next_number":null}}),
         ),
         (
-            vec!["datadog-cli", "services", "--count", "1"],
+            vec!["datadog-cli", "services", "--limit", "1"],
             "/api/v2/catalog/entity",
             "meta",
             json!({"count":1,"includeCount":0}),
         ),
         (
-            vec!["datadog-cli", "downtimes", "--count", "1"],
+            vec!["datadog-cli", "downtimes", "--limit", "1"],
             "/api/v2/downtime",
             "meta",
             json!({"page":{"total_filtered_count":1}}),
@@ -235,7 +233,7 @@ async fn unknown_and_invalid_totals_are_distinct() {
         }
         respond(&server, "/api/v2/team", body).await;
         let Command::Teams(args) =
-            Cli::parse_from(["datadog-cli", "teams", "--page-size", "1"]).command
+            Cli::parse_from(["datadog-cli", "teams", "--limit", "1"]).command
         else {
             panic!()
         };
@@ -271,7 +269,7 @@ async fn explicit_team_continuation_is_authoritative_without_a_total() {
         )
         .await;
         let Command::Teams(args) =
-            Cli::parse_from(["datadog-cli", "teams", "--page-size", "1"]).command
+            Cli::parse_from(["datadog-cli", "teams", "--limit", "1"]).command
         else {
             panic!()
         };

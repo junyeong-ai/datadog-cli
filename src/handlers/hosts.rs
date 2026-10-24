@@ -4,7 +4,8 @@ use serde_json::{Value, json};
 use crate::cli::HostsArgs;
 use crate::datadog::DatadogClient;
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ResponseFormatter, TagFilter};
+use crate::handlers::common::{ResponseFormatter, TagFilter};
+use crate::pagination::PaginationInfo;
 
 pub struct HostsHandler;
 
@@ -27,8 +28,8 @@ impl HostsHandler {
                 Some(from),
                 args.sort_field.as_deref(),
                 args.sort_dir.as_deref(),
-                Some(args.start),
-                Some(args.count),
+                Some(args.offset),
+                Some(args.limit),
             )
             .await?;
 
@@ -61,10 +62,10 @@ impl HostsHandler {
                 "Host total_matching must be nonnegative".into(),
             )
         })?;
-        let pagination = PaginationInfo::from_offset_total(
+        let pagination = PaginationInfo::from_offset(
             response.host_list.len(),
-            args.start as usize,
-            args.count as usize,
+            args.offset as usize,
+            args.limit as usize,
             Some(total),
         );
 

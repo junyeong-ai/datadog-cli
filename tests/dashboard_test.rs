@@ -145,8 +145,8 @@ async fn dashboard_lists_preserve_summary_fields_and_pagination() {
     let output = DashboardsHandler::list(
         &client_for(&server),
         &DashboardsListArgs {
-            count: 2,
-            start: 4,
+            limit: 2,
+            offset: 4,
             filter_shared: true,
             filter_deleted: false,
         },

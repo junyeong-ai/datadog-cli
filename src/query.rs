@@ -446,6 +446,7 @@ impl PreparedQuery {
         };
         Ok(json!({
             "data":data,
+            "pagination":{"returned_pages":if self.max_pages > 1 { pages.len() } else { 1 },"next_cursor":next_cursor,"has_next":self.operation.pagination.as_ref().map(|_| next_cursor.is_some()),"has_next_is_estimate":self.operation.pagination.as_ref().map(|_| false)},
             "meta":{
                 "api":api_meta,
                 "source":{"operation":self.operation.id,"site":site,"path":self.operation.path,"catalog_commit":Catalog::load()?.source["commit"],"preview":self.operation.preview.is_some()},
@@ -453,7 +454,6 @@ impl PreparedQuery {
                 "execution":{"calls":budget.calls,"received_bytes":budget.received_bytes,"elapsed_ms":start.elapsed().as_millis()},
                 "context":{"time_range":self.time_scope},
                 "projection":{"pointers":self.selection},
-                "pagination":{"returned_pages":if self.max_pages > 1 { pages.len() } else { 1 },"next_cursor":next_cursor,"has_next":self.operation.pagination.as_ref().map(|_| next_cursor.is_some()),"has_next_is_estimate":self.operation.pagination.as_ref().map(|_| false)},
                 "job":{"wait":self.wait,"polls":polls},
                 "result":{"schema_violations":deviations.entries(),"processing":processing,"collection":if self.max_pages == 1 { "single_response" } else if next_cursor.is_some() { "page_limit" } else { "exhausted" },"not_modified":reply.status==304}
             }

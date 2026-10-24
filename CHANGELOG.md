@@ -13,10 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reversed time ranges fail with exit code 1 before configuration or credential providers run. The `invalid_time` error kind is removed.
 - Query request objects that declare properties reject undeclared fields, and `capabilities show` input schemas state this with `additionalProperties: false`. Datadog ignored some misspelled fields, such as `filter.qurey` in `v2.ListLogs`, and returned unfiltered results with exit code 0.
 - `--error-format json` distinguishes unavailable local credentials and OAuth provider failures (`credentials`) from credentials Datadog rejected (`authentication`, now with `http_status: 401`). Both keep exit code 3; the text prefix for local failures is `Credentials unavailable:`.
+- Every list output reports one `.pagination` object: `returned`, `total_count`, `has_next`, `has_next_is_estimate`, and one continuation, `next_cursor`, `next_offset`, or `next_page`, which is `null` on the last page. `query` and `mcp list` move it from `.meta.pagination` to `.pagination`. The `total`, `page`, and `page_size` fields are removed; `total` repeated the returned count when the server reported no total.
+- Paging flags are `--limit` for the page size and `--cursor`, `--offset`, or `--page` for continuation. `--count` becomes `--limit` and `--start` becomes `--offset` for `hosts`, `services`, `downtimes`, `dashboards list`, and `incidents list`; `--page-size` becomes `--limit` for `monitors list` and `teams`.
 - Query responses that deviate from the bundled contract are returned with `meta.result.schema_violations` and a stderr warning instead of failing with exit code 7. On 2026-10-24, `v2.ListTeams`, `v1.ListHosts`, and `v1.ListLogIndexes` returned null in documented numeric fields and failed entirely. Pagination cursors that are not strings still fail with exit code 7.
 
 ### Fixed
 
+- Offset continuations of `hosts`, `services`, `downtimes`, and `slo list` start after the records actually returned, so a page the server shortens no longer skips records.
 - Host metrics (`cpu`, `iowait`, `load`), log index daily limit settings, and team list `next_offset`/`prev_offset` accept the null values returned by the API.
 
 ## [0.9.5] - 2026-10-24

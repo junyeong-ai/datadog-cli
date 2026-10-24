@@ -633,8 +633,8 @@ async fn cursor_page_limit_and_repeated_cursor_do_not_claim_exhaustion() {
         .await
         .unwrap();
     assert_eq!(result["meta"]["result"]["collection"], "page_limit");
-    assert_eq!(result["meta"]["pagination"]["has_next"], true);
-    assert_eq!(result["meta"]["pagination"]["next_cursor"], "three");
+    assert_eq!(result["pagination"]["has_next"], true);
+    assert_eq!(result["pagination"]["next_cursor"], "three");
 }
 
 #[tokio::test]

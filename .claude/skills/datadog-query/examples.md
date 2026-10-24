@@ -46,9 +46,9 @@ datadog-cli query logs v2.ListLogs \
   --max-pages 3 --max-calls 5 --max-bytes 1048576
 ```
 
-Each original response is at `.data.pages[]`. Check `.meta.pagination.next_cursor`, `.meta.result.collection`, and `.meta.result.processing` independently. `page_limit` means collection stopped with more results available; `exhausted` means the API supplied no next cursor. Neither proves that the underlying query was complete. Inspect `.meta.api.pages[]` for server warnings/status. Cursors are opaque and the client never follows server-supplied URLs.
+Each original response is at `.data.pages[]`. Check `.pagination.next_cursor`, `.meta.result.collection`, and `.meta.result.processing` independently. `page_limit` means collection stopped with more results available; `exhausted` means the API supplied no next cursor. Neither proves that the underlying query was complete. Inspect `.meta.api.pages[]` for server warnings/status. Cursors are opaque and the client never follows server-supplied URLs.
 
-Dedicated `logs search`, `spans`, and other search commands return one page. Their continuation fields are at `.pagination`; pass the documented cursor/page/offset flag with unchanged absolute bounds.
+Dedicated `logs search`, `spans`, and other search commands return one page. Pass the reported `.pagination.next_cursor`, `next_offset`, or `next_page` to `--cursor`, `--offset`, or `--page` with unchanged absolute bounds.
 
 ## Metric formulas
 

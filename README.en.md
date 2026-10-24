@@ -217,10 +217,10 @@ jq -r '.pagination.next_cursor // empty' page.json
 
 `logs aggregate` and `logs timeseries` accept `--group-by` and `--group-limit` to compute the most frequent groups on the server. This is a bounded ranking, not an exhaustive list of groups; inspect API warnings alongside the result.
 
-Search returns one page. Pass the returned cursor with `--cursor` to fetch another.
+List commands return one page, and every command uses the same `.pagination` object. `--limit` sets the page size. The continuation is one of `next_cursor`, `next_offset`, or `next_page`, depending on the API, and is passed back with the matching `--cursor`, `--offset`, or `--page`; it is `null` on the last page.
 `pagination.returned` counts records in this response; `total_count` is the server-reported total or `null` when unknown.
-`has_next_is_estimate: true` identifies continuation inferred from page size. The existing `total` retains the returned count when no total is known; do not use it for aggregation.
-Fix absolute start/end times across pages to query the same window. Consult command help for endpoint-specific pagination.
+`has_next_is_estimate: true` identifies continuation inferred from page size.
+Fix absolute start/end times across pages to query the same window.
 `--tag-filter "env:,service:"` retains those prefixes; `""` excludes tags and `"*"` retains all tags.
 
 `--error-format json` emits the final runtime error as one JSON line on stderr. `.error.kind` distinguishes unavailable local credentials or OAuth provider failures (`credentials`), credentials Datadog rejected (`authentication`, HTTP 401), and missing permissions (`permission_denied`, HTTP 403); all use exit code 3. Other diagnostics such as retry logs may precede it, and CLI usage errors remain text. When stderr is closed, results and the original exit code are preserved even if warnings or the final error cannot be written.

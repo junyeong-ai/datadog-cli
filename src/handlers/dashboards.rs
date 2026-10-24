@@ -3,7 +3,8 @@ use serde_json::{Value, json};
 use crate::cli::DashboardsListArgs;
 use crate::datadog::DatadogClient;
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ResponseFormatter};
+use crate::handlers::common::ResponseFormatter;
+use crate::pagination::PaginationInfo;
 
 pub struct DashboardsHandler;
 
@@ -15,8 +16,8 @@ impl DashboardsHandler {
 
         let response = client
             .list_dashboards(
-                Some(args.count),
-                Some(args.start),
+                Some(args.limit),
+                Some(args.offset),
                 args.filter_shared,
                 args.filter_deleted,
             )
@@ -31,10 +32,11 @@ impl DashboardsHandler {
             })
             .collect();
 
-        let pagination = PaginationInfo::from_offset_without_total(
+        let pagination = PaginationInfo::from_offset(
             data.len(),
-            args.start as usize,
-            args.count as usize,
+            args.offset as usize,
+            args.limit as usize,
+            None,
         );
 
         Ok(handler.format_list(json!(data), Some(serde_json::to_value(pagination)?), None))

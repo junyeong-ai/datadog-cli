@@ -15,7 +15,8 @@ Rust 2024 CLI. `rust-toolchain.toml` pins development Rust; `Cargo.toml` declare
 - `src/query.rs` and `src/datadog/transport/query.rs`: prepare reviewed requests before credential execution; preserve original API bodies and share explicit call, byte, and deadline budgets. Report response schema deviations without discarding the body, because the bundled contract can trail the live API; strictly validate the fields the client interprets, such as cursors, processing states, and DDSQL states. Query submissions with uncertain idempotency must not retry. File responses require an explicit new destination and must be persisted without clobbering existing files.
   Time mappings and processing states come from reviewed policy entries. Projection uses explicit JSON Pointers and must preserve API diagnostics. Never mark an unknown state complete or conflate query processing with page collection.
 - `src/time.rs`: the time argument grammar. Offsets point into the past; reject unlisted forms instead of interpreting them. Resolve a command's times against one reference instant and check ranges before credential execution.
-- `src/handlers/`: endpoint-specific transformation and pagination. `common.rs` owns shared tag, pagination, and output-envelope behavior.
+- `src/handlers/`: endpoint-specific transformation and pagination. `common.rs` owns shared tag and output-envelope behavior.
+- `src/pagination.rs`: the `.pagination` object of every list output.
 - `src/diagnostics.rs`: shared fallible stderr writes. Ignore diagnostic BrokenPipe, propagate other warning I/O errors, and preserve the original exit code when a final error cannot be printed.
 - `src/output.rs`: JSON/JSONL/table writers. Stdout contains results; tracing writes to stderr. Propagate I/O errors so closed pipelines exit quietly.
 
@@ -25,7 +26,7 @@ Keep scalar column arrays ordered; column names are optional attributes, not uni
 
 Preserve log custom attributes, monitor evaluation settings and recovery thresholds, and complete metric unit arrays. Keep existing JSON paths when adding information. Summary presentation must not silently remove the only way to retrieve investigation context. Stack truncation must affect only the documented error stack.
 
-Pagination exposes `returned`, optional `total_count`, and `has_next_is_estimate`. Use endpoint-specific server totals when available; never replace them with page-size inference. Preserve server pagination metadata under `meta.api`. Validate required response data and supplied field types before interpreting an empty result.
+Pagination exposes `returned`, optional `total_count`, `has_next_is_estimate`, and one continuation named for its flag (`next_cursor`, `next_offset`, or `next_page`); offsets continue after the records returned. Use endpoint-specific server totals when available; never replace them with page-size inference. Preserve server pagination metadata under `meta.api`. Validate required response data and supplied field types before interpreting an empty result.
 
 Pass metric query expressions unchanged. Use the structured timeseries interval for server-side rollup; do not infer query syntax or aggregation from string patterns.
 

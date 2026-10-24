@@ -4,7 +4,8 @@ use serde_json::{Value, json};
 use crate::cli::LlmObsArgs;
 use crate::datadog::{DatadogClient, LlmObsFilter, LlmObsSearchParams};
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ResponseFormatter};
+use crate::handlers::common::ResponseFormatter;
+use crate::pagination::PaginationInfo;
 
 pub struct LlmObsHandler;
 
@@ -47,7 +48,7 @@ impl LlmObsHandler {
             .and_then(|a| a.as_str())
             .map(String::from);
 
-        let pagination = PaginationInfo::from_cursor(returned, args.limit as usize, next_cursor);
+        let pagination = PaginationInfo::from_cursor(returned, next_cursor);
 
         Ok(handler.with_api_meta(
             json!({

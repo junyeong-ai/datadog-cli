@@ -3,7 +3,8 @@ use serde_json::{Value, json};
 use crate::cli::MonitorsListArgs;
 use crate::datadog::DatadogClient;
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ResponseFormatter};
+use crate::handlers::common::ResponseFormatter;
+use crate::pagination::PaginationInfo;
 
 pub struct MonitorsHandler;
 
@@ -18,7 +19,7 @@ impl MonitorsHandler {
                 args.tags.as_deref(),
                 args.monitor_tags.as_deref(),
                 Some(args.page),
-                Some(args.page_size),
+                Some(args.limit),
             )
             .await?;
 
@@ -38,11 +39,8 @@ impl MonitorsHandler {
             })
             .collect();
 
-        let pagination = PaginationInfo::from_page_number(
-            data.len(),
-            args.page as usize,
-            args.page_size as usize,
-        );
+        let pagination =
+            PaginationInfo::from_page(data.len(), args.page as usize, args.limit as usize, None);
 
         Ok(handler.format_list(json!(data), Some(serde_json::to_value(pagination)?), None))
     }

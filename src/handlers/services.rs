@@ -3,7 +3,8 @@ use serde_json::{Value, json};
 use crate::cli::ServicesArgs;
 use crate::datadog::DatadogClient;
 use crate::error::Result;
-use crate::handlers::common::{PaginationInfo, ResponseFormatter, api_count};
+use crate::handlers::common::{ResponseFormatter, api_count};
+use crate::pagination::PaginationInfo;
 
 pub struct ServicesHandler;
 
@@ -19,8 +20,8 @@ impl ServicesHandler {
                 args.name.as_deref(),
                 args.owner.as_deref(),
                 args.include.as_deref(),
-                args.start,
-                args.count,
+                args.offset,
+                args.limit,
             )
             .await?;
 
@@ -30,10 +31,10 @@ impl ServicesHandler {
         let data = json!(crate::datadog::models::response_records(&response)?);
         let returned = data.as_array().map(|a| a.len()).unwrap_or(0);
 
-        let pagination = PaginationInfo::from_offset_total(
+        let pagination = PaginationInfo::from_offset(
             returned,
-            args.start as usize,
-            args.count as usize,
+            args.offset as usize,
+            args.limit as usize,
             api_count(response.pointer("/meta/count"))?,
         );
 

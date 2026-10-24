@@ -214,10 +214,10 @@ jq -r '.pagination.next_cursor // empty' page.json
 
 `logs aggregate`와 `logs timeseries`의 `--group-by`는 서버에서 로그 수 내림차순으로 최대 `--group-limit`개 그룹을 구합니다. 전체 그룹 전수 조회가 아니며 서버 경고는 결과와 함께 확인해야 합니다.
 
-검색 결과는 한 페이지입니다. 다음 페이지는 반환된 커서를 `--cursor`로 전달합니다.
+목록 명령은 한 페이지를 반환하고, 모든 명령이 같은 `.pagination` 구조를 씁니다. 페이지 크기는 `--limit`입니다. 다음 페이지 값은 API 방식에 따라 `next_cursor`·`next_offset`·`next_page` 중 하나이며, 같은 이름의 `--cursor`·`--offset`·`--page`로 전달합니다. 다음 페이지가 없으면 그 값은 `null`입니다.
 `pagination.returned`는 이번 응답 건수이며 `total_count`는 서버가 알려준 전체 건수입니다. 알 수 없으면 `null`입니다.
-`has_next_is_estimate`가 `true`이면 다음 페이지 여부는 페이지 크기로 추정한 값입니다. 기존 `total`은 전체 건수가 없을 때 이번 응답 건수를 유지하므로 집계에 사용하지 마세요.
-반복 조회에서는 절대 시작·종료 시간을 고정해 같은 기간을 조회하세요. API별 페이지 방식은 명령 참조를 확인하세요.
+`has_next_is_estimate`가 `true`이면 다음 페이지 여부는 페이지 크기로 추정한 값입니다.
+반복 조회에서는 절대 시작·종료 시간을 고정해 같은 기간을 조회하세요.
 `--tag-filter "env:,service:"`는 해당 접두어만 유지하고 `""`는 모든 태그를 제외하며 `"*"`는 모두 유지합니다.
 
 `--error-format json`은 최종 런타임 오류를 stderr의 JSON 한 줄로 출력합니다. `.error.kind`는 로컬 자격증명 부재·OAuth 제공자 실패(`credentials`), Datadog의 자격증명 거부(`authentication`, HTTP 401), 권한 부족(`permission_denied`, HTTP 403)을 구분하며 모두 종료 코드 3입니다. 재시도 로그 등 다른 진단이 앞에 올 수 있으며 CLI 문법 오류는 텍스트입니다. stderr가 닫혀 경고나 최종 오류를 쓰지 못해도 결과와 원래 종료 코드는 유지됩니다.

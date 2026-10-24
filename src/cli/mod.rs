@@ -14,6 +14,9 @@ use crate::time::{TimeExpr, TimeRange};
 const TIME_HELP: &str =
     "now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds";
 const SORT_HELP: &str = "Sort order (use --sort=\"-timestamp\" for descending)";
+const CURSOR_HELP: &str = "Cursor from .pagination.next_cursor of the previous page";
+const OFFSET_HELP: &str = "Records to skip; continue with .pagination.next_offset";
+const PAGE_HELP: &str = "Page number from 0; continue with .pagination.next_page";
 
 #[derive(Clone, Copy, ValueEnum)]
 pub enum AuthProvider {
@@ -218,7 +221,7 @@ pub struct SloListArgs {
     #[arg(long, default_value = "100", value_parser = clap::value_parser!(i32).range(1..), help = "Results per page")]
     pub limit: i32,
 
-    #[arg(long, default_value = "0", value_parser = clap::value_parser!(i32).range(0..), help = "Pagination offset")]
+    #[arg(long, default_value = "0", value_parser = clap::value_parser!(i32).range(0..), help = OFFSET_HELP)]
     pub offset: i32,
 }
 
@@ -234,10 +237,10 @@ pub enum IncidentsAction {
 #[derive(Args)]
 pub struct IncidentsListArgs {
     #[arg(long, default_value = "25", value_parser = clap::value_parser!(i32).range(1..=100), help = "Results per page (max 100)")]
-    pub count: i32,
+    pub limit: i32,
 
-    #[arg(long, default_value = "0", value_parser = clap::value_parser!(i32).range(0..), help = "Pagination offset")]
-    pub start: i32,
+    #[arg(long, default_value = "0", value_parser = clap::value_parser!(i32).range(0..), help = OFFSET_HELP)]
+    pub offset: i32,
 
     #[arg(long, value_parser = ["users", "attachments"], help = "Include related data")]
     pub include: Option<String>,
@@ -280,11 +283,11 @@ pub struct DowntimesArgs {
     #[arg(long, help = "Only downtimes active right now")]
     pub current_only: bool,
 
-    #[arg(long, default_value = "0", value_parser = clap::value_parser!(i32).range(0..), help = "Pagination offset")]
-    pub start: i32,
+    #[arg(long, default_value = "0", value_parser = clap::value_parser!(i32).range(0..), help = OFFSET_HELP)]
+    pub offset: i32,
 
     #[arg(long, default_value = "100", value_parser = clap::value_parser!(i32).range(1..), help = "Results per page")]
-    pub count: i32,
+    pub limit: i32,
 }
 
 #[derive(Args)]
@@ -298,7 +301,7 @@ pub struct AuditArgs {
     #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000), help = "Results per page (max 1000)")]
     pub limit: i32,
 
-    #[arg(long, help = "Pagination cursor from previous response")]
+    #[arg(long, help = CURSOR_HELP)]
     pub cursor: Option<String>,
 
     #[arg(long, value_parser = ["timestamp", "-timestamp"], help = SORT_HELP)]
@@ -313,11 +316,11 @@ pub struct TeamsArgs {
     #[arg(long, help = "Only teams the caller belongs to")]
     pub me: bool,
 
-    #[arg(long, default_value = "0", value_parser = clap::value_parser!(i32).range(0..), help = "Page number")]
+    #[arg(long, default_value = "0", value_parser = clap::value_parser!(i32).range(0..), help = PAGE_HELP)]
     pub page: i32,
 
     #[arg(long, default_value = "100", value_parser = clap::value_parser!(i32).range(1..=100), help = "Results per page (max 100)")]
-    pub page_size: i32,
+    pub limit: i32,
 }
 
 #[derive(Args)]
@@ -331,7 +334,7 @@ pub struct LlmObsArgs {
     #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=5000), help = "Results per page (CLI max 5000)")]
     pub limit: i32,
 
-    #[arg(long, help = "Pagination cursor from previous response")]
+    #[arg(long, help = CURSOR_HELP)]
     pub cursor: Option<String>,
 
     #[arg(long, help = SORT_HELP)]
@@ -402,7 +405,7 @@ pub struct EventsArgs {
     #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000), help = "Results per page (max 1000)")]
     pub limit: i32,
 
-    #[arg(long, help = "Pagination cursor from previous response")]
+    #[arg(long, help = CURSOR_HELP)]
     pub cursor: Option<String>,
 
     #[arg(long, value_parser = ["timestamp", "-timestamp"], help = SORT_HELP)]
@@ -423,11 +426,11 @@ pub struct HostsArgs {
     #[arg(long, help = "Sort direction (asc, desc)")]
     pub sort_dir: Option<String>,
 
-    #[arg(long, default_value = "0", value_parser = clap::value_parser!(i32).range(0..), help = "Pagination offset")]
-    pub start: i32,
+    #[arg(long, default_value = "0", value_parser = clap::value_parser!(i32).range(0..), help = OFFSET_HELP)]
+    pub offset: i32,
 
     #[arg(long, default_value = "100", value_parser = clap::value_parser!(i32).range(1..=1000), help = "Results per page (max 1000)")]
-    pub count: i32,
+    pub limit: i32,
 
     #[arg(long, help = "Tag prefixes to include (default from config)")]
     pub tag_filter: Option<String>,
@@ -444,7 +447,7 @@ pub struct SpansArgs {
     #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000), help = "Results per page (max 1000)")]
     pub limit: i32,
 
-    #[arg(long, help = "Pagination cursor from previous response")]
+    #[arg(long, help = CURSOR_HELP)]
     pub cursor: Option<String>,
 
     #[arg(long, value_parser = ["timestamp", "-timestamp"], help = SORT_HELP)]
@@ -475,11 +478,11 @@ pub struct ServicesArgs {
     #[arg(long, value_parser = ["schema", "raw_schema", "oncall", "incident", "relation"], help = "Include related data")]
     pub include: Option<String>,
 
-    #[arg(long, default_value = "0", value_parser = clap::value_parser!(i32).range(0..), help = "Pagination offset")]
-    pub start: i32,
+    #[arg(long, default_value = "0", value_parser = clap::value_parser!(i32).range(0..), help = OFFSET_HELP)]
+    pub offset: i32,
 
     #[arg(long, default_value = "100", value_parser = clap::value_parser!(i32).range(1..), help = "Results per page")]
-    pub count: i32,
+    pub limit: i32,
 }
 
 #[derive(Args)]
@@ -493,7 +496,7 @@ pub struct RumArgs {
     #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000), help = "Results per page (max 1000)")]
     pub limit: i32,
 
-    #[arg(long, help = "Pagination cursor from previous response")]
+    #[arg(long, help = CURSOR_HELP)]
     pub cursor: Option<String>,
 
     #[arg(long, value_parser = ["timestamp", "-timestamp"], help = SORT_HELP)]
@@ -529,7 +532,7 @@ pub struct LogsSearchArgs {
     #[arg(long, default_value = "10", value_parser = clap::value_parser!(i32).range(1..=1000), help = "Results per page (max 1000)")]
     pub limit: i32,
 
-    #[arg(long, help = "Pagination cursor from previous response")]
+    #[arg(long, help = CURSOR_HELP)]
     pub cursor: Option<String>,
 
     #[arg(long, value_parser = ["timestamp", "-timestamp"], help = SORT_HELP)]
@@ -609,11 +612,11 @@ pub struct MonitorsListArgs {
     #[arg(long, help = "Filter by monitor tags")]
     pub monitor_tags: Option<String>,
 
-    #[arg(long, default_value = "0", value_parser = clap::value_parser!(i32).range(0..), help = "Page number")]
+    #[arg(long, default_value = "0", value_parser = clap::value_parser!(i32).range(0..), help = PAGE_HELP)]
     pub page: i32,
 
     #[arg(long, default_value = "100", value_parser = clap::value_parser!(i32).range(1..=1000), help = "Results per page (max 1000)")]
-    pub page_size: i32,
+    pub limit: i32,
 }
 
 #[derive(Subcommand)]
@@ -628,10 +631,10 @@ pub enum DashboardsAction {
 #[derive(Args)]
 pub struct DashboardsListArgs {
     #[arg(long, default_value = "100", value_parser = clap::value_parser!(i32).range(1..), help = "Results per page")]
-    pub count: i32,
+    pub limit: i32,
 
-    #[arg(long, default_value = "0", value_parser = clap::value_parser!(i32).range(0..), help = "Pagination offset")]
-    pub start: i32,
+    #[arg(long, default_value = "0", value_parser = clap::value_parser!(i32).range(0..), help = OFFSET_HELP)]
+    pub offset: i32,
 
     #[arg(long, help = "Include shared dashboards only")]
     pub filter_shared: bool,

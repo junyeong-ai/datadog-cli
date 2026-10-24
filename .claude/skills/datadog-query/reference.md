@@ -127,7 +127,7 @@ Usage: datadog-cli mcp list [OPTIONS]
 Options:
       --toolset <TOOLSET>  Reviewed toolset name, for example dbm
       --search <SEARCH>    Literal case-insensitive text in tool names and descriptions
-      --offset <OFFSET>    Pagination offset [default: 0]
+      --offset <OFFSET>    Records to skip; continue with .pagination.next_offset [default: 0]
       --limit <LIMIT>      Results per page (max 200) [default: 25]
   -h, --help               Print help
 ```
@@ -232,7 +232,7 @@ Options:
       --domain <DOMAIN>  Exact domain ID from capabilities domains
       --all              Include excluded operations and their reasons
       --search <SEARCH>  Literal case-insensitive text in the operation ID or summary
-      --offset <OFFSET>  Pagination offset [default: 0]
+      --offset <OFFSET>  Records to skip; continue with .pagination.next_offset [default: 0]
       --limit <LIMIT>    Results per page (max 200) [default: 25]
   -h, --help             Print help
 ```
@@ -335,7 +335,7 @@ Options:
       --from <FROM>                  now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
       --to <TO>                      now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: now]
       --limit <LIMIT>                Results per page (max 1000) [default: 10]
-      --cursor <CURSOR>              Pagination cursor from previous response
+      --cursor <CURSOR>              Cursor from .pagination.next_cursor of the previous page
       --sort <SORT>                  Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
       --storage-tier <STORAGE_TIER>  Storage tier to search (default: indexes) [possible values: indexes, online-archives, flex]
       --tag-filter <TAG_FILTER>      Tag prefixes to include (default from config)
@@ -407,8 +407,8 @@ Usage: datadog-cli monitors list [OPTIONS]
 Options:
       --tags <TAGS>                  Filter by resource tags
       --monitor-tags <MONITOR_TAGS>  Filter by monitor tags
-      --page <PAGE>                  Page number [default: 0]
-      --page-size <PAGE_SIZE>        Results per page (max 1000) [default: 100]
+      --page <PAGE>                  Page number from 0; continue with .pagination.next_page [default: 0]
+      --limit <LIMIT>                Results per page (max 1000) [default: 100]
   -h, --help                         Print help
 ```
 
@@ -440,7 +440,7 @@ Options:
       --from <FROM>      now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
       --to <TO>          now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: now]
       --limit <LIMIT>    Results per page (max 1000) [default: 10]
-      --cursor <CURSOR>  Pagination cursor from previous response
+      --cursor <CURSOR>  Cursor from .pagination.next_cursor of the previous page
       --sort <SORT>      Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
   -h, --help             Print help
 ```
@@ -457,8 +457,8 @@ Options:
       --from <FROM>              now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
       --sort-field <SORT_FIELD>  Sort field (e.g., cpu, iowait, load)
       --sort-dir <SORT_DIR>      Sort direction (asc, desc)
-      --start <START>            Pagination offset [default: 0]
-      --count <COUNT>            Results per page (max 1000) [default: 100]
+      --offset <OFFSET>          Records to skip; continue with .pagination.next_offset [default: 0]
+      --limit <LIMIT>            Results per page (max 1000) [default: 100]
       --tag-filter <TAG_FILTER>  Tag prefixes to include (default from config)
   -h, --help                     Print help
 ```
@@ -487,11 +487,11 @@ List dashboards
 Usage: datadog-cli dashboards list [OPTIONS]
 
 Options:
-      --count <COUNT>   Results per page [default: 100]
-      --start <START>   Pagination offset [default: 0]
-      --filter-shared   Include shared dashboards only
-      --filter-deleted  Include deleted dashboards only
-  -h, --help            Print help
+      --limit <LIMIT>    Results per page [default: 100]
+      --offset <OFFSET>  Records to skip; continue with .pagination.next_offset [default: 0]
+      --filter-shared    Include shared dashboards only
+      --filter-deleted   Include deleted dashboards only
+  -h, --help             Print help
 ```
 
 ## `datadog-cli dashboards get`
@@ -522,7 +522,7 @@ Options:
       --from <FROM>              now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
       --to <TO>                  now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: now]
       --limit <LIMIT>            Results per page (max 1000) [default: 10]
-      --cursor <CURSOR>          Pagination cursor from previous response
+      --cursor <CURSOR>          Cursor from .pagination.next_cursor of the previous page
       --sort <SORT>              Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
       --tag-filter <TAG_FILTER>  Tag prefixes to include (default from config)
       --full-stack-trace         Show full stack traces
@@ -541,8 +541,8 @@ Options:
       --name <NAME>        Filter by entity name
       --owner <OWNER>      Filter by owner
       --include <INCLUDE>  Include related data [possible values: schema, raw_schema, oncall, incident, relation]
-      --start <START>      Pagination offset [default: 0]
-      --count <COUNT>      Results per page [default: 100]
+      --offset <OFFSET>    Records to skip; continue with .pagination.next_offset [default: 0]
+      --limit <LIMIT>      Results per page [default: 100]
   -h, --help               Print help
 ```
 
@@ -560,7 +560,7 @@ Options:
       --from <FROM>              now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
       --to <TO>                  now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: now]
       --limit <LIMIT>            Results per page (max 1000) [default: 10]
-      --cursor <CURSOR>          Pagination cursor from previous response
+      --cursor <CURSOR>          Cursor from .pagination.next_cursor of the previous page
       --sort <SORT>              Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
       --tag-filter <TAG_FILTER>  Tag prefixes to include (default from config)
       --full-stack-trace         Show full stack traces
@@ -594,7 +594,7 @@ Options:
       --query <QUERY>            Filter by SLO name or description text
       --tags-query <TAGS_QUERY>  Filter by tags (e.g. "team:web")
       --limit <LIMIT>            Results per page [default: 100]
-      --offset <OFFSET>          Pagination offset [default: 0]
+      --offset <OFFSET>          Records to skip; continue with .pagination.next_offset [default: 0]
   -h, --help                     Print help
 ```
 
@@ -636,8 +636,8 @@ List incidents
 Usage: datadog-cli incidents list [OPTIONS]
 
 Options:
-      --count <COUNT>      Results per page (max 100) [default: 25]
-      --start <START>      Pagination offset [default: 0]
+      --limit <LIMIT>      Results per page (max 100) [default: 25]
+      --offset <OFFSET>    Records to skip; continue with .pagination.next_offset [default: 0]
       --include <INCLUDE>  Include related data [possible values: users, attachments]
   -h, --help               Print help
 ```
@@ -713,10 +713,10 @@ List downtimes
 Usage: datadog-cli downtimes [OPTIONS]
 
 Options:
-      --current-only   Only downtimes active right now
-      --start <START>  Pagination offset [default: 0]
-      --count <COUNT>  Results per page [default: 100]
-  -h, --help           Print help
+      --current-only     Only downtimes active right now
+      --offset <OFFSET>  Records to skip; continue with .pagination.next_offset [default: 0]
+      --limit <LIMIT>    Results per page [default: 100]
+  -h, --help             Print help
 ```
 
 ## `datadog-cli audit`
@@ -733,7 +733,7 @@ Options:
       --from <FROM>      now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
       --to <TO>          now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: now]
       --limit <LIMIT>    Results per page (max 1000) [default: 10]
-      --cursor <CURSOR>  Pagination cursor from previous response
+      --cursor <CURSOR>  Cursor from .pagination.next_cursor of the previous page
       --sort <SORT>      Sort order (use --sort="-timestamp" for descending) [possible values: timestamp, -timestamp]
   -h, --help             Print help
 ```
@@ -746,11 +746,11 @@ List teams
 Usage: datadog-cli teams [OPTIONS]
 
 Options:
-      --keyword <KEYWORD>      Search teams by keyword
-      --me                     Only teams the caller belongs to
-      --page <PAGE>            Page number [default: 0]
-      --page-size <PAGE_SIZE>  Results per page (max 100) [default: 100]
-  -h, --help                   Print help
+      --keyword <KEYWORD>  Search teams by keyword
+      --me                 Only teams the caller belongs to
+      --page <PAGE>        Page number from 0; continue with .pagination.next_page [default: 0]
+      --limit <LIMIT>      Results per page (max 100) [default: 100]
+  -h, --help               Print help
 ```
 
 ## `datadog-cli llm-obs`
@@ -767,7 +767,7 @@ Options:
       --from <FROM>            now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: 1h]
       --to <TO>                now, a past offset (15m, 1h, 7d, now-1h, '2 hours ago'), RFC3339, or Unix seconds [default: now]
       --limit <LIMIT>          Results per page (CLI max 5000) [default: 10]
-      --cursor <CURSOR>        Pagination cursor from previous response
+      --cursor <CURSOR>        Cursor from .pagination.next_cursor of the previous page
       --sort <SORT>            Sort order (use --sort="-timestamp" for descending)
       --ml-app <ML_APP>        Filter by ML application name
       --span-kind <SPAN_KIND>  Filter by span kind (e.g. agent, workflow, llm, tool)

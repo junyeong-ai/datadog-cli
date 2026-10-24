@@ -1,145 +1,10 @@
 use crate::error::{DatadogError, Result};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 
 pub const DEFAULT_STACK_TRACE_LINES: usize = 10;
 pub const MAX_STRING_LENGTH: usize = 100;
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct PaginationInfo {
-    pub total: usize,
-    pub returned: usize,
-    pub total_count: Option<usize>,
-    pub page: usize,
-    pub page_size: usize,
-    pub has_next: bool,
-    pub has_next_is_estimate: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub next_offset: Option<usize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub next_cursor: Option<String>,
-}
-
-impl PaginationInfo {
-    pub fn single_page(result_count: usize, limit: usize) -> Self {
-        Self {
-            total: result_count,
-            returned: result_count,
-            total_count: None,
-            page: 0,
-            page_size: limit,
-            has_next: result_count >= limit,
-            has_next_is_estimate: true,
-            next_offset: None,
-            next_cursor: None,
-        }
-    }
-
-    pub fn from_offset(total: usize, start: usize, count: usize) -> Self {
-        debug_assert!(count > 0);
-        let page = start / count;
-        let next_offset = start.saturating_add(count);
-        let has_next = next_offset < total;
-
-        Self {
-            total,
-            returned: total.saturating_sub(start).min(count),
-            total_count: Some(total),
-            page,
-            page_size: count,
-            has_next,
-            has_next_is_estimate: false,
-            next_offset: if has_next { Some(next_offset) } else { None },
-            next_cursor: None,
-        }
-    }
-
-    /// Offset pagination for APIs that report no total: a full page implies
-    /// more results may exist (the boundary case yields one extra empty page).
-    pub fn from_offset_without_total(returned: usize, start: usize, count: usize) -> Self {
-        debug_assert!(count > 0);
-        let has_next = returned >= count;
-
-        Self {
-            total: returned,
-            returned,
-            total_count: None,
-            page: start / count,
-            page_size: count,
-            has_next,
-            has_next_is_estimate: true,
-            next_offset: has_next.then_some(start.saturating_add(returned)),
-            next_cursor: None,
-        }
-    }
-
-    /// Page-number pagination for APIs that report no total: a full page
-    /// implies more results may exist.
-    pub fn from_page_number(returned: usize, page: usize, page_size: usize) -> Self {
-        Self {
-            total: returned,
-            returned,
-            total_count: None,
-            page,
-            page_size,
-            has_next: returned >= page_size,
-            has_next_is_estimate: true,
-            next_offset: None,
-            next_cursor: None,
-        }
-    }
-
-    pub fn from_cursor(total: usize, page_size: usize, next_cursor: Option<String>) -> Self {
-        Self {
-            total,
-            returned: total,
-            total_count: None,
-            page: 0,
-            page_size,
-            has_next: next_cursor.is_some(),
-            has_next_is_estimate: false,
-            next_offset: None,
-            next_cursor,
-        }
-    }
-
-    pub fn from_offset_total(
-        returned: usize,
-        start: usize,
-        count: usize,
-        total: Option<usize>,
-    ) -> Self {
-        match total {
-            Some(total) => Self {
-                returned,
-                ..Self::from_offset(total, start, count)
-            },
-            None => Self::from_offset_without_total(returned, start, count),
-        }
-    }
-
-    pub fn from_page_number_total(
-        returned: usize,
-        page: usize,
-        page_size: usize,
-        total: Option<usize>,
-    ) -> Self {
-        match total {
-            Some(total) => Self {
-                page,
-                next_offset: None,
-                ..Self::from_offset_total(
-                    returned,
-                    page.saturating_mul(page_size),
-                    page_size,
-                    Some(total),
-                )
-            },
-            None => Self::from_page_number(returned, page, page_size),
-        }
-    }
-}
 
 pub(crate) fn api_count(value: Option<&Value>) -> Result<Option<usize>> {
     value
@@ -276,27 +141,6 @@ mod tests {
     impl TagFilter for TestHandler {}
 
     #[test]
-    fn test_from_offset_without_total_full_page() {
-        let pagination = PaginationInfo::from_offset_without_total(100, 0, 100);
-        assert!(pagination.has_next);
-        assert_eq!(pagination.next_offset, Some(100));
-        assert_eq!(pagination.page, 0);
-
-        let next = PaginationInfo::from_offset_without_total(100, 100, 100);
-        assert!(next.has_next);
-        assert_eq!(next.next_offset, Some(200));
-        assert_eq!(next.page, 1);
-    }
-
-    #[test]
-    fn test_from_offset_without_total_partial_page() {
-        let pagination = PaginationInfo::from_offset_without_total(37, 200, 100);
-        assert!(!pagination.has_next);
-        assert_eq!(pagination.next_offset, None);
-        assert_eq!(pagination.page, 2);
-    }
-
-    #[test]
     fn test_response_formatter_list() {
         let handler = TestHandler;
         let data = json!(["item1", "item2"]);
@@ -316,16 +160,6 @@ mod tests {
         let response = handler.format_list(data.clone(), None, Some(meta.clone()));
         assert_eq!(response["data"], data);
         assert_eq!(response["meta"], meta);
-    }
-
-    #[test]
-    fn test_from_page_number() {
-        let full = PaginationInfo::from_page_number(50, 2, 50);
-        assert!(full.has_next);
-        assert_eq!(full.page, 2);
-
-        let partial = PaginationInfo::from_page_number(10, 3, 50);
-        assert!(!partial.has_next);
     }
 
     #[test]
