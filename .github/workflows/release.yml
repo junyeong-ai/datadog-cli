@@ -277,9 +277,11 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+          if draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2> /dev/null); then
             gh release upload "$RELEASE_TAG" dist/* --clobber
-            gh release edit "$RELEASE_TAG" --draft=false
+            if [ "$draft" = "true" ]; then
+              gh release edit "$RELEASE_TAG" --draft=false
+            fi
           else
             gh release create "$RELEASE_TAG" dist/* --verify-tag --generate-notes
           fi
