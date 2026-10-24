@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.5] - 2026-10-24
+
+### Changed
+
+- Schema validation errors for query inputs, query responses, and MCP arguments and results list up to ten violations with their location and expected constraint, such as allowed values, limits, missing properties, and unexpected property names. Supplied values stay masked; names, locations, and schema text are escaped and length-bounded.
+- Config commands reject `--format` with exit code 1 instead of ignoring it.
+- The query skill pre-approves only `datadog-cli` and `jq` commands in Claude Code. Agent guidance names dedicated commands consistently, documents exit code 1 and JSONL output for array responses, and requests JSON explicitly when parsing.
+- Dependencies are updated, including tokio 1.54.1, rmcp 3.7.0, and jsonschema 0.60.1.
+- Release builds no longer restore CI caches, releases are published with the GitHub CLI, and workflows are audited with zizmor.
+
+### Fixed
+
+- Monitor list queries accept the null `options.notify_by` returned by the API.
+- Unknown MCP toolsets list the reviewed toolsets, and a query with the wrong domain names the operation's domains. Paging options state their maximums in help.
+- Missing-credential errors name the environment variables and config fields of the selected authentication method instead of command-line secret flags.
+
+### Removed
+
+- Parsing microbenchmarks.
+
+### Documentation
+
+- Both READMEs share one section order and describe current behavior; per-version migration steps are recorded in this changelog.
+
 ## [0.9.4] - 2026-10-19
 
 ### Fixed
