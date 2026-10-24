@@ -193,12 +193,13 @@ datadog-cli config edit   # 위 경로를 $EDITOR로 열기; 기본값 vim
 
 ## 출력과 자동화
 
-`--format`은 API·탐색 명령의 앞뒤 어디에서나 사용할 수 있으며, config 명령은 텍스트만 출력합니다.
+`--format`은 API·탐색 명령의 앞뒤 어디에서나 사용할 수 있습니다. config 명령은 텍스트만 출력하며 `--format`을 지정하면 종료 코드 1로 실패합니다.
 JSON은 터미널에서 들여쓰기하고 파이프에서는 압축합니다. JSONL은 `data` 항목만 한 줄씩 출력하므로 페이지 메타데이터가 없습니다.
 표는 객체 또는 객체 배열을 표시합니다. 진단 로그는 stderr로 출력합니다.
 로그의 사용자 속성은 `.data[].attributes`에 보존하며 추적 ID의 실제 키는 계측 설정에 따라 다릅니다.
+Dashboard 목록·상세는 API의 선택 설정과 확장 필드를 보존합니다. 상세 작성자는 원본 `author_handle`·`author_name`과 `author` 별칭으로 조회할 수 있고 `created`·`modified` 별칭도 제공하며, 템플릿 변수의 `defaults`·`type`과 위젯의 `is_column_break`를 유지합니다.
 모니터 상세는 평가 설정·복구 임계값·확장 필드를, 호스트는 ID·별칭·서버가 제공한 메타데이터와 메트릭을 보존합니다. Span의 HTTP·메시징 속성은 유지하며 `--full-stack-trace`는 오류 스택에만 적용합니다.
-메트릭의 `.data[].units`는 기본 단위와 분모 단위의 순서·null·배율을 보존합니다. 기존 `.unit`은 첫 번째 비어 있지 않은 단위의 요약입니다.
+메트릭의 `.data[].units`는 기본 단위와 분모 단위의 순서·null·배율을 보존합니다. 기존 `.unit`은 첫 번째 비어 있지 않은 단위의 요약입니다. API가 보고한 메트릭 처리 오류는 HTTP 200 응답이어도 종료 코드 4, 잘못된 응답 구조는 7을 반환합니다.
 `scalar`는 API 열 배열을 `.data.columns`에 순서대로 보존하며 같은 이름의 열도 덮어쓰지 않습니다. 숫자 값은 `jq '.data.columns[] | select(.type == "number") | .values[]'`로 추출하고, JSONL에서는 `.data` 접두어를 제외합니다. 표 헤더는 `[순번] 이름 (유형)`으로 열을 구분합니다.
 RUM 상세 속성은 `.data[].attributes`에, Incident의 `--include` 리소스는 `.meta.included`에 있습니다.
 조회 API의 상태·경고·요청 ID는 `.meta.api`에 보존합니다. 서버 timeout과 응답 경고는 모든 출력 형식에서 stderr에도 표시됩니다. 비치명 경고가 있는 부분 결과도 종료 코드 0을 반환하므로, 경고가 있는 집계를 전체 건수로 해석하지 마세요.
@@ -219,7 +220,7 @@ jq -r '.pagination.next_cursor // empty' page.json
 반복 조회에서는 절대 시작·종료 시간을 고정해 같은 기간을 조회하세요. API별 페이지 방식은 명령 참조를 확인하세요.
 `--tag-filter "env:,service:"`는 해당 접두어만 유지하고 `""`는 모든 태그를 제외하며 `"*"`는 모두 유지합니다.
 
-`--error-format json`은 최종 런타임 오류를 stderr의 JSON 한 줄로 출력합니다. `.error.kind`로 `authentication`과 `permission_denied`를 구분하며 둘 다 종료 코드 3을 유지합니다. 재시도 로그 등 다른 진단이 앞에 올 수 있으며 CLI 문법 오류는 텍스트입니다.
+`--error-format json`은 최종 런타임 오류를 stderr의 JSON 한 줄로 출력합니다. `.error.kind`로 `authentication`과 `permission_denied`를 구분하며 둘 다 종료 코드 3을 유지합니다. 재시도 로그 등 다른 진단이 앞에 올 수 있으며 CLI 문법 오류는 텍스트입니다. stderr가 닫혀 경고나 최종 오류를 쓰지 못해도 결과와 원래 종료 코드는 유지됩니다.
 
 종료 코드: `0` 성공·닫힌 stdout 파이프, `1` 입력·설정·기타 오류, `2` CLI 문법,
 `3` 인증, `4` API, `5` 요청 제한, `6` 네트워크·타임아웃, `7` 응답 디코딩, `130` Ctrl+C.

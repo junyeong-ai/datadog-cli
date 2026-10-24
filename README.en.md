@@ -196,12 +196,13 @@ See the [command reference](.claude/skills/datadog-query/reference.md) for suppo
 
 ## Output and automation
 
-`--format` works before or after API and discovery subcommands; config commands print text only.
+`--format` works before or after API and discovery subcommands. Config commands print text only and fail with exit code 1 when `--format` is given.
 JSON is indented on a terminal and compact in pipes. JSONL emits only `data` records, without pagination metadata.
 Tables accept an object or an array of objects. Diagnostics go to stderr.
 Log custom fields are preserved at `.data[].attributes`; actual trace ID keys depend on instrumentation.
+Dashboard lists and details preserve optional API settings and extension fields. Detail authors are available through the original `author_handle` and `author_name` fields and the `author` alias, `created` and `modified` aliases are provided, and template variable `defaults` and `type` and widget `is_column_break` are retained.
 Monitor details preserve evaluation settings, recovery thresholds, and extension fields. Hosts retain IDs, aliases, and server-supplied metadata and metrics. Spans retain HTTP and messaging attributes; `--full-stack-trace` affects only error stacks.
-Metric `.data[].units` preserves primary/per-unit order, null positions, and scaling. The existing `.unit` summarizes the first non-null unit.
+Metric `.data[].units` preserves primary/per-unit order, null positions, and scaling. The existing `.unit` summarizes the first non-null unit. Metric-processing errors reported by the API exit with code 4, including in HTTP 200 responses; malformed response structures exit with code 7.
 `scalar` preserves the ordered API column array at `.data.columns`; identical column names do not overwrite one another. Extract numbers with `jq '.data.columns[] | select(.type == "number") | .values[]'` and omit the `.data` prefix for JSONL. Table headers use `[index] name (type)` to distinguish columns.
 RUM event details are at `.data[].attributes`; incident `--include` resources are at `.meta.included`.
 Server query status, warnings, and request IDs are preserved at `.meta.api`. Server timeouts and response warnings also appear on stderr in every output format. Partial results with nonfatal warnings still exit with code 0, so do not interpret a warned aggregate as a complete count.
@@ -222,7 +223,7 @@ Search returns one page. Pass the returned cursor with `--cursor` to fetch anoth
 Fix absolute start/end times across pages to query the same window. Consult command help for endpoint-specific pagination.
 `--tag-filter "env:,service:"` retains those prefixes; `""` excludes tags and `"*"` retains all tags.
 
-`--error-format json` emits the final runtime error as one JSON line on stderr. `.error.kind` distinguishes `authentication` from `permission_denied`; both retain exit code 3. Other diagnostics such as retry logs may precede it, and CLI usage errors remain text.
+`--error-format json` emits the final runtime error as one JSON line on stderr. `.error.kind` distinguishes `authentication` from `permission_denied`; both retain exit code 3. Other diagnostics such as retry logs may precede it, and CLI usage errors remain text. When stderr is closed, results and the original exit code are preserved even if warnings or the final error cannot be written.
 
 Exit codes: `0` success/closed stdout pipe, `1` input/configuration/other errors, `2` CLI usage,
 `3` authentication, `4` API, `5` rate limit, `6` network/timeout, `7` response decoding, `130` Ctrl+C.
