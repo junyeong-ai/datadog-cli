@@ -457,8 +457,7 @@ impl Config {
                 .filter(|token| !token.is_empty())
                 .ok_or_else(|| {
                     DatadogError::AuthError(
-                        "Token authentication requires token in config, DD_TOKEN, or --token"
-                            .into(),
+                        "Token authentication requires DD_TOKEN or token in a config file".into(),
                     )
                 })?;
             return Ok(Self {
@@ -480,12 +479,15 @@ impl Config {
                 match (api_key, app_key) {
                     (Some(api_key), Some(app_key)) => Credentials::Keys { api_key, app_key },
                     _ => {
-                        return Err(DatadogError::AuthError(
+                        let message = if method == Some(AuthMethod::ApiKeys) {
+                            "API key authentication requires DD_API_KEY and DD_APP_KEY, or \
+                             api_key and app_key in a config file"
+                        } else {
                             "credentials required: export DD_TOKEN or both DD_API_KEY and \
-                             DD_APP_KEY, set them in the global config file, or configure \
-                             OAuth; `datadog-cli config show` reports the selected method"
-                                .into(),
-                        ));
+                             DD_APP_KEY, set them in a config file, or configure OAuth; \
+                             `datadog-cli config show` reports the selected method"
+                        };
+                        return Err(DatadogError::AuthError(message.into()));
                     }
                 }
             }
