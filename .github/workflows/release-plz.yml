@@ -26,12 +26,12 @@ jobs:
           persist-credentials: false
 
       - name: Install Rust toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
         with:
           cache: false
 
       - name: Run release-plz release-pr
-        uses: MarcoIeni/release-plz-action@7ef5e4d4b0420630cfcaeb182c01e13651d4c577 # v0.5.145
+        uses: MarcoIeni/release-plz-action@66b324fd6c72d05d2a08568492ecdd62bfb8a62b # v0.5.148
         with:
           command: release-pr
         env:
@@ -50,12 +50,12 @@ jobs:
           persist-credentials: false
 
       - name: Install Rust toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
         with:
           cache: false
 
       - name: Run release-plz release
-        uses: MarcoIeni/release-plz-action@7ef5e4d4b0420630cfcaeb182c01e13651d4c577 # v0.5.145
+        uses: MarcoIeni/release-plz-action@66b324fd6c72d05d2a08568492ecdd62bfb8a62b # v0.5.148
         with:
           command: release
         env:
