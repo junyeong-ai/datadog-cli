@@ -12,8 +12,13 @@ updates:
       - dependencies
       - rust
     commit-message:
-      prefix: "chore(deps)"
+      prefix: "chore"
       include: scope
+    ignore:
+      # rmcp's StreamableHttpClient signatures use sse-stream types; bump it with rmcp.
+      - dependency-name: sse-stream
+        update-types:
+          - version-update:semver-major
     groups:
       cargo-minor-patch:
         update-types:
@@ -35,7 +40,7 @@ updates:
       - dependencies
       - github-actions
     commit-message:
-      prefix: "chore(deps)"
+      prefix: "chore"
       include: scope
     groups:
       gha-minor-patch:
