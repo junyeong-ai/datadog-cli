@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-11-16
+
+### Changed
+
+- Credentials are read only from config files and the environment. The global `--api-key`, `--app-key`, and `--token` options are removed because command-line values appear in process listings, shell history, and agent transcripts; set `DD_API_KEY` and `DD_APP_KEY`, `DD_TOKEN`, or the config file fields instead. `--site`, `--auth-method`, and `--pup-org` still apply per command.
+- `--auth-provider pup` is removed; use `--auth-method oauth`.
+- `defaults.format` accepts only `json`, `jsonl`, and `table`, like `--format`. `jsonlines` and case variants such as `JSON` fail with exit code 1.
+- `dashboards list` and `dashboards get` return API fields unchanged. The `created`, `modified`, and `author` aliases are removed; read `created_at`, `modified_at`, `author_handle`, and `author_name`.
+- `config show` reports configurations without `[auth].method` as `automatic (token/key precedence)` with source `default`.
+- The bundled API contract follows datadog-api-client-rust 27c8a13 (2026-11-16): 2,032 operations, 858 queries. Upstream removed `v2.DownloadCloudWorkloadPolicyFile` and `v2.ListNetworkHealthInsights`, moved CSM ownership operations to `/api/v2/security/ownership` and cloud authentication operations to `/api/v2/wif`, and deprecated `v1.CreateEvent`.
+- MCP `list_assistant_conversations` and `get_assistant_conversation_history` are replaced by `list_chat_conversations` and `get_chat_conversation_history` in the `chat` toolset, following the official reference. The `assistant` toolset is removed.
+- Development uses Rust 1.100.0; Rust 1.97 remains the minimum supported version. Dependencies are updated, including rmcp 3.10.0, jsonschema 0.61.2, and toml 1.2.1, and CI actions and tools use their latest releases.
+
+### Added
+
+- 66 reviewed query operations, including Agent Health issues, AI Gateway configuration and usage, Bits Security Analyst investigations, On-Call pages and escalation policies, feature flag history, RUM archives and recovery, team hierarchy members, Custom OIDC workload identity federation, and `v2.GetIssueImpact` with `--from`/`--to`.
+- 21 reviewed MCP read and analysis tools: log archive, index, and pipeline configuration (`logs-configuration`), GPU and LLM inference monitoring (`gpu-monitoring`), Live Processes search (`processes`), Markdown notebook reads, APM error dependency analysis, documentation search (`documentation`), and Bits Chat conversation reads.
+
+### Fixed
+
+- HTTP clients bypass proxies only for loopback destinations. With `HTTP(S)_PROXY` set and loopback absent from `NO_PROXY`, tests against local mock servers failed or stalled; Datadog requests still honor proxy settings.
+- Nine `ddsql` and `reference-tables` MCP tool descriptions in `mcp list` no longer include the reference's toolset header.
+
 ## [0.10.0] - 2026-10-24
 
 ### Changed
