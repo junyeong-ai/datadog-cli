@@ -39,7 +39,7 @@ Agent Observability query and structured filters are mutually exclusive. Keep th
 
 Verify endpoint contracts against https://docs.datadoghq.com/api/latest/ before changing bodies, authentication, limits, or pagination. Read-only search POSTs may retry; newly introduced mutations need an explicit idempotency policy. LLM Observability uses a preview endpoint.
 
-Keep existing flags, exit codes, and JSON field paths compatible unless the task requires a documented change. Search commands return one page; JSONL does not include pagination metadata. Confirm output structure before writing jq examples.
+Keep one current contract for flags, exit codes, and JSON field paths: replace superseded behavior instead of adding compatibility aliases, and record breaking changes with migration steps in `CHANGELOG.md`. Search commands return one page; JSONL does not include pagination metadata. Confirm output structure before writing jq examples.
 
 Distinguish unavailable credentials, rejected credentials (HTTP 401), and permission denial (HTTP 403) by error kind without changing exit code 3 or switching credentials. `--error-format json` applies to the final runtime error on stderr; CLI usage errors and earlier diagnostics have separate output contracts.
 
