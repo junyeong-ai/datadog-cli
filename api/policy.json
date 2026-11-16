@@ -1724,6 +1724,7 @@
 "v2.SetOnCallTeamRoutingRules":{"method":"put","path":"/api/v2/on-call/teams/{team_id}/routing-rules","access":"not-query","reason":"Not an approved data or configuration query."},
 "v2.SetOnDemandConcurrencyCap":{"method":"post","path":"/api/v2/synthetics/settings/on_demand_concurrency_cap","access":"not-query","reason":"Not an approved data or configuration query."},
 "v2.SimpleSearchLLMObsExperimentation":{"method":"post","path":"/api/v2/llm-obs/v1/experimentation/simple-search","access":"query"},
+"v2.SnoozeIssue":{"method":"post","path":"/api/v2/error-tracking/issues/{issue_id}/snooze","access":"not-query","reason":"Not an approved data or configuration query."},
 "v2.SoftDeleteDegradationUpdate":{"method":"delete","path":"/api/v2/statuspages/{page_id}/degradations/{degradation_id}/updates/{update_id}","access":"not-query","reason":"Not an approved data or configuration query."},
 "v2.StarModelLabProject":{"method":"post","path":"/api/v2/model-lab-api/projects/{project_id}/star","access":"not-query","reason":"Not an approved data or configuration query."},
 "v2.StartExperiment":{"method":"post","path":"/api/v2/experiments/{experiment_id}/start","access":"not-query","reason":"Not an approved data or configuration query."},

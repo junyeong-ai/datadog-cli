@@ -1,11 +1,11 @@
 {
   "repo": "DataDog/datadog-api-client-rust",
-  "commit": "27c8a13cdb60daf1786e837771d36650747f44cf",
-  "date": "2026-11-16T09:33:56Z",
+  "commit": "5c2a9204781f68568374d827a409962542079cdb",
+  "date": "2026-11-16T12:24:05Z",
   "v1": {
     "sha256": "b4cd0711efb6edd8c03ffd109aafafa605c65049c60ed77e899cca3592108bf0"
   },
   "v2": {
-    "sha256": "6f7f45b8df103dadd128b04b21dd74782e9efed7f312f59adf5d52b4d7fa7645"
+    "sha256": "68fde54386811bb32eaadba784017067785134c5ee06cb2d8ad8c235eec93057"
   }
 }
