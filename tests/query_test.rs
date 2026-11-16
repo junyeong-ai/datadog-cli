@@ -410,7 +410,7 @@ async fn successful_http_reports_processing_errors_and_schema_deviations() {
 async fn conditional_reads_are_not_empty_resources_and_downloads_preserve_bytes() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/api/v2/csm/ownership/resource/team"))
+        .and(path("/api/v2/security/ownership/resource/team"))
         .and(header("if-none-match", "\"version-1\""))
         .respond_with(ResponseTemplate::new(304).insert_header("etag", "\"version-1\""))
         .expect(1)

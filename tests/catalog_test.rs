@@ -130,7 +130,6 @@ fn post_searches_are_queries_and_get_actions_are_excluded() {
     for id in [
         "v1.GetGraphSnapshot",
         "v2.GenerateCostTagDescriptionByKey",
-        "v2.GetSPARecommendations",
         "v2.CreateOnCallPage",
         "v2.GetAPIKey",
     ] {
