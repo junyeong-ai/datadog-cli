@@ -14,6 +14,8 @@ Regenerate with:
 uv run --with PyYAML==6.0.3 python scripts/update_api_catalog.py
 ```
 
+The weekly Supply Chain workflow runs `scripts/check_contract_drift.py`, which compares `policy.json` and `mcp-reference-tools.json` with the latest upstream contracts and keeps one `contract-drift` issue open while operations or MCP tools await review.
+
 OpenAPI 3.0 schemas are converted to JSON Schema Draft 7 by translating local
 references, typed `nullable`, Datadog's nullable references, and boolean exclusive bounds. Nullable enums include null; references and compositions use a union with null, matching documented states such as [custom rules without revisions](https://docs.datadoghq.com/api/latest/static-analysis/show-custom-rule/). Validation constraints,
 property names, enum values, and additional properties retain their API meanings.
@@ -48,6 +50,6 @@ Cursor automation is opt-in and follows explicit request/response pointers valid
 
 ## Official MCP tools
 
-`mcp-tools.json` contains individually reviewed read/analysis tools from the official tools reference; `mcp-source.json` records that reference and its digest. Names outside this policy cannot execute, even when a server advertises them as read-only. Mutations, remote actions, onboarding and arbitrary code execution are excluded. A contradictory `readOnlyHint: false` blocks execution. Input and declared structured output schemas come from the authenticated server and validate offline without external reference retrieval.
+`mcp-tools.json` contains individually reviewed read/analysis tools from the official tools reference; `mcp-source.json` records that reference and its digest. `mcp-reference-tools.json` lists every tool name the reviewed reference documents, including excluded tools; record it after a review with `uv run --with PyYAML==6.0.3 python scripts/check_contract_drift.py --write-mcp-reference`. Names outside this policy cannot execute, even when a server advertises them as read-only. Mutations, remote actions, onboarding and arbitrary code execution are excluded. A contradictory `readOnlyHint: false` blocks execution. Input and declared structured output schemas come from the authenticated server and validate offline without external reference retrieval.
 
 The official Rust MCP SDK owns protocol/session handling. The HTTP backend fixes the selected site origin, protects credential headers, disables redirects/reconnection/session replay, and bounds total calls/bytes/time including session cleanup. Requests use MCP protocol `2025-11-25`; the server negotiates the supported response version. No sampling, roots, elicitation, local subprocesses or resource fetching are enabled. A successful handshake does not establish availability of any specialist tool.

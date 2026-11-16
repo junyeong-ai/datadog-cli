@@ -28,3 +28,45 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
           command: check
+
+  contract-drift:
+    name: Upstream contract drift
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install PyYAML
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet PyYAML==6.0.3
+
+      - name: Compare reviewed contracts with upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: '"$RUNNER_TEMP/venv/bin/python" scripts/check_contract_drift.py --report "$RUNNER_TEMP/drift.md"'
+
+      - name: Open, update, or close the drift issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          title="Upstream Datadog contracts need review"
+          gh label create contract-drift --color D93F0B \
+            --description "Upstream API or MCP contract changes awaiting policy review" --force
+          issue=$(gh issue list --label contract-drift --state open --json number --jq '.[0].number // empty')
+          if [ -s "$RUNNER_TEMP/drift.md" ]; then
+            if [ -n "$issue" ]; then
+              gh issue edit "$issue" --body-file "$RUNNER_TEMP/drift.md"
+            else
+              gh issue create --title "$title" --label contract-drift --body-file "$RUNNER_TEMP/drift.md"
+            fi
+          elif [ -n "$issue" ]; then
+            gh issue close "$issue" --comment "The reviewed contracts match upstream."
+          fi
