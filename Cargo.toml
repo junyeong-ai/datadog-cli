@@ -18,18 +18,19 @@ serde_json = "1.0.154"
 reqwest = { version = "0.13.5", features = ["json", "query", "rustls", "stream", "system-proxy"], default-features = false }
 thiserror = "2.0.21"
 chrono = { version = "0.4.45", features = ["serde"] }
-toml = { version = "1.1.8", default-features = false, features = ["parse", "serde", "std"] }
+toml = { version = "1.2.1", default-features = false, features = ["parse", "serde", "std"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 clap = { version = "4.6.7", features = ["derive"] }
 comfy-table = "8.0.1"
 fastrand = "2.5.0"
 httpdate = "1.0.3"
-jsonschema = { version = "0.60.1", default-features = false }
+jsonschema = { version = "0.61.2", default-features = false }
 percent-encoding = "2.3.2"
 tempfile = "3.27.0"
-rmcp = { version = "3.7.0", default-features = false, features = ["client", "transport-streamable-http-client"] }
+rmcp = { version = "3.10.0", default-features = false, features = ["client", "transport-streamable-http-client"] }
 futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
+# rmcp's StreamableHttpClient signatures use these types; keep the version rmcp depends on.
 sse-stream = "0.2.6"
 
 [target.'cfg(not(windows))'.dependencies]
