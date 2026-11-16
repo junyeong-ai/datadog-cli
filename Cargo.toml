@@ -7,7 +7,6 @@ authors = ["Datadog CLI Contributors"]
 description = "Read-only Datadog query CLI with offline API discovery and bounded, schema-validated execution"
 license = "MIT"
 repository = "https://github.com/junyeong-ai/datadog-cli"
-homepage = "https://github.com/junyeong-ai/datadog-cli"
 keywords = ["datadog", "cli", "observability", "monitoring", "apm"]
 categories = ["command-line-utilities", "api-bindings", "development-tools::profiling"]
 readme = "README.md"
