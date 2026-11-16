@@ -4,7 +4,7 @@ mod mcp;
 mod query;
 use crate::output;
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand};
 
 use crate::config::{AuthMethod, Config, ConfigOptions};
 use crate::datadog::{DatadogClient, MAX_METRIC_QUERIES};
@@ -17,11 +17,6 @@ const SORT_HELP: &str = "Sort order (use --sort=\"-timestamp\" for descending)";
 const CURSOR_HELP: &str = "Cursor from .pagination.next_cursor of the previous page";
 const OFFSET_HELP: &str = "Records to skip; continue with .pagination.next_offset";
 const PAGE_HELP: &str = "Page number from 0; continue with .pagination.next_page";
-
-#[derive(Clone, Copy, ValueEnum)]
-pub enum AuthProvider {
-    Pup,
-}
 
 #[derive(Parser)]
 #[command(name = "datadog-cli")]
@@ -45,32 +40,12 @@ pub struct Cli {
     #[arg(short = 'v', long, global = true, help = "Enable debug logging")]
     pub verbose: bool,
 
-    #[arg(long, global = true, help = "API key (otherwise DD_API_KEY or config)")]
-    pub api_key: Option<String>,
-
-    #[arg(
-        long,
-        global = true,
-        help = "Application key (otherwise DD_APP_KEY or config)"
-    )]
-    pub app_key: Option<String>,
-
-    #[arg(
-        long,
-        global = true,
-        help = "Bearer token: PAT, SAT, or OAuth access token"
-    )]
-    pub token: Option<String>,
-
     #[arg(
         long,
         global = true,
         help = "Datadog site (otherwise DD_SITE or config)"
     )]
     pub site: Option<String>,
-
-    #[arg(long, global = true, value_enum, conflicts_with = "auth_method", conflicts_with_all = ["api_key", "app_key", "token"], help = "Use Pup OAuth (compatibility option for --auth-method oauth)")]
-    pub auth_provider: Option<AuthProvider>,
 
     #[arg(
         long,
@@ -719,7 +694,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             ));
         }
         if !matches!(action, ConfigAction::Show)
-            && (cli.auth_provider.is_some() || cli.auth_method.is_some() || cli.pup_org.is_some())
+            && (cli.auth_method.is_some() || cli.pup_org.is_some())
         {
             return Err(crate::error::DatadogError::InvalidInput(
                 "Authentication options apply to API commands and config show".into(),
@@ -790,13 +765,8 @@ impl Command {
 impl Cli {
     fn config_options(&self) -> ConfigOptions {
         ConfigOptions {
-            api_key: self.api_key.clone(),
-            app_key: self.app_key.clone(),
-            token: self.token.clone(),
             site: self.site.clone(),
-            auth_method: self
-                .auth_method
-                .or(self.auth_provider.map(|_| AuthMethod::Oauth)),
+            auth_method: self.auth_method,
             pup_org: self.pup_org.clone(),
         }
     }

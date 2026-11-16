@@ -10,9 +10,9 @@ pub enum Format {
 
 impl Format {
     pub fn from_str(s: &str) -> Result<Self, String> {
-        match s.to_lowercase().as_str() {
+        match s {
             "json" => Ok(Format::Json),
-            "jsonl" | "jsonlines" => Ok(Format::JsonLines),
+            "jsonl" => Ok(Format::JsonLines),
             "table" => Ok(Format::Table),
             _ => Err(format!("Invalid format: {}", s)),
         }

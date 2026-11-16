@@ -19,7 +19,7 @@ The accompanying skill comes from the same release tag. Non-interactive installa
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
-DATADOG_CLI_VERSION=0.10.0 bash install.sh
+DATADOG_CLI_VERSION=0.11.0 bash install.sh
 ```
 
 Source builds require Rustup and C build tools. Development uses Rust 1.100.0 from `rust-toolchain.toml`; the minimum supported Rust version is 1.97.
@@ -144,9 +144,9 @@ datadog-cli logs search "service:api"
 datadog-cli config show
 ```
 
-`method` accepts `api-keys`, `token`, or `oauth`. `api-keys` uses the existing `api_key`/`app_key`; `token` uses `token` or `DD_TOKEN`. `oauth` uses the Pup session and ignores static keys/tokens. Environment variables override credential values only within the selected method. Without `[auth]`, existing token/key precedence is preserved.
+`method` accepts `api-keys`, `token`, or `oauth`. `api-keys` uses `api_key`/`app_key`; `token` uses `token` or `DD_TOKEN`. `oauth` uses the Pup session and ignores static keys/tokens. Environment variables override credential values only within the selected method. Without `[auth]`, the token/key precedence under [Configuration](#configuration) applies.
 `pup_org` is a saved Pup session name; select the actual Datadog organization during browser consent. Other commands require their API scopes and user permissions.
-Use `--auth-method api-keys|token|oauth` to select a method for one invocation. Explicit CLI credentials also override the global default method. Credential options that conflict with `--auth-method` are errors. Override the session with `--pup-org` and the site with `--site` or `DD_SITE`. The existing `--auth-provider pup` remains equivalent to `--auth-method oauth`.
+Use `--auth-method api-keys|token|oauth` to select a method for one invocation. Override the session with `--pup-org` and the site with `--site` or `DD_SITE`.
 `[auth]` is allowed only in the global file. A project `.datadog.toml` selecting a different OAuth site is an error unless the site is explicitly overridden with `--site` or `DD_SITE`. Arbitrary credential commands are not configurable.
 Each OAuth API command invokes `pup auth token --org=<session>` once. Pup owns storage and refresh; this CLI does not persist tokens. CLI credential processes for the same site are serialized with an OS file lock to prevent concurrent refresh writes. The lock stores no token. Provider execution, including lock wait, is limited to 60 seconds. Failure, empty output, or invalid output returns authentication error 3 without falling back to another key, token, or session.
 `config show` displays the method, selection source, session, and masked configuration without invoking Pup. Authentication options apply to API commands and `config show`. Use SATs or service account keys for unattended execution.
@@ -154,6 +154,7 @@ Each OAuth API command invokes `pup auth token --org=<session>` once. Pup owns s
 ## Configuration
 
 Fields merge in ascending priority: **global file → nearest project file → environment → CLI arguments**.
+Credential values come only from config files and the environment, never from command-line arguments, which would expose them in process listings, shell history, and agent transcripts.
 Project configuration is `.datadog.toml`, searched from the current directory through its ancestors.
 Global configuration is `~/.config/datadog-cli/config.toml`.
 Home resolution honors `HOME` on Linux/macOS and `USERPROFILE` on Windows.
@@ -181,7 +182,7 @@ max_retries = 3
 `timeout_secs` limits each request; `total_timeout_secs` limits an API call including retries and waits.
 Only transient network failures, 408, 429, and 5xx responses retry. Exponential backoff uses jitter and a 30-second cap.
 Retryable responses honor `Retry-After`; 429 also honors `x-ratelimit-reset`. When both are present, the longer wait applies. Waits over 30 seconds return the original error immediately.
-Redirects are not followed. HTTP(S) environment proxies and OS proxy settings are supported.
+Redirects are not followed. HTTP(S) environment proxies and OS proxy settings are supported, except for loopback addresses.
 
 ```bash
 datadog-cli config show   # Effective configuration with masked secrets
@@ -200,9 +201,9 @@ See the [command reference](.claude/skills/datadog-query/reference.md) for suppo
 JSON is indented on a terminal and compact in pipes. JSONL emits only `data` records, without pagination metadata.
 Tables accept an object or an array of objects. Diagnostics go to stderr.
 Log custom fields are preserved at `.data[].attributes`; actual trace ID keys depend on instrumentation.
-Dashboard lists and details preserve optional API settings and extension fields. Detail authors are available through the original `author_handle` and `author_name` fields and the `author` alias, `created` and `modified` aliases are provided, and template variable `defaults` and `type` and widget `is_column_break` are retained.
+Dashboard lists and details keep API field names, optional settings, and extension fields unchanged, including template variable `defaults` and `type` and widget `is_column_break`.
 Monitor details preserve evaluation settings, recovery thresholds, and extension fields. Hosts retain IDs, aliases, and server-supplied metadata and metrics. Spans retain HTTP and messaging attributes; `--full-stack-trace` affects only error stacks.
-Metric `.data[].units` preserves primary/per-unit order, null positions, and scaling. The existing `.unit` summarizes the first non-null unit. Metric-processing errors reported by the API exit with code 4, including in HTTP 200 responses; malformed response structures exit with code 7.
+Metric `.data[].units` preserves primary/per-unit order, null positions, and scaling. `.unit` summarizes the first non-null unit. Metric-processing errors reported by the API exit with code 4, including in HTTP 200 responses; malformed response structures exit with code 7.
 `scalar` preserves the ordered API column array at `.data.columns`; identical column names do not overwrite one another. Extract numbers with `jq '.data.columns[] | select(.type == "number") | .values[]'` and omit the `.data` prefix for JSONL. Table headers use `[index] name (type)` to distinguish columns.
 RUM event details are at `.data[].attributes`; incident `--include` resources are at `.meta.included`.
 Server query status, warnings, and request IDs are preserved at `.meta.api`. Server timeouts and response warnings also appear on stderr in every output format. Partial results with nonfatal warnings still exit with code 0, so do not interpret a warned aggregate as a complete count.

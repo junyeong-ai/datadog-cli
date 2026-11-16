@@ -76,12 +76,6 @@ async fn dashboard_details_preserve_modern_settings_and_nested_extensions() {
     });
     let result = get_dashboard(&body).await;
     assert_fields_preserved(&body, &result);
-    assert_eq!(result["created"], body["created_at"]);
-    assert_eq!(result["modified"], body["modified_at"]);
-    assert_eq!(
-        result["author"],
-        json!({"name": "Fixture Author", "handle": "fixture@example.test"})
-    );
     assert!(result["template_variables"][0].get("default").is_none());
 }
 
@@ -116,17 +110,6 @@ async fn dashboard_optional_settings_preserve_null_and_absence() {
 }
 
 #[tokio::test]
-async fn dashboard_compatibility_aliases_do_not_replace_api_extensions() {
-    let body = json!({
-        "title": "Future fields", "layout_type": "ordered", "widgets": [],
-        "created_at": "2026-10-17T00:00:00Z", "created": {"retained": true},
-        "modified_at": "2026-10-17T01:00:00Z", "modified": null,
-        "author_handle": "fixture@example.test", "author": {"retained": true}
-    });
-    assert_fields_preserved(&body, &get_dashboard(&body).await);
-}
-
-#[tokio::test]
 async fn dashboard_lists_preserve_summary_fields_and_pagination() {
     let server = MockServer::start().await;
     let summaries = json!([
@@ -153,16 +136,7 @@ async fn dashboard_lists_preserve_summary_fields_and_pagination() {
     )
     .await
     .unwrap();
-    for (original, actual) in summaries
-        .as_array()
-        .unwrap()
-        .iter()
-        .zip(output["data"].as_array().unwrap())
-    {
-        assert_fields_preserved(original, actual);
-    }
-    assert_eq!(output["data"][0]["created"], summaries[0]["created_at"]);
-    assert!(output["data"][1].get("id").is_none());
+    assert_eq!(output["data"], summaries);
     assert_eq!(output["pagination"]["next_offset"], 6);
 }
 

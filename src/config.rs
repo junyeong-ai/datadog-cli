@@ -101,9 +101,6 @@ impl AuthMethod {
 
 #[derive(Default)]
 pub struct ConfigOptions {
-    pub api_key: Option<String>,
-    pub app_key: Option<String>,
-    pub token: Option<String>,
     pub site: Option<String>,
     pub auth_method: Option<AuthMethod>,
     pub pup_org: Option<String>,
@@ -283,27 +280,14 @@ impl ConfigPlan {
         files: &ConfigFiles,
         options: &ConfigOptions,
     ) -> (Option<AuthMethod>, &'static str) {
-        let cli_method = options.auth_method.or_else(|| {
-            if options
-                .token
-                .as_deref()
-                .is_some_and(|token| !token.is_empty())
-            {
-                Some(AuthMethod::Token)
-            } else if options.api_key.is_some() || options.app_key.is_some() {
-                Some(AuthMethod::ApiKeys)
-            } else {
-                None
-            }
-        });
         let global_method = files.global.auth.as_ref().map(|auth| auth.method);
-        let method = cli_method.or(global_method);
-        let source = if cli_method.is_some() {
+        let method = options.auth_method.or(global_method);
+        let source = if options.auth_method.is_some() {
             "CLI"
         } else if global_method.is_some() {
             "global config"
         } else {
-            "legacy precedence"
+            "default"
         };
         (method, source)
     }
@@ -314,22 +298,6 @@ impl ConfigPlan {
         options: ConfigOptions,
     ) -> Result<Self> {
         let (method, source) = Self::select_method(&files, &options);
-        if let Some(method) = method {
-            let conflict = match method {
-                AuthMethod::ApiKeys => options.token.is_some(),
-                AuthMethod::Token => options.api_key.is_some() || options.app_key.is_some(),
-                AuthMethod::Oauth => {
-                    options.token.is_some()
-                        || options.api_key.is_some()
-                        || options.app_key.is_some()
-                }
-            };
-            if conflict && (options.auth_method.is_some() || method == AuthMethod::Oauth) {
-                return Err(DatadogError::InvalidInput(
-                    "Credential flags must match --auth-method".into(),
-                ));
-            }
-        }
         if options.pup_org.is_some() && method != Some(AuthMethod::Oauth) {
             return Err(DatadogError::InvalidInput(
                 "--pup-org requires OAuth authentication".into(),
@@ -364,9 +332,6 @@ impl ConfigPlan {
         environment.retain_credentials(method);
         file.overlay(environment);
         file.overlay(ConfigFile {
-            api_key: options.api_key,
-            app_key: options.app_key,
-            token: options.token,
             site: options.site,
             ..ConfigFile::default()
         });
@@ -399,22 +364,6 @@ impl ConfigPlan {
 }
 
 impl Config {
-    pub fn load(
-        cli_api_key: Option<String>,
-        cli_app_key: Option<String>,
-        cli_token: Option<String>,
-        cli_site: Option<String>,
-    ) -> Result<Self> {
-        let plan = ConfigPlan::load(ConfigOptions {
-            api_key: cli_api_key,
-            app_key: cli_app_key,
-            token: cli_token,
-            site: cli_site,
-            ..ConfigOptions::default()
-        })?;
-        Self::resolve_with_method(plan.file, plan.method)
-    }
-
     pub async fn load_with_options(options: ConfigOptions) -> Result<Self> {
         Self::load_with_site_check(options, |_| Ok(())).await
     }
@@ -434,7 +383,6 @@ impl Config {
             site: cli_site,
             auth_method: Some(AuthMethod::Oauth),
             pup_org: Some(org.into()),
-            ..ConfigOptions::default()
         })
         .await
     }
@@ -532,7 +480,7 @@ impl Config {
 
         if crate::output::Format::from_str(&defaults.format).is_err() {
             return Err(DatadogError::InvalidInput(
-                "defaults.format must be json, jsonl (or jsonlines), or table".into(),
+                "defaults.format must be json, jsonl, or table".into(),
             ));
         }
         if network.timeout_secs == 0 || network.total_timeout_secs == 0 {
@@ -659,25 +607,6 @@ total_timeout_secs = 120
 
     /// Displays the merged configuration without requiring valid credentials,
     /// so it stays usable for debugging an incomplete setup.
-    pub fn show() -> Result<String> {
-        Self::show_with_overrides(None, None, None, None)
-    }
-
-    pub fn show_with_overrides(
-        api_key: Option<String>,
-        app_key: Option<String>,
-        token: Option<String>,
-        site: Option<String>,
-    ) -> Result<String> {
-        Self::show_with_options(ConfigOptions {
-            api_key,
-            app_key,
-            token,
-            site,
-            ..ConfigOptions::default()
-        })
-    }
-
     pub fn show_with_options(options: ConfigOptions) -> Result<String> {
         let plan = ConfigPlan::load(options)?;
         let file = plan.file;
@@ -708,7 +637,7 @@ total_timeout_secs = 120
                 .map(|p| p.display().to_string())
                 .unwrap_or_else(|| "(unavailable)".into()),
             plan.method
-                .map_or("legacy (token/key precedence)", AuthMethod::as_str),
+                .map_or("automatic (token/key precedence)", AuthMethod::as_str),
             plan.source,
             if plan.method == Some(AuthMethod::Oauth) {
                 plan.pup_org.as_deref().unwrap_or("(not set)")
@@ -1147,11 +1076,16 @@ mod tests {
         }
     }
     #[test]
-    fn existing_config_format_aliases_remain_valid() {
-        for format in ["jsonlines", "JSONL", "JSON", "Table"] {
+    fn config_format_accepts_only_cli_format_names() {
+        for format in ["json", "jsonl", "table"] {
             let mut file = file_with_keys();
             file.defaults.format = Some(format.into());
             assert_eq!(Config::resolve(file).unwrap().defaults.format, format);
+        }
+        for format in ["jsonlines", "JSONL", "Table"] {
+            let mut file = file_with_keys();
+            file.defaults.format = Some(format.into());
+            assert_eq!(Config::resolve(file).unwrap_err().exit_code(), 1);
         }
     }
     fn auth_plan(
@@ -1227,64 +1161,19 @@ mod tests {
     }
 
     #[test]
-    fn cli_authentication_overrides_global_defaults_and_rejects_conflicts() {
-        let global = "api_key='test123'\napp_key='app456'\ntoken='global-token'\n[auth]\nmethod='oauth'\npup_org='global-session'";
-        for options in [
+    fn cli_authentication_method_overrides_the_global_default() {
+        let plan = auth_plan(
+            "api_key='test123'\napp_key='app456'\ntoken='global-token'\n[auth]\nmethod='oauth'\npup_org='global-session'",
+            "",
+            "",
             ConfigOptions {
                 auth_method: Some(AuthMethod::ApiKeys),
-                ..ConfigOptions::default()
-            },
-            ConfigOptions {
-                api_key: Some("test123".into()),
-                ..ConfigOptions::default()
-            },
-        ] {
-            let plan = auth_plan(global, "", "", options).unwrap();
-            assert_eq!(plan.source, "CLI");
-            assert_keys(&Config::resolve_with_method(plan.file, plan.method).unwrap());
-        }
-        let plan = auth_plan(
-            global,
-            "",
-            "",
-            ConfigOptions {
-                token: Some("cli-token".into()),
                 ..ConfigOptions::default()
             },
         )
         .unwrap();
-        assert!(
-            matches!(Config::resolve_with_method(plan.file, plan.method).unwrap().credentials, Credentials::Token(value) if value=="cli-token")
-        );
-        for options in [
-            ConfigOptions {
-                auth_method: Some(AuthMethod::ApiKeys),
-                token: Some("unused".into()),
-                ..ConfigOptions::default()
-            },
-            ConfigOptions {
-                auth_method: Some(AuthMethod::Token),
-                api_key: Some("unused".into()),
-                ..ConfigOptions::default()
-            },
-            ConfigOptions {
-                auth_method: Some(AuthMethod::Oauth),
-                token: Some("unused".into()),
-                ..ConfigOptions::default()
-            },
-            ConfigOptions {
-                token: Some(String::new()),
-                ..ConfigOptions::default()
-            },
-        ] {
-            assert_eq!(
-                auth_plan(global, "", "", options)
-                    .err()
-                    .unwrap()
-                    .exit_code(),
-                1
-            );
-        }
+        assert_eq!(plan.source, "CLI");
+        assert_keys(&Config::resolve_with_method(plan.file, plan.method).unwrap());
     }
 
     #[test]
@@ -1365,18 +1254,15 @@ mod tests {
     }
 
     #[test]
-    fn legacy_empty_cli_token_still_clears_inherited_token() {
+    fn empty_environment_token_clears_an_inherited_token() {
         let plan = auth_plan(
             "api_key='test123'\napp_key='app456'\ntoken='lower'",
             "",
-            "",
-            ConfigOptions {
-                token: Some(String::new()),
-                ..ConfigOptions::default()
-            },
+            "token=''",
+            ConfigOptions::default(),
         )
         .unwrap();
-        assert_eq!(plan.method, None);
+        assert_eq!((plan.method, plan.source), (None, "default"));
         assert_keys(&Config::resolve_with_method(plan.file, plan.method).unwrap());
     }
 }

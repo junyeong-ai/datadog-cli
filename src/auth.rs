@@ -97,7 +97,7 @@ async fn token_from_command(mut command: Command, timeout: Duration) -> Result<S
         .spawn()
         .map_err(|_| {
             DatadogError::CredentialError(
-                "Pup 2.0+ must be installed on PATH for --auth-provider pup".into(),
+                "Pup 2.0+ must be installed on PATH for OAuth authentication".into(),
             )
         })?;
     let result = tokio::time::timeout(timeout, read_token(&mut child))

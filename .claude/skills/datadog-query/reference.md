@@ -86,18 +86,14 @@ Commands:
   help            Print this message or the help of the given subcommand(s)
 
 Options:
-      --error-format <ERROR_FORMAT>    Final runtime error format on stderr; CLI usage errors remain text [default: text] [possible values: text, json]
-      --format <FORMAT>                Output format (default from config) [possible values: json, jsonl, table]
-  -v, --verbose                        Enable debug logging
-      --api-key <API_KEY>              API key (otherwise DD_API_KEY or config)
-      --app-key <APP_KEY>              Application key (otherwise DD_APP_KEY or config)
-      --token <TOKEN>                  Bearer token: PAT, SAT, or OAuth access token
-      --site <SITE>                    Datadog site (otherwise DD_SITE or config)
-      --auth-provider <AUTH_PROVIDER>  Use Pup OAuth (compatibility option for --auth-method oauth) [possible values: pup]
-      --auth-method <AUTH_METHOD>      Authentication method (otherwise global config [auth].method) [possible values: api-keys, token, oauth]
-      --pup-org <PUP_ORG>              Named Pup OAuth session (otherwise global config [auth].pup_org)
-  -h, --help                           Print help
-  -V, --version                        Print version
+      --error-format <ERROR_FORMAT>  Final runtime error format on stderr; CLI usage errors remain text [default: text] [possible values: text, json]
+      --format <FORMAT>              Output format (default from config) [possible values: json, jsonl, table]
+  -v, --verbose                      Enable debug logging
+      --site <SITE>                  Datadog site (otherwise DD_SITE or config)
+      --auth-method <AUTH_METHOD>    Authentication method (otherwise global config [auth].method) [possible values: api-keys, token, oauth]
+      --pup-org <PUP_ORG>            Named Pup OAuth session (otherwise global config [auth].pup_org)
+  -h, --help                         Print help
+  -V, --version                      Print version
 ```
 
 ## `datadog-cli mcp`

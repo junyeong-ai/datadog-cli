@@ -89,8 +89,8 @@ fn main() {
     }
     for args in [
         vec![
-            "--auth-provider",
-            "pup",
+            "--auth-method",
+            "oauth",
             "--pup-org",
             "team",
             "--token",
@@ -99,8 +99,8 @@ fn main() {
             "q",
         ],
         vec![
-            "--auth-provider",
-            "pup",
+            "--auth-method",
+            "oauth",
             "--pup-org",
             "team",
             "--api-key",
@@ -123,11 +123,11 @@ fn main() {
         assert!(!String::from_utf8_lossy(&result.stderr).contains("fixture-secret"));
     }
     for args in [
-        vec!["--auth-provider", "pup", "metrics", "q"],
+        vec!["--auth-method", "oauth", "metrics", "q"],
         vec!["--pup-org", "team", "metrics", "q"],
         vec![
-            "--auth-provider",
-            "pup",
+            "--auth-method",
+            "oauth",
             "--pup-org",
             "team",
             "--site",
