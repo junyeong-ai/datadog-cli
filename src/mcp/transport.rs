@@ -61,7 +61,7 @@ impl BoundedHttp {
         max_calls: u32,
         max_bytes: usize,
     ) -> Result<Self> {
-        let client = reqwest::Client::builder()
+        let client = crate::datadog::client_builder(&uri)
             .default_headers(crate::datadog::auth_headers(&config.credentials)?)
             .timeout(duration.min(Duration::from_secs(config.network.timeout_secs)))
             .redirect(reqwest::redirect::Policy::none())

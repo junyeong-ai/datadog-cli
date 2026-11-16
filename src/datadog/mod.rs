@@ -5,7 +5,9 @@ mod transport;
 
 pub use client::{LlmObsFilter, LlmObsSearchParams, MAX_METRIC_QUERIES, SearchParams};
 pub use transport::DatadogClient;
-pub(crate) use transport::{ApiReply, QueryBudget, QueryCall, auth_headers, query_headers};
+pub(crate) use transport::{
+    ApiReply, QueryBudget, QueryCall, auth_headers, client_builder, query_headers,
+};
 
 /// Rejects failures that metric queries report inside successful responses.
 /// Other response fields reach `query` callers unchanged; their deviations

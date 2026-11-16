@@ -26,7 +26,7 @@ impl DatadogClient {
     /// Points the client at an arbitrary base URL instead of the site's
     /// API host — for integration tests against a local mock server.
     pub fn with_base_url(config: &Config, base_url: String) -> Result<Self> {
-        let client = Client::builder()
+        let client = client_builder(&base_url)
             .default_headers(auth_headers(&config.credentials)?)
             .user_agent(concat!(
                 env!("CARGO_PKG_NAME"),
@@ -205,6 +205,32 @@ pub(crate) fn auth_headers(credentials: &Credentials) -> Result<reqwest::header:
     Ok(headers)
 }
 
+/// Starts an HTTP client for `destination`. Like Go's `net/http`, proxy
+/// settings do not apply to `localhost` or loopback addresses, which a proxy
+/// cannot reach on this host's behalf.
+pub(crate) fn client_builder(destination: &str) -> reqwest::ClientBuilder {
+    if is_loopback(destination) {
+        Client::builder().no_proxy()
+    } else {
+        Client::builder()
+    }
+}
+
+fn is_loopback(destination: &str) -> bool {
+    let Some(host) = reqwest::Url::parse(destination)
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_owned))
+    else {
+        return false;
+    };
+    host.eq_ignore_ascii_case("localhost")
+        || host
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|address| address.is_loopback())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,5 +298,25 @@ mod tests {
         assert!(headers["authorization"].is_sensitive());
         assert!(!format!("{headers:?}").contains("secret"));
         assert!(auth_headers(&Credentials::Token("secret\nvalue".into())).is_err());
+    }
+
+    #[test]
+    fn only_loopback_destinations_bypass_proxies() {
+        for destination in [
+            "http://127.0.0.1:8080",
+            "http://[::1]:80/mcp",
+            "http://LocalHost:1",
+        ] {
+            assert!(is_loopback(destination), "{destination}");
+        }
+        for destination in [
+            "https://api.datadoghq.com",
+            "https://mcp.datadoghq.eu/v1/mcp",
+            "http://localhost.example.com",
+            "http://127.0.0.1.example.com",
+            "not a url",
+        ] {
+            assert!(!is_loopback(destination), "{destination}");
+        }
     }
 }
