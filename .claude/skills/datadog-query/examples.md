@@ -27,7 +27,12 @@ datadog-cli logs search "service:api status:error" --from "$FROM" --to "$TO" --l
   jq -r '[.timestamp, .service, .message] | @tsv'
 datadog-cli spans "service:api error:true" --from "$FROM" --to "$TO" --limit 20 --format jsonl |
   jq -r '[.id, .attributes.service] | @tsv'
+ISSUE_ID=$(datadog-cli error-tracking search "service:api" --from "$FROM" --to "$TO" --format json | jq -r '.data[0].id // empty')
+datadog-cli query error-tracking v2.GetIssueImpact \
+  --input "$(jq -nc --arg id "$ISSUE_ID" '{path:{issue_id:$id}}')" --from "$FROM" --to "$TO"
 ```
+
+Error-tracking search result IDs are issue IDs. `v2.GetIssueImpact` advertises `time_range`, so `--from`/`--to` fill its millisecond window; it reports error counts by source and the most affected users, sessions, views, and endpoints.
 
 Inspect `.meta.api.status` and `.meta.api.warnings` before treating a count as complete. Server timeout and warning diagnostics also appear on stderr; exit code 0 alone does not guarantee completeness.
 

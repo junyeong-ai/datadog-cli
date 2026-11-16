@@ -1,6 +1,6 @@
 ---
 name: datadog-query
-description: Queries Datadog to investigate service errors, performance, infrastructure, CI and tests, security, on-call, costs, and AI observability. Use for Datadog-backed investigations or resource lookups, including DBM, profiling, Kubernetes, and data lineage through official MCP tools.
+description: Queries Datadog logs, metrics, APM spans, RUM, error tracking, monitors, incidents, dashboards, CI and tests, security, on-call, costs, and LLM observability through a read-only CLI. Use when investigating errors, latency, alerts, deployments, or resource state with Datadog data, including DBM, profiling, Kubernetes, and data lineage through official MCP tools.
 allowed-tools: Bash(datadog-cli *) Bash(jq *)
 ---
 
