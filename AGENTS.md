@@ -62,6 +62,15 @@ Use unit tests for merge/parse policies and Wiremock tests for observable HTTP b
 
 The release profile aborts on panic: validate boundary inputs and avoid unchecked arithmetic on user or API data. Do not claim performance changes without a measurement.
 
+## Releases
+
+Prepare a release in one `chore: prepare vX.Y.Z` commit: bump `version` in `Cargo.toml` and `Cargo.lock`, update the README install examples, and add the `CHANGELOG.md` section with migration steps. Push `main`, wait until CI, Lint, Supply Chain, and CodeQL succeed on that commit, then push the annotated tag `vX.Y.Z` with the message `Datadog CLI vX.Y.Z`. The release workflow rechecks those runs, builds every target, signs archives with cosign, and attaches SLSA provenance. Verify published archives:
+
+```bash
+cosign verify-blob --bundle "$ARCHIVE.bundle" --certificate-identity "https://github.com/junyeong-ai/datadog-cli/.github/workflows/release.yml@refs/tags/$TAG" --certificate-oidc-issuer https://token.actions.githubusercontent.com "$ARCHIVE"
+slsa-verifier verify-artifact "$ARCHIVE" --provenance-path datadog-cli.intoto.jsonl --source-uri github.com/junyeong-ai/datadog-cli --source-tag "$TAG"
+```
+
 ## Documentation and dependencies
 
 Generate command syntax from Clap, not a second manual option list:
