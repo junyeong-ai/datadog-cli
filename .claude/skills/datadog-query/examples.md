@@ -142,6 +142,8 @@ For specialist investigations, discover the smallest relevant toolset, read the 
 | Database slowdown | `dbm` | Instances, callers, query samples, existing explain plans and wait events |
 | CPU or allocation regression | `profiling` | Available profiles, flame/call graphs and comparison time series |
 | Failed Kubernetes rollout | `kubernetes` | Resource state, manifests and rollout analysis |
+| Missing or unexpectedly dropped logs | `logs-configuration` | Index filters, exclusion filters, daily limits, pipeline processors and archive routing |
+| Self-hosted LLM inference latency | `gpu-monitoring` | Deployment health, serving performance, engine configuration and kernel rankings |
 | Data freshness or downstream impact | `data-observability` | Entity hierarchy, lineage, monitor coverage and warehouse history |
 | User journey failure | `session-replay`, `rum`, `product-analytics` | Replay summaries, views, operations and aggregate behavior |
 | Cross-signal anomaly | `watchdog`, `apm` | Vendor insights, service health and supporting traces |

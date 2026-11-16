@@ -1,7 +1,7 @@
 {
   "url": "https://docs.datadoghq.com/mcp_server/tools.md",
-  "retrieved_at": "2026-10-19",
-  "sha256": "5e3106c3756212e8e09a0b82abd6499a6e06981e10ab9983aa941d9a7b05bb5f",
+  "retrieved_at": "2026-11-16",
+  "sha256": "0ae3ac5098642530c28186df9db080a51cf6b35b95508794dd7e630b83df6034",
   "policy": "Only individually reviewed read and analysis tools are callable. Unknown tools, mutations, remote actions, onboarding and code execution are excluded. Server annotations cannot authorize additional tools.",
   "server_supplements": {
     "url": "https://mcp.datadoghq.com/v1/mcp?toolsets=core",
