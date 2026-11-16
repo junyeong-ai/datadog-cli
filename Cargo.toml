@@ -2,7 +2,7 @@
 name = "datadog-cli"
 version = "0.11.0"
 edition = "2024"
-rust-version = "1.97"
+rust-version = "1.100"
 authors = ["Datadog CLI Contributors"]
 description = "Read-only Datadog query CLI with offline API discovery and bounded, schema-validated execution"
 license = "MIT"

@@ -22,7 +22,7 @@ curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/script
 DATADOG_CLI_VERSION=0.11.0 bash install.sh
 ```
 
-Source builds require Rustup and C build tools. Development uses Rust 1.100.0 from `rust-toolchain.toml`; the minimum supported Rust version is 1.97.
+Source builds require Rustup and C build tools and use Rust 1.100.0 pinned in `rust-toolchain.toml`.
 
 ```bash
 git clone https://github.com/junyeong-ai/datadog-cli
@@ -242,4 +242,4 @@ cargo deny check
 cargo run --locked --example command_reference > .claude/skills/datadog-query/reference.md
 ```
 
-CI covers Linux/macOS/Windows tests, MSRV, workflow security audits, and dependency checks.
+CI covers Linux/macOS/Windows tests, workflow security audits, and dependency checks.

@@ -22,7 +22,7 @@ curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/script
 DATADOG_CLI_VERSION=0.11.0 bash install.sh
 ```
 
-소스 빌드는 Rustup과 C 빌드 도구가 필요합니다. 개발 도구체인은 `rust-toolchain.toml`의 Rust 1.100.0이며, 최소 지원 버전은 Rust 1.97입니다.
+소스 빌드는 Rustup과 C 빌드 도구가 필요하며, `rust-toolchain.toml`에 고정한 Rust 1.100.0을 사용합니다.
 
 ```bash
 git clone https://github.com/junyeong-ai/datadog-cli
@@ -239,4 +239,4 @@ cargo deny check
 cargo run --locked --example command_reference > .claude/skills/datadog-query/reference.md
 ```
 
-CI는 Linux·macOS·Windows 테스트, MSRV 검사, 워크플로우 보안 감사와 의존성 검사를 수행합니다.
+CI는 Linux·macOS·Windows 테스트, 워크플로우 보안 감사와 의존성 검사를 수행합니다.

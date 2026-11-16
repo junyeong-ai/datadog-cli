@@ -25,6 +25,17 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Check toolchain versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          channel=$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)
+          if [ "$(sed -n 's/^rust-version = "\(.*\)"$/\1/p' Cargo.toml)" != "${channel%.*}" ] ||
+            [ "$(sed -n 's/^rust //p' .tool-versions)" != "$channel" ]; then
+            echo "::error::Cargo.toml rust-version and .tool-versions must match rust-toolchain.toml channel $channel"
+            exit 1
+          fi
+
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
         with:
