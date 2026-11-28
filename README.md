@@ -19,7 +19,7 @@ curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/script
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
-DATADOG_CLI_VERSION=0.11.0 bash install.sh
+DATADOG_CLI_VERSION=0.12.0 bash install.sh
 ```
 
 소스 빌드는 Rustup과 C 빌드 도구가 필요하며, `rust-toolchain.toml`에 고정한 Rust 1.100.1을 사용합니다.

@@ -19,7 +19,7 @@ The accompanying skill comes from the same release tag. Non-interactive installa
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/scripts/install.sh -o install.sh
-DATADOG_CLI_VERSION=0.11.0 bash install.sh
+DATADOG_CLI_VERSION=0.12.0 bash install.sh
 ```
 
 Source builds require Rustup and C build tools and use Rust 1.100.1 pinned in `rust-toolchain.toml`.

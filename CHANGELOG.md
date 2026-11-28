@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-11-28
+
+### Changed
+
+- The latest accepted time is 9999-12-30T22:00:00Z instead of 9999-12-31T23:59:59Z, because times are now parsed with jiff, which represents instants up to that bound. Scripts that pass a later sentinel such as `9999-12-31T23:59:59Z` or `253402300799` fail with exit code 2; pass `9999-12-30T22:00:00Z`, `253402207200`, or `now` instead.
+- Absolute times accept ISO 8601 calendar date-times with a UTC offset besides RFC3339, such as `2024-01-01T09:00+0900` from `date +%z`. An RFC 9557 time zone annotation is accepted, and the offset determines the instant. Times without an offset remain CLI usage errors.
+- Rust 1.100.1 is the required version, matching `rust-toolchain.toml`; 0.11.0 declared Rust 1.97. Dependencies are updated, including rmcp 3.12.0, jsonschema 0.63.2, clap 4.6.10, and toml 1.2.3, and chrono is removed because it is unmaintained (RUSTSEC-2026-0543). CI actions and tools use their latest releases.
+- The bundled API contract follows datadog-api-client-rust 5c2a920 (2026-11-16): 2,033 operations, 858 queries. `v2.SnoozeIssue` is excluded because it changes an error-tracking issue's state.
+
+### Fixed
+
+- `mcp show` and `mcp call` report `Advertised tools: none` when the server exposes no tools to the identity, instead of ending the error with an empty list. Advertised tool names are bounded and escaped like other server-supplied names.
+
 ## [0.11.0] - 2026-11-16
 
 ### Changed
