@@ -1,14 +1,12 @@
-use chrono::DateTime;
 use datadog_cli::catalog::Catalog;
 use datadog_cli::query::{PreparedQuery, apply_time_range};
 use datadog_cli::time::TimeExpr;
+use jiff::Timestamp;
 use serde_json::json;
 
 #[test]
 fn one_reference_instant_is_encoded_only_at_reviewed_time_fields() {
-    let now = DateTime::parse_from_rfc3339("2026-10-19T00:00:00Z")
-        .unwrap()
-        .to_utc();
+    let now: Timestamp = "2026-10-19T00:00:00Z".parse().unwrap();
     let mut seconds = json!({"query":{"limit":1}});
     let scope = apply_time_range(
         &mut seconds,
@@ -20,8 +18,8 @@ fn one_reference_instant_is_encoded_only_at_reviewed_time_fields() {
     )
     .unwrap()
     .unwrap();
-    assert_eq!(seconds["query"]["from"], now.timestamp() - 3600);
-    assert_eq!(seconds["query"]["to"], now.timestamp());
+    assert_eq!(seconds["query"]["from"], now.as_second() - 3600);
+    assert_eq!(seconds["query"]["to"], now.as_second());
     assert_eq!(scope["encoding"], "unix_seconds");
     let mut milliseconds = json!({"body":{"data":{"type":"timeseries_request","attributes":{"queries":[{"data_source":"metrics","query":"avg:system.cpu.user{*}","name":"a"}]}}}});
     apply_time_range(
@@ -35,7 +33,7 @@ fn one_reference_instant_is_encoded_only_at_reviewed_time_fields() {
     .unwrap();
     assert_eq!(
         milliseconds["body"]["data"]["attributes"]["from"],
-        (now.timestamp() - 3600) * 1000
+        (now.as_second() - 3600) * 1000
     );
     assert_eq!(
         milliseconds["body"]["data"]["attributes"]["queries"][0]["query"],
@@ -65,9 +63,7 @@ fn one_reference_instant_is_encoded_only_at_reviewed_time_fields() {
 
 #[test]
 fn range_flags_reject_conflicts_unsupported_mappings_and_reversed_bounds() {
-    let now = DateTime::parse_from_rfc3339("2026-10-19T00:00:00Z")
-        .unwrap()
-        .to_utc();
+    let now: Timestamp = "2026-10-19T00:00:00Z".parse().unwrap();
     let mut input = json!({"query":{"from":1}});
     assert!(
         apply_time_range(

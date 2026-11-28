@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde_json::{Value, json};
 
 use crate::catalog::{Catalog, TimeEncoding};
@@ -11,7 +11,7 @@ pub fn apply_time_range(
     id: &str,
     from: Option<TimeExpr>,
     to: Option<TimeExpr>,
-    now: DateTime<Utc>,
+    now: Timestamp,
 ) -> Result<Option<Value>> {
     let Some(from) = from else {
         if to.is_some() {

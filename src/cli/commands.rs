@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde_json::Value;
 
 use super::{
@@ -10,11 +10,7 @@ use crate::datadog::DatadogClient;
 use crate::error::Result;
 use crate::handlers;
 
-pub async fn execute(
-    command: &Command,
-    client: &DatadogClient,
-    now: DateTime<Utc>,
-) -> Result<Value> {
+pub async fn execute(command: &Command, client: &DatadogClient, now: Timestamp) -> Result<Value> {
     match command {
         Command::Mcp { .. } => unreachable!("MCP commands use their explicit transport"),
         Command::Capabilities { .. } => {

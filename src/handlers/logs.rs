@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde_json::{Value, json};
 
 use crate::cli::{LogsAggregateArgs, LogsSearchArgs, LogsTimeseriesArgs};
@@ -18,7 +18,7 @@ impl LogsHandler {
     pub async fn search(
         client: &DatadogClient,
         args: &LogsSearchArgs,
-        now: DateTime<Utc>,
+        now: Timestamp,
     ) -> Result<Value> {
         let handler = LogsHandler;
 
@@ -100,7 +100,7 @@ impl LogsHandler {
     pub async fn aggregate(
         client: &DatadogClient,
         args: &LogsAggregateArgs,
-        now: DateTime<Utc>,
+        now: Timestamp,
     ) -> Result<Value> {
         let handler = LogsHandler;
 
@@ -156,7 +156,7 @@ impl LogsHandler {
     pub async fn timeseries(
         client: &DatadogClient,
         args: &LogsTimeseriesArgs,
-        now: DateTime<Utc>,
+        now: Timestamp,
     ) -> Result<Value> {
         let handler = LogsHandler;
 

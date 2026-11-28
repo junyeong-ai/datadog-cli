@@ -783,7 +783,7 @@ async fn search_handlers_preserve_documented_record_and_cursor_shapes() {
     else {
         panic!("expected logs search")
     };
-    let logs = LogsHandler::search(&client, &args, chrono::Utc::now())
+    let logs = LogsHandler::search(&client, &args, jiff::Timestamp::now())
         .await
         .unwrap();
     assert_eq!(logs["data"][0]["service"], "api");
@@ -795,7 +795,7 @@ async fn search_handlers_preserve_documented_record_and_cursor_shapes() {
     let Command::Spans(args) = cli.command else {
         panic!("expected spans")
     };
-    let spans = SpansHandler::list(&client, &args, chrono::Utc::now())
+    let spans = SpansHandler::list(&client, &args, jiff::Timestamp::now())
         .await
         .unwrap();
     assert_eq!(spans["data"][0]["attributes"]["service"], "api");
@@ -833,7 +833,7 @@ async fn timeseries_interval_rejects_overflow_before_http() {
     for interval in [0, -1, i64::MAX] {
         args.interval = Some(interval);
         assert!(matches!(
-            MetricsHandler::timeseries(&client, &args, chrono::Utc::now())
+            MetricsHandler::timeseries(&client, &args, jiff::Timestamp::now())
                 .await
                 .unwrap_err(),
             DatadogError::InvalidInput(_)
@@ -902,7 +902,7 @@ async fn metrics_preserves_complete_query_expressions() {
         let Command::Metrics(args) = cli.command else {
             panic!("expected metrics")
         };
-        let result = MetricsHandler::query(&client_for(&server, 0), &args, chrono::Utc::now())
+        let result = MetricsHandler::query(&client_for(&server, 0), &args, jiff::Timestamp::now())
             .await
             .unwrap();
         assert_eq!(result["meta"]["query"], query);
@@ -1154,7 +1154,7 @@ async fn scalar_preserves_column_identity_metadata_and_empty_results() {
         let Command::Scalar(args) = cli.command else {
             panic!("expected scalar")
         };
-        let result = MetricsHandler::scalar(&client_for(&server, 0), &args, chrono::Utc::now())
+        let result = MetricsHandler::scalar(&client_for(&server, 0), &args, jiff::Timestamp::now())
             .await
             .unwrap();
         assert_eq!(result["data"]["columns"], columns);
@@ -1222,9 +1222,10 @@ async fn rum_preserves_nested_attributes_and_applies_only_the_stack_option() {
         let Command::Rum(args) = Cli::try_parse_from(argv).unwrap().command else {
             panic!()
         };
-        let result = RumHandler::search_events(&client_for(&server, 0), &args, chrono::Utc::now())
-            .await
-            .unwrap();
+        let result =
+            RumHandler::search_events(&client_for(&server, 0), &args, jiff::Timestamp::now())
+                .await
+                .unwrap();
         let record = &result["data"][0];
         assert_eq!(record["id"], "event-1");
         assert_eq!(record["type"], "rum");
@@ -1277,17 +1278,21 @@ async fn cursor_handlers_preserve_api_metadata_and_pagination_independently() {
         let result = match Cli::try_parse_from(argv).unwrap().command {
             Command::Logs {
                 action: LogsAction::Search(args),
-            } => LogsHandler::search(&client, &args, chrono::Utc::now()).await,
+            } => LogsHandler::search(&client, &args, jiff::Timestamp::now()).await,
             Command::Events(args) => {
-                EventsHandler::search(&client, &args, chrono::Utc::now()).await
+                EventsHandler::search(&client, &args, jiff::Timestamp::now()).await
             }
             Command::Rum(args) => {
-                RumHandler::search_events(&client, &args, chrono::Utc::now()).await
+                RumHandler::search_events(&client, &args, jiff::Timestamp::now()).await
             }
-            Command::Spans(args) => SpansHandler::list(&client, &args, chrono::Utc::now()).await,
-            Command::Audit(args) => AuditHandler::search(&client, &args, chrono::Utc::now()).await,
+            Command::Spans(args) => {
+                SpansHandler::list(&client, &args, jiff::Timestamp::now()).await
+            }
+            Command::Audit(args) => {
+                AuditHandler::search(&client, &args, jiff::Timestamp::now()).await
+            }
             Command::LlmObs(args) => {
-                LlmObsHandler::search(&client, &args, chrono::Utc::now()).await
+                LlmObsHandler::search(&client, &args, jiff::Timestamp::now()).await
             }
             _ => panic!(),
         }
@@ -1325,10 +1330,10 @@ async fn log_aggregation_preserves_partial_result_metadata_without_overwriting_q
         let client = client_for(&server, 0);
         let result = match args {
             LogsAction::Aggregate(args) => {
-                LogsHandler::aggregate(&client, &args, chrono::Utc::now()).await
+                LogsHandler::aggregate(&client, &args, jiff::Timestamp::now()).await
             }
             LogsAction::Timeseries(args) => {
-                LogsHandler::timeseries(&client, &args, chrono::Utc::now()).await
+                LogsHandler::timeseries(&client, &args, jiff::Timestamp::now()).await
             }
             _ => panic!(),
         }

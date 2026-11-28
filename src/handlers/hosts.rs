@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde_json::{Value, json};
 
 use crate::cli::HostsArgs;
@@ -13,11 +13,7 @@ impl TagFilter for HostsHandler {}
 impl ResponseFormatter for HostsHandler {}
 
 impl HostsHandler {
-    pub async fn list(
-        client: &DatadogClient,
-        args: &HostsArgs,
-        now: DateTime<Utc>,
-    ) -> Result<Value> {
+    pub async fn list(client: &DatadogClient, args: &HostsArgs, now: Timestamp) -> Result<Value> {
         let handler = HostsHandler;
 
         let from = args.from.resolve(now)?;

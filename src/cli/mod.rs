@@ -171,7 +171,7 @@ pub struct TimeRangeArgs {
 }
 
 impl TimeRangeArgs {
-    pub fn resolve(&self, now: chrono::DateTime<chrono::Utc>) -> Result<TimeRange> {
+    pub fn resolve(&self, now: jiff::Timestamp) -> Result<TimeRange> {
         TimeRange::resolve(self.from, self.to, now)
     }
 }
@@ -634,7 +634,7 @@ pub enum ConfigAction {
 }
 
 pub async fn run(cli: Cli) -> Result<()> {
-    let now = chrono::Utc::now();
+    let now = jiff::Timestamp::now();
     if let Command::Mcp { ref action } = cli.command {
         return mcp::run(action, &cli).await;
     }
@@ -724,7 +724,7 @@ pub async fn run(cli: Cli) -> Result<()> {
 
 impl Command {
     /// Resolves time arguments before configuration or credential providers run.
-    fn validate_times(&self, now: chrono::DateTime<chrono::Utc>) -> Result<()> {
+    fn validate_times(&self, now: jiff::Timestamp) -> Result<()> {
         match self {
             Command::Metrics(MetricsArgs { range, .. })
             | Command::Timeseries(TimeseriesArgs { range, .. })

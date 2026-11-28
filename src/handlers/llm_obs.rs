@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde_json::{Value, json};
 
 use crate::cli::LlmObsArgs;
@@ -15,7 +15,7 @@ impl LlmObsHandler {
     pub async fn search(
         client: &DatadogClient,
         args: &LlmObsArgs,
-        now: DateTime<Utc>,
+        now: Timestamp,
     ) -> Result<Value> {
         let handler = LlmObsHandler;
 

@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde_json::{Value, json};
 
 use crate::cli::AuditArgs;
@@ -12,11 +12,7 @@ pub struct AuditHandler;
 impl ResponseFormatter for AuditHandler {}
 
 impl AuditHandler {
-    pub async fn search(
-        client: &DatadogClient,
-        args: &AuditArgs,
-        now: DateTime<Utc>,
-    ) -> Result<Value> {
+    pub async fn search(client: &DatadogClient, args: &AuditArgs, now: Timestamp) -> Result<Value> {
         let handler = AuditHandler;
 
         let (from_iso, to_iso) = args.range.resolve(now)?.rfc3339()?;

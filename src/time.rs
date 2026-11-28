@@ -1,14 +1,19 @@
 use std::str::FromStr;
 
-use chrono::{DateTime, Utc};
+use jiff::{
+    Timestamp,
+    fmt::{strtime, temporal::Pieces},
+    tz::Offset,
+};
 
 use crate::error::{DatadogError, Result};
 
-/// Latest accepted time, 9999-12-31T23:59:59Z, in Unix seconds. Larger values
-/// are almost always milliseconds pasted where seconds are expected, and the
-/// bound keeps resolved times convertible to milliseconds.
-const MAX_UNIX_SECONDS: i64 = 253_402_300_799;
-const SUPPORTED_RANGE: &str = "Time must be between 1970-01-01T00:00:00Z and 9999-12-31T23:59:59Z";
+/// Latest accepted time, `Timestamp::MAX` in whole seconds
+/// (9999-12-30T22:00:00Z). Larger values are almost always milliseconds pasted
+/// where seconds are expected, and the bound keeps resolved times convertible
+/// to milliseconds.
+const MAX_UNIX_SECONDS: i64 = 253_402_207_200;
+const SUPPORTED_RANGE: &str = "Time must be between 1970-01-01T00:00:00Z and 9999-12-30T22:00:00Z";
 
 const EXPECTED_FORMS: &str = "expected now, a past offset such as 15m, 1h, 7d, now-1h or \
     '2 hours ago', RFC3339 such as 2024-01-01T00:00:00Z, or Unix seconds";
@@ -39,11 +44,8 @@ impl FromStr for TimeExpr {
                     "Unix timestamp out of range (expected seconds; is this milliseconds?)".into()
                 });
         }
-        if let Ok(time) = DateTime::parse_from_rfc3339(input) {
-            return Some(time.timestamp())
-                .filter(|seconds| (0..=MAX_UNIX_SECONDS).contains(seconds))
-                .map(Self::At)
-                .ok_or_else(|| SUPPORTED_RANGE.into());
+        if let Ok(pieces) = Pieces::parse(input) {
+            return absolute_seconds(&pieces).map(Self::At);
         }
         let offset = input
             .strip_prefix("now-")
@@ -56,9 +58,9 @@ impl FromStr for TimeExpr {
 }
 
 impl TimeExpr {
-    pub fn resolve(self, now: DateTime<Utc>) -> Result<i64> {
+    pub fn resolve(self, now: Timestamp) -> Result<i64> {
         let seconds = match self {
-            Self::Ago(seconds) => now.timestamp().saturating_sub(seconds),
+            Self::Ago(seconds) => now.as_second().saturating_sub(seconds),
             Self::At(seconds) => seconds,
         };
         if seconds < 0 {
@@ -66,6 +68,22 @@ impl TimeExpr {
         }
         Ok(seconds)
     }
+}
+
+/// An absolute time needs a time of day and a UTC offset. The offset alone
+/// fixes the instant, as RFC 9557 specifies, so a time zone annotation is not
+/// consulted. `as_second` truncates toward zero, so the range is checked on the
+/// instant: 1969-12-31T23:59:59.5Z would otherwise become the epoch.
+fn absolute_seconds(pieces: &Pieces) -> std::result::Result<i64, String> {
+    let (Some(time), Some(offset)) = (pieces.time(), pieces.to_numeric_offset()) else {
+        return Err(EXPECTED_FORMS.into());
+    };
+    offset
+        .to_timestamp(pieces.date().to_datetime(time))
+        .ok()
+        .filter(|instant| *instant >= Timestamp::UNIX_EPOCH)
+        .map(Timestamp::as_second)
+        .ok_or_else(|| SUPPORTED_RANGE.into())
 }
 
 fn offset_seconds(offset: &str) -> Option<i64> {
@@ -92,7 +110,7 @@ pub struct TimeRange {
 }
 
 impl TimeRange {
-    pub fn resolve(from: TimeExpr, to: TimeExpr, now: DateTime<Utc>) -> Result<Self> {
+    pub fn resolve(from: TimeExpr, to: TimeExpr, now: Timestamp) -> Result<Self> {
         let (from, to) = (from.resolve(now)?, to.resolve(now)?);
         if from > to {
             return Err(DatadogError::InvalidInput(
@@ -108,23 +126,23 @@ impl TimeRange {
 }
 
 pub fn rfc3339(timestamp: i64) -> Result<String> {
-    DateTime::from_timestamp(timestamp, 0)
-        .map(|time| time.to_rfc3339())
-        .ok_or_else(|| DatadogError::InvalidInput("Time is outside the supported range".into()))
+    Timestamp::from_second(timestamp)
+        .map(|time| time.display_with_offset(Offset::UTC).to_string())
+        .map_err(|_| DatadogError::InvalidInput("Time is outside the supported range".into()))
 }
 
 pub fn format_timestamp(timestamp: i64) -> String {
-    DateTime::from_timestamp(timestamp, 0)
-        .map(|time| time.format("%Y-%m-%d %H:%M:%S UTC").to_string())
-        .unwrap_or_else(|| format!("Invalid timestamp: {timestamp}"))
+    Timestamp::from_second(timestamp)
+        .and_then(|time| strtime::format("%Y-%m-%d %H:%M:%S UTC", time))
+        .unwrap_or_else(|_| format!("Invalid timestamp: {timestamp}"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn now() -> DateTime<Utc> {
-        DateTime::from_timestamp(1_704_067_200, 0).unwrap()
+    fn now() -> Timestamp {
+        Timestamp::from_second(1_704_067_200).unwrap()
     }
 
     fn resolve(input: &str) -> std::result::Result<i64, String> {
@@ -155,10 +173,18 @@ mod tests {
 
     #[test]
     fn absolute_forms_ignore_the_reference_instant() {
-        assert_eq!(resolve("2024-01-01T00:00:00Z"), Ok(1_704_067_200));
-        assert_eq!(resolve("2024-01-01T09:00:00+09:00"), Ok(1_704_067_200));
+        for input in [
+            "2024-01-01T00:00:00Z",
+            "2024-01-01T09:00:00+09:00",
+            "2024-01-01T00:00:00.000Z",
+            "2024-01-01T09:00:00+0900",
+            "2024-01-01T09:00+09:00[Asia/Seoul]",
+        ] {
+            assert_eq!(resolve(input), Ok(1_704_067_200), "{input}");
+        }
         assert_eq!(resolve("1609459200"), Ok(1_609_459_200));
-        assert_eq!(resolve("253402300799"), Ok(MAX_UNIX_SECONDS));
+        assert_eq!(resolve("253402207200"), Ok(MAX_UNIX_SECONDS));
+        assert_eq!(resolve("9999-12-30T22:00:00Z"), Ok(MAX_UNIX_SECONDS));
     }
 
     #[test]
@@ -177,6 +203,8 @@ mod tests {
             "now-1h ago",
             "-3600",
             "2024-01-01",
+            "2024-01-01T00:00:00",
+            "2024-13-01T00:00:00Z",
             "h",
         ] {
             assert_eq!(resolve(input), Err(EXPECTED_FORMS.into()), "{input}");
@@ -197,7 +225,12 @@ mod tests {
 
     #[test]
     fn resolved_times_stay_between_the_epoch_and_year_9999() {
-        for input in ["1969-12-31T23:59:59Z", "9999-12-31T23:59:59-23:59"] {
+        for input in [
+            "1969-12-31T23:59:59Z",
+            "1969-12-31T23:59:59.5Z",
+            "9999-12-30T22:00:01Z",
+            "9999-12-31T23:59:59-23:59",
+        ] {
             assert_eq!(resolve(input), Err(SUPPORTED_RANGE.into()), "{input}");
         }
         assert_eq!(resolve("1970-01-01T00:00:00Z"), Ok(0));

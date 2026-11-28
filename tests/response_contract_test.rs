@@ -65,7 +65,7 @@ async fn llm_query_and_structured_filters_are_distinct_request_modes() {
         let Command::LlmObs(args) = Cli::parse_from(argv).command else {
             panic!()
         };
-        LlmObsHandler::search(&client(&server), &args, chrono::Utc::now())
+        LlmObsHandler::search(&client(&server), &args, jiff::Timestamp::now())
             .await
             .unwrap();
         let requests = server.received_requests().await.unwrap();
@@ -304,7 +304,7 @@ async fn host_metadata_and_identity_survive_without_bypassing_tag_filters() {
         let result = datadog_cli::handlers::hosts::HostsHandler::list(
             &client(&server),
             &args,
-            chrono::Utc::now(),
+            jiff::Timestamp::now(),
         )
         .await
         .unwrap();
@@ -352,7 +352,7 @@ async fn log_custom_attributes_preserve_correlation_and_business_context() {
     else {
         panic!()
     };
-    let output = LogsHandler::search(&client(&server), &args, chrono::Utc::now())
+    let output = LogsHandler::search(&client(&server), &args, jiff::Timestamp::now())
         .await
         .unwrap();
     assert_eq!(output["data"][0]["attributes"], attributes);
@@ -390,10 +390,10 @@ async fn log_groups_are_ranked_on_the_server_and_keep_query_diagnostics() {
         let client = client(&server);
         let result = match action {
             LogsAction::Aggregate(args) => {
-                LogsHandler::aggregate(&client, &args, chrono::Utc::now()).await
+                LogsHandler::aggregate(&client, &args, jiff::Timestamp::now()).await
             }
             LogsAction::Timeseries(args) => {
-                LogsHandler::timeseries(&client, &args, chrono::Utc::now()).await
+                LogsHandler::timeseries(&client, &args, jiff::Timestamp::now()).await
             }
             _ => panic!(),
         }
@@ -518,7 +518,7 @@ async fn metric_units_preserve_denominators_scaling_and_null_positions() {
         else {
             panic!()
         };
-        let output = MetricsHandler::query(&client(&server), &args, chrono::Utc::now())
+        let output = MetricsHandler::query(&client(&server), &args, jiff::Timestamp::now())
             .await
             .unwrap();
         for (index, original) in units.as_array().unwrap().iter().enumerate() {
@@ -561,7 +561,7 @@ async fn spans_preserve_http_and_messaging_details_with_both_stack_modes() {
         let Command::Spans(args) = Cli::parse_from(argv).command else {
             panic!()
         };
-        let output = SpansHandler::list(&client(&server), &args, chrono::Utc::now())
+        let output = SpansHandler::list(&client(&server), &args, jiff::Timestamp::now())
             .await
             .unwrap();
         let mut expected = custom.clone();

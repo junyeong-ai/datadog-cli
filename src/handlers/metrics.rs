@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde_json::{Value, json};
 
 use crate::cli::{MetricsArgs, ScalarArgs, TimeseriesArgs};
@@ -15,7 +15,7 @@ impl MetricsHandler {
     pub async fn query(
         client: &DatadogClient,
         args: &MetricsArgs,
-        now: DateTime<Utc>,
+        now: Timestamp,
     ) -> Result<Value> {
         let handler = MetricsHandler;
 
@@ -116,7 +116,7 @@ impl MetricsHandler {
     pub async fn timeseries(
         client: &DatadogClient,
         args: &TimeseriesArgs,
-        now: DateTime<Utc>,
+        now: Timestamp,
     ) -> Result<Value> {
         let handler = MetricsHandler;
 
@@ -187,7 +187,7 @@ impl MetricsHandler {
     pub async fn scalar(
         client: &DatadogClient,
         args: &ScalarArgs,
-        now: DateTime<Utc>,
+        now: Timestamp,
     ) -> Result<Value> {
         let handler = MetricsHandler;
 

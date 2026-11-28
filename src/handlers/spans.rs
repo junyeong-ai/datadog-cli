@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde_json::{Value, json};
 
 use crate::cli::SpansArgs;
@@ -16,11 +16,7 @@ impl ResponseFilter for SpansHandler {}
 impl ResponseFormatter for SpansHandler {}
 
 impl SpansHandler {
-    pub async fn list(
-        client: &DatadogClient,
-        args: &SpansArgs,
-        now: DateTime<Utc>,
-    ) -> Result<Value> {
+    pub async fn list(client: &DatadogClient, args: &SpansArgs, now: Timestamp) -> Result<Value> {
         let handler = SpansHandler;
 
         let (from, to) = args.range.resolve(now)?.rfc3339()?;

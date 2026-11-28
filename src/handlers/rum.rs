@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde_json::{Value, json};
 
 use crate::cli::RumArgs;
@@ -19,7 +19,7 @@ impl RumHandler {
     pub async fn search_events(
         client: &DatadogClient,
         args: &RumArgs,
-        now: DateTime<Utc>,
+        now: Timestamp,
     ) -> Result<Value> {
         let handler = RumHandler;
 

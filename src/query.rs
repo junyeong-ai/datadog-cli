@@ -243,9 +243,9 @@ impl PreparedQuery {
                 for pointer in [&range.from, &range.to] {
                     let bound = self.input.pointer(pointer).ok_or_else(|| DatadogError::InvalidInput("Multiple pages require an explicit fixed time range; use --from and --to".into()))?;
                     if matches!(range.encoding, crate::catalog::TimeEncoding::Rfc3339)
-                        && bound.as_str().is_none_or(|value| {
-                            chrono::DateTime::parse_from_rfc3339(value).is_err()
-                        })
+                        && bound
+                            .as_str()
+                            .is_none_or(|value| value.parse::<jiff::Timestamp>().is_err())
                     {
                         return Err(DatadogError::InvalidInput("Multiple pages require absolute RFC3339 time bounds; use --from and --to".into()));
                     }

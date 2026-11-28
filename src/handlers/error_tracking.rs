@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde_json::{Value, json};
 
 use crate::cli::ErrorTrackingSearchArgs;
@@ -14,7 +14,7 @@ impl ErrorTrackingHandler {
     pub async fn search(
         client: &DatadogClient,
         args: &ErrorTrackingSearchArgs,
-        now: DateTime<Utc>,
+        now: Timestamp,
     ) -> Result<Value> {
         let handler = ErrorTrackingHandler;
 

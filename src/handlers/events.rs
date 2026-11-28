@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde_json::{Value, json};
 
 use crate::cli::EventsArgs;
@@ -15,7 +15,7 @@ impl EventsHandler {
     pub async fn search(
         client: &DatadogClient,
         args: &EventsArgs,
-        now: DateTime<Utc>,
+        now: Timestamp,
     ) -> Result<Value> {
         let handler = EventsHandler;
 
