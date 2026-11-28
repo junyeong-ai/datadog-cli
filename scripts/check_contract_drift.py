@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Report upstream Datadog API operations and MCP tools that the reviewed contracts do not cover.
 
-Run with: uv run --with PyYAML==6.0.3 python scripts/check_contract_drift.py [--report PATH]
+Run with: uv run --with PyYAML==6.0.4 python scripts/check_contract_drift.py [--report PATH]
 A Markdown report is written only when a policy review is needed. After reviewing the
 MCP tools reference, record its tool names with --write-mcp-reference.
 """

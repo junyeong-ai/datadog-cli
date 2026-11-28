@@ -44,7 +44,7 @@ jobs:
       - name: Install PyYAML
         run: |
           python3 -m venv "$RUNNER_TEMP/venv"
-          "$RUNNER_TEMP/venv/bin/pip" install --quiet PyYAML==6.0.3
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet PyYAML==6.0.4
 
       - name: Compare reviewed contracts with upstream
         env:

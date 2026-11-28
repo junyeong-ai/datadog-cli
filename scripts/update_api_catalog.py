@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Regenerate the reviewed, offline Datadog query contracts.
 
-Run with: uv run --with PyYAML==6.0.3 python scripts/update_api_catalog.py
+Run with: uv run --with PyYAML==6.0.4 python scripts/update_api_catalog.py
 """
 
 import argparse
