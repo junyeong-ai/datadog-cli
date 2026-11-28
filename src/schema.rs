@@ -63,7 +63,10 @@ fn describe(error: &ValidationError<'_>, prefix: &str) -> String {
     let expectation = match error.kind() {
         ValidationErrorKind::AdditionalProperties { unexpected }
         | ValidationErrorKind::UnevaluatedProperties { unexpected } => {
-            format!("unexpected properties {}", names(unexpected))
+            format!(
+                "unexpected properties {}",
+                quoted_names(unexpected, MAX_REPORTED_NAMES)
+            )
         }
         ValidationErrorKind::PropertyNames { error } => {
             format!("invalid property name: {}", error.masked())
@@ -73,18 +76,23 @@ fn describe(error: &ValidationError<'_>, prefix: &str) -> String {
     format!("{location}: {expectation}")
 }
 
-fn names(names: &[String]) -> String {
+/// Quotes at most `limit` untrusted names, each bounded and escaped, and counts
+/// the rest. An empty list reads `none`.
+pub(crate) fn quoted_names(names: &[String], limit: usize) -> String {
+    if names.is_empty() {
+        return "none".into();
+    }
     let mut listed = names
         .iter()
-        .take(MAX_REPORTED_NAMES)
+        .take(limit)
         .map(|name| {
-            let name = head(name).replace('\\', "\\\\").replace('\'', "\\'");
+            let name = printable(&head(name).replace('\\', "\\\\").replace('\'', "\\'"));
             format!("'{name}'")
         })
         .collect::<Vec<_>>()
         .join(", ");
-    if names.len() > MAX_REPORTED_NAMES {
-        listed.push_str(&format!(" and {} more", names.len() - MAX_REPORTED_NAMES));
+    if names.len() > limit {
+        listed.push_str(&format!(" and {} more", names.len() - limit));
     }
     listed
 }
@@ -153,6 +161,20 @@ mod tests {
         assert!(!message.contains("secret-sort"));
         assert!(!message.contains("5000"));
         assert!(violations(&validator, &json!({"id": "a"})).is_none());
+    }
+
+    #[test]
+    fn quoted_names_are_bounded_escaped_and_never_blank() {
+        assert_eq!(quoted_names(&[], 2), "none");
+        let names = [
+            "a'b".to_string(),
+            "c\u{1b}[31m".to_string(),
+            "d".to_string(),
+        ];
+        assert_eq!(
+            quoted_names(&names, 2),
+            "'a\\'b', 'c\\u{1b}[31m' and 1 more"
+        );
     }
 
     #[test]

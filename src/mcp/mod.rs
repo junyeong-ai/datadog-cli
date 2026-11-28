@@ -21,8 +21,11 @@ use crate::{
     config::Config,
     error::{DatadogError, Result},
     pagination::PaginationInfo,
+    schema::quoted_names,
 };
 mod transport;
+
+const MAX_REPORTED_TOOLS: usize = 16;
 
 #[derive(Deserialize)]
 struct ReviewedTool {
@@ -265,7 +268,7 @@ impl PreparedMcp {
         }
         let tool = selected.ok_or_else(|| {
             DatadogError::QueryError(
-                format!("The reviewed tool is unavailable from this MCP server or identity. Advertised tools (up to 16): {}", advertised.iter().take(16).cloned().collect::<Vec<_>>().join(", ")),
+                format!("The reviewed tool is unavailable from this MCP server or identity. Advertised tools: {}", quoted_names(&advertised.into_iter().collect::<Vec<_>>(), MAX_REPORTED_TOOLS)),
             )
         })?;
         if self.input.is_none() {
