@@ -22,7 +22,7 @@ curl -fsSL https://raw.githubusercontent.com/junyeong-ai/datadog-cli/main/script
 DATADOG_CLI_VERSION=0.11.0 bash install.sh
 ```
 
-Source builds require Rustup and C build tools and use Rust 1.100.0 pinned in `rust-toolchain.toml`.
+Source builds require Rustup and C build tools and use Rust 1.100.1 pinned in `rust-toolchain.toml`.
 
 ```bash
 git clone https://github.com/junyeong-ai/datadog-cli
